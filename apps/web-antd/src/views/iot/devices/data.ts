@@ -4,7 +4,7 @@ import type { IotDeviceApi } from '#/api/iot';
 
 import { $t } from '#/locales';
 
-/** 设备台账列表列（可用率入口放在操作列：逐台设备的断档/可用率是 M-2 的核心观感）。 */
+/** 设备台账列表列（可用率/历史曲线入口放在操作列：逐台设备的数据面查询是 M-2 的核心观感）。 */
 export function useColumns(): VxeTableGridColumns {
   return [
     { field: 'deviceCode', title: $t('page.iot.device.code'), minWidth: 140 },
@@ -23,7 +23,8 @@ export function useColumns(): VxeTableGridColumns {
       title: $t('common.action'),
       field: 'action',
       fixed: 'right',
-      width: 220,
+      // 4 个带图标+文字的按钮（可用率 / 历史曲线 / 编辑 / 删除）排在一行，220 会被省略号截断
+      width: 380,
       align: 'center',
       slots: { default: 'action' },
     },

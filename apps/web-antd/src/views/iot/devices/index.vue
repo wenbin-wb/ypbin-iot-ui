@@ -14,10 +14,14 @@ import { $t } from '#/locales';
 import { useColumns } from './data';
 import Availability from './modules/availability.vue';
 import Form from './modules/form.vue';
+import Series from './modules/series.vue';
 
 const [FormDrawer, FormDrawerApi] = useVbenDrawer({ connectedComponent: Form });
 const [AvailabilityDrawer, AvailabilityDrawerApi] = useVbenDrawer({
   connectedComponent: Availability,
+});
+const [SeriesDrawer, SeriesDrawerApi] = useVbenDrawer({
+  connectedComponent: Series,
 });
 
 const [Grid, gridApi] = useVbenVxeGrid({
@@ -48,6 +52,10 @@ function onAvailability(row: IotDeviceApi.DeviceResp) {
   AvailabilityDrawerApi.setData(row).open();
 }
 
+function onSeries(row: IotDeviceApi.DeviceResp) {
+  SeriesDrawerApi.setData(row).open();
+}
+
 function onDelete(row: IotDeviceApi.DeviceResp) {
   deleteDevice(row.id)
     .then(() => {
@@ -62,6 +70,7 @@ function onDelete(row: IotDeviceApi.DeviceResp) {
   <Page auto-content-height>
     <FormDrawer @reload="gridApi.query()" />
     <AvailabilityDrawer />
+    <SeriesDrawer />
     <Grid>
       <template #toolbar-tools>
         <Button
@@ -82,6 +91,12 @@ function onDelete(row: IotDeviceApi.DeviceResp) {
               icon: 'lucide:activity',
               auth: 'iot:availability:get',
               onClick: () => onAvailability(row),
+            },
+            {
+              text: $t('page.iot.series.title'),
+              icon: 'lucide:chart-line',
+              auth: 'iot:series:get',
+              onClick: () => onSeries(row),
             },
             {
               text: $t('common.edit'),
