@@ -13,12 +13,18 @@ import { $t } from '#/locales';
 const loading = ref(false);
 const data = ref<IotAvailabilityApi.AvailabilityResp>();
 
-const [Drawer, drawerApi] = useVbenDrawer({
+/** 抽屉数据：设备行（vben 的 `getData()` 不带类型参数，泛型要写在 useVbenDrawer 上）。 */
+interface AvailabilityDrawerData {
+  deviceName?: string;
+  id: string;
+}
+
+const [Drawer, drawerApi] = useVbenDrawer<AvailabilityDrawerData>({
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) {
       return;
     }
-    const device = drawerApi.getData<{ deviceName?: string; id: string }>();
+    const device = drawerApi.getData();
     drawerApi.setState({
       title: $t('iot.availability.title', [device?.deviceName ?? device?.id ?? '']),
     });
