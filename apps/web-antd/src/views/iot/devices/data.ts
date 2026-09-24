@@ -7,18 +7,18 @@ import { $t } from '#/locales';
 /** 设备台账列表列（可用率入口放在操作列：逐台设备的断档/可用率是 M-2 的核心观感）。 */
 export function useColumns(): VxeTableGridColumns {
   return [
-    { field: 'deviceCode', title: $t('iot.device.code'), minWidth: 140 },
-    { field: 'deviceName', title: $t('iot.device.name'), minWidth: 160 },
-    { field: 'protocol', title: $t('iot.device.protocol'), width: 110 },
-    { field: 'endpoint', title: $t('iot.device.endpoint'), minWidth: 200 },
+    { field: 'deviceCode', title: $t('page.iot.device.code'), minWidth: 140 },
+    { field: 'deviceName', title: $t('page.iot.device.name'), minWidth: 160 },
+    { field: 'protocol', title: $t('page.iot.device.protocol'), width: 110 },
+    { field: 'endpoint', title: $t('page.iot.device.endpoint'), minWidth: 200 },
     {
       field: 'onlineStatus',
-      title: $t('iot.device.onlineStatus'),
+      title: $t('page.iot.device.onlineStatus'),
       width: 110,
       cellRender: { name: 'CellTag' },
     },
-    { field: 'lastSeenAt', title: $t('iot.device.lastSeenAt'), width: 170 },
-    { field: 'createTime', title: $t('iot.device.createTime'), width: 170 },
+    { field: 'lastSeenAt', title: $t('page.iot.device.lastSeenAt'), width: 170 },
+    { field: 'createTime', title: $t('page.iot.device.createTime'), width: 170 },
     {
       title: $t('common.action'),
       field: 'action',
@@ -37,14 +37,15 @@ export function useFormSchema(): FormSchema[] {
       component: 'Input',
       componentProps: { maxlength: 64 },
       fieldName: 'deviceCode',
-      label: $t('iot.device.code'),
+      label: $t('page.iot.device.code'),
       rules: 'required',
     },
     {
       component: 'Input',
-      componentProps: { maxlength: 128 },
+      // 与后端 @Size(max = 100) 对齐：前端放宽会让用户在提交时才吃后端报错
+      componentProps: { maxlength: 100 },
       fieldName: 'deviceName',
-      label: $t('iot.device.name'),
+      label: $t('page.iot.device.name'),
       rules: 'required',
     },
     {
@@ -56,26 +57,27 @@ export function useFormSchema(): FormSchema[] {
           { label: 'MQTT', value: 'mqtt' },
           { label: 'OPC UA', value: 'opcua' },
         ],
-        placeholder: $t('iot.device.protocolPlaceholder'),
+        placeholder: $t('page.iot.device.protocolPlaceholder'),
       },
       fieldName: 'protocol',
-      label: $t('iot.device.protocol'),
+      label: $t('page.iot.device.protocol'),
       rules: 'required',
     },
     {
       component: 'Input',
       componentProps: {
-        placeholder: $t('iot.device.endpointPlaceholder'),
+        placeholder: $t('page.iot.device.endpointPlaceholder'),
       },
       fieldName: 'endpoint',
-      label: $t('iot.device.endpoint'),
+      help: $t('page.iot.device.endpointHelp'),
+      label: $t('page.iot.device.endpoint'),
       rules: 'required',
     },
     {
       component: 'Input',
       componentProps: { maxlength: 255 },
       fieldName: 'remark',
-      label: $t('iot.device.remark'),
+      label: $t('page.iot.device.remark'),
     },
   ];
 }
