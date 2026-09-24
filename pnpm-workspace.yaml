@@ -150,7 +150,7 @@ catalog:
   knip: ^6.29.0
   lefthook: ^2.1.10
   lodash.clonedeep: ^4.5.0
-  marked: ^18.0.9
+  marked: ^18.0.13
   medium-zoom: ^1.1.0
   naive-ui: ^2.45.3
   nitropack: ^2.13.4
