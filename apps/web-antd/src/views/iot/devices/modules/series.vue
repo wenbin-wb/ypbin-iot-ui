@@ -43,7 +43,11 @@ const deviceLabel = ref('');
 const propertyId = ref('');
 const fromValue = ref<Dayjs>();
 const toValue = ref<Dayjs>();
-const limit = ref<number>(IOT_SERIES_DEFAULT_LIMIT);
+/**
+ * `InputNumber` 的 `value`/`update:value` 类型是 `string | number`（antdv 4.2.6 的 `ValueType`），
+ * 故按组件实际类型声明；提交查询前统一 `Number()` 并校验整数范围。
+ */
+const limit = ref<number | string>(IOT_SERIES_DEFAULT_LIMIT);
 
 const loading = ref(false);
 const points = ref<SeriesPoint[]>([]);
