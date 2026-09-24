@@ -96,11 +96,28 @@ const [Drawer, drawerApi] = useVbenDrawer<SeriesDrawerData>({
 });
 
 /** 后端 `ts` 为 epoch 毫秒（Long 序列化成字符串）⇒ 展示前 `Number()` 转换。 */
-function formatTs(ts: number | string): string {
+function toMillis(ts: number | string): null | number {
   const millis = Number(ts);
-  return Number.isFinite(millis)
-    ? dayjs(millis).format('YYYY-MM-DD HH:mm:ss')
-    : String(ts);
+  return Number.isFinite(millis) ? millis : null;
+}
+
+/**
+ * 明细表与 CSV 的时间格式：**带毫秒**。
+ * 时序点在同一秒内可能有多条读数，截到秒会让两行看起来一模一样，导出的 CSV 也就不是无损的。
+ */
+function formatTs(ts: number | string): string {
+  const millis = toMillis(ts);
+  return millis === null
+    ? String(ts)
+    : dayjs(millis).format('YYYY-MM-DD HH:mm:ss.SSS');
+}
+
+/** 图表横轴的时间格式：截到秒（轴标签空间有限，毫秒只会让同一秒的标签挤在一起、刻度变少）。 */
+function formatAxisTs(ts: number | string): string {
+  const millis = toMillis(ts);
+  return millis === null
+    ? String(ts)
+    : dayjs(millis).format('YYYY-MM-DD HH:mm:ss');
 }
 
 /** 值转数字：空/非数值（文本点位）返回 null —— 折线在这些点断开，而不是被画成 0。 */
@@ -159,7 +176,7 @@ function buildChartOption(
       axisLabel: { hideOverlap: true },
       axisTick: { show: false },
       boundaryGap: false,
-      data: list.map((point) => formatTs(point.ts)),
+      data: list.map((point) => formatAxisTs(point.ts)),
       splitLine: { show: false },
       type: 'category',
     },
@@ -173,9 +190,16 @@ function buildChartOption(
   };
 }
 
-/** CSV 单元格转义（RFC 4180）：含逗号/引号/换行时用双引号包裹，内部引号双写。 */
+/**
+ * CSV 单元格：先做公式注入防护，再做 RFC 4180 转义。
+ *
+ * 读数原值来自设备上报，属不可信输入：以 `=` 或 `@` 开头的文本会被 Excel/Sheets 当**公式**执行
+ * （DDE 一类；参见 CVE-2021-41270 这类 CSV 注入案例），故前置单引号使其按文本处理。
+ * `+`/`-` 不处理——它们是合法的数值前缀（负数），一刀切会把数值变成文本。
+ */
 function csvCell(cell: string): string {
-  return /["\r\n,]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell;
+  const guarded = /^[=@]/.test(cell) ? `'${cell}` : cell;
+  return /["\r\n,]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
 }
 
 /** 导出文件名：设备 + 点位 + 时间戳（点位里的非安全字符统一换成下划线）。 */
