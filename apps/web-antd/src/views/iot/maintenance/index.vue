@@ -50,7 +50,7 @@ function onClose(row: IotMaintenanceApi.MaintenanceWindowDto) {
           @click="FormDrawerApi.setData(null).open()"
         >
           <template #icon><Plus /></template>
-          {{ $t('iot.maintenance.create') }}
+          {{ $t('page.iot.maintenance.create') }}
         </Button>
       </template>
 
@@ -59,11 +59,11 @@ function onClose(row: IotMaintenanceApi.MaintenanceWindowDto) {
           v-if="!row.endTs"
           :actions="[
             {
-              text: $t('iot.maintenance.close'),
+              text: $t('page.iot.maintenance.close'),
               icon: 'lucide:circle-check',
               auth: 'iot:maintenance:close',
               popConfirm: {
-                title: $t('iot.maintenance.closeConfirm'),
+                title: $t('page.iot.maintenance.closeConfirm'),
                 confirm: () => onClose(row),
               },
             },

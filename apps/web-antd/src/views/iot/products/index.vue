@@ -69,7 +69,7 @@ function onPublish(row: IotProductApi.ProductResp) {
           @click="FormDrawerApi.setData(null).open()"
         >
           <template #icon><Plus /></template>
-          {{ $t('ui.actionTitle.create', [$t('iot.product.name')]) }}
+          {{ $t('ui.actionTitle.create', [$t('page.iot.product.name')]) }}
         </Button>
       </template>
 
@@ -77,11 +77,11 @@ function onPublish(row: IotProductApi.ProductResp) {
         <VbenTableAction
           :actions="[
             {
-              text: $t('iot.product.publish'),
+              text: $t('page.iot.product.publish'),
               icon: 'lucide:upload',
               auth: 'iot:product:publish',
               popConfirm: {
-                title: $t('iot.product.publishConfirm'),
+                title: $t('page.iot.product.publishConfirm'),
                 confirm: () => onPublish(row),
               },
             },

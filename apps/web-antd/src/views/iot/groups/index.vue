@@ -52,7 +52,7 @@ function onDelete(row: IotGroupApi.GroupResp) {
           @click="FormDrawerApi.setData(null).open()"
         >
           <template #icon><Plus /></template>
-          {{ $t('ui.actionTitle.create', [$t('iot.group.name')]) }}
+          {{ $t('ui.actionTitle.create', [$t('page.iot.group.name')]) }}
         </Button>
       </template>
 

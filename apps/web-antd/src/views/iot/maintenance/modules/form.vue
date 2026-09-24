@@ -43,7 +43,7 @@ const [Drawer, drawerApi] = useVbenDrawer({
     if (isOpen) {
       formApi.reset();
       drawerApi.setState({
-        title: $t('iot.maintenance.create'),
+        title: $t('page.iot.maintenance.create'),
       });
     }
   },

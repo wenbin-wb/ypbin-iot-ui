@@ -9,29 +9,29 @@ export function useColumns(): VxeTableGridColumns {
   return [
     {
       field: 'deviceId',
-      title: $t('iot.maintenance.device'),
+      title: $t('page.iot.maintenance.device'),
       minWidth: 160,
       formatter: ({ cellValue }: { cellValue?: string }) =>
-        cellValue || $t('iot.maintenance.tenantWide'),
+        cellValue || $t('page.iot.maintenance.tenantWide'),
     },
-    { field: 'startTs', title: $t('iot.maintenance.start'), width: 170 },
+    { field: 'startTs', title: $t('page.iot.maintenance.start'), width: 170 },
     {
       field: 'endTs',
-      title: $t('iot.maintenance.end'),
+      title: $t('page.iot.maintenance.end'),
       width: 170,
       formatter: ({ cellValue }: { cellValue?: string }) =>
-        cellValue || $t('iot.maintenance.ongoing'),
+        cellValue || $t('page.iot.maintenance.ongoing'),
     },
     {
       field: 'source',
-      title: $t('iot.maintenance.source'),
+      title: $t('page.iot.maintenance.source'),
       width: 120,
       formatter: ({ cellValue }: { cellValue?: string }) =>
         cellValue === 'LEASE_HANDOVER'
-          ? $t('iot.maintenance.sourceHandover')
-          : $t('iot.maintenance.sourceManual'),
+          ? $t('page.iot.maintenance.sourceHandover')
+          : $t('page.iot.maintenance.sourceManual'),
     },
-    { field: 'reason', title: $t('iot.maintenance.reason'), minWidth: 200 },
+    { field: 'reason', title: $t('page.iot.maintenance.reason'), minWidth: 200 },
     {
       title: $t('common.action'),
       field: 'action',
@@ -53,12 +53,12 @@ export function useFormSchema(): FormSchema[] {
         api: getDeviceOptions,
         class: 'w-full',
         labelField: 'deviceName',
-        placeholder: $t('iot.maintenance.devicePlaceholder'),
+        placeholder: $t('page.iot.maintenance.devicePlaceholder'),
         showSearch: true,
         valueField: 'id',
       },
       fieldName: 'deviceId',
-      label: $t('iot.maintenance.device'),
+      label: $t('page.iot.maintenance.device'),
     },
     {
       component: 'DatePicker',
@@ -68,7 +68,7 @@ export function useFormSchema(): FormSchema[] {
         valueFormat: 'YYYY-MM-DD HH:mm:ss',
       },
       fieldName: 'startTs',
-      label: $t('iot.maintenance.start'),
+      label: $t('page.iot.maintenance.start'),
     },
     {
       component: 'DatePicker',
@@ -78,14 +78,14 @@ export function useFormSchema(): FormSchema[] {
         valueFormat: 'YYYY-MM-DD HH:mm:ss',
       },
       fieldName: 'endTs',
-      label: $t('iot.maintenance.end'),
-      help: $t('iot.maintenance.endHelp'),
+      label: $t('page.iot.maintenance.end'),
+      help: $t('page.iot.maintenance.endHelp'),
     },
     {
       component: 'Textarea',
       componentProps: { maxlength: 255, rows: 3 },
       fieldName: 'reason',
-      label: $t('iot.maintenance.reason'),
+      label: $t('page.iot.maintenance.reason'),
       rules: 'required',
     },
   ];

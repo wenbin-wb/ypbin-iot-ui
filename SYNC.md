@@ -15,8 +15,12 @@
    `sys_menu.component` 一致（例如 `/iot/devices/index` ⇄ `apps/web-antd/src/views/iot/devices/index.vue`）；
    权限码一律用后端已登记的（`iot:device:*` / `iot:product:*` / `iot:group:*` / `iot:availability:get` /
    `iot:maintenance:*`），前端不得自造。
-4. **门禁**：PR 必须过 `CI`（lint + typecheck + build）与 `CodeQL`；改菜单/权限的 SQL 由后端仓的门禁兜住。
+4. **门禁**：PR 必须过 `CI`（typecheck + 单元测试 + 构建；**注意本仓 CI 没有 lint 步骤**）与 `CodeQL`；改菜单/权限的 SQL 由后端仓的门禁兜住。
 5. **本机不跑全量前端构建**（低配机器约定）⇒ 前端验证以 CI 为准，PR 说明里附 CI 结论。
+6. **IoT 文案键必须过 `node scripts/check-iot-i18n-keys.mjs`**（CI 已接）：`page.json` 的运行期命名空间是 `page.*`
+   ⇒ 页面里写 `$t('page.iot.xxx')`。缺键/写错前缀会让界面显示原始 key——实测过一次（95 处），当时 CI 全绿也发现不了。
+   为补这个盲区，本仓**故意修改了上游文件** `.github/workflows/ci.yml`（加一步校验），属于「白名单外的必要改动」，
+   已在 PR 说明里注明理由。
 
 ## 与后端仓的关系
 

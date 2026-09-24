@@ -70,7 +70,7 @@ function onDelete(row: IotDeviceApi.DeviceResp) {
           @click="FormDrawerApi.setData(null).open()"
         >
           <template #icon><Plus /></template>
-          {{ $t('ui.actionTitle.create', [$t('iot.device.name')]) }}
+          {{ $t('ui.actionTitle.create', [$t('page.iot.device.name')]) }}
         </Button>
       </template>
 
@@ -78,7 +78,7 @@ function onDelete(row: IotDeviceApi.DeviceResp) {
         <VbenTableAction
           :actions="[
             {
-              text: $t('iot.availability.title', ['']),
+              text: $t('page.iot.availability.title', ['']),
               icon: 'lucide:activity',
               auth: 'iot:availability:get',
               onClick: () => onAvailability(row),

@@ -54,8 +54,8 @@ const [Drawer, drawerApi] = useVbenDrawer<null | IotProductApi.ProductResp>({
       formApi.reset();
       drawerApi.setState({
         title: isUpdate.value
-          ? $t('ui.actionTitle.edit', [$t('iot.product.name')])
-          : $t('ui.actionTitle.create', [$t('iot.product.name')]),
+          ? $t('ui.actionTitle.edit', [$t('page.iot.product.name')])
+          : $t('ui.actionTitle.create', [$t('page.iot.product.name')]),
       });
       await nextTick();
       if (data) {

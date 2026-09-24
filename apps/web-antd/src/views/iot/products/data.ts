@@ -6,19 +6,19 @@ import { $t } from '#/locales';
 
 export function useColumns(): VxeTableGridColumns {
   return [
-    { field: 'productCode', title: $t('iot.product.code'), minWidth: 150 },
-    { field: 'productName', title: $t('iot.product.name'), minWidth: 160 },
-    { field: 'protocol', title: $t('iot.device.protocol'), width: 110 },
-    { field: 'dataFormat', title: $t('iot.product.dataFormat'), width: 110 },
-    { field: 'deviceType', title: $t('iot.product.deviceType'), width: 120 },
+    { field: 'productCode', title: $t('page.iot.product.code'), minWidth: 150 },
+    { field: 'productName', title: $t('page.iot.product.name'), minWidth: 160 },
+    { field: 'protocol', title: $t('page.iot.device.protocol'), width: 110 },
+    { field: 'dataFormat', title: $t('page.iot.product.dataFormat'), width: 110 },
+    { field: 'deviceType', title: $t('page.iot.product.deviceType'), width: 120 },
     {
       field: 'modelStatus',
-      title: $t('iot.product.modelStatus'),
+      title: $t('page.iot.product.modelStatus'),
       width: 110,
       cellRender: { name: 'CellTag' },
     },
-    { field: 'currentVersion', title: $t('iot.product.currentVersion'), width: 110 },
-    { field: 'createTime', title: $t('iot.device.createTime'), width: 170 },
+    { field: 'currentVersion', title: $t('page.iot.product.currentVersion'), width: 110 },
+    { field: 'createTime', title: $t('page.iot.device.createTime'), width: 170 },
     {
       title: $t('common.action'),
       field: 'action',
@@ -34,16 +34,17 @@ export function useFormSchema(): FormSchema[] {
   return [
     {
       component: 'Input',
-      componentProps: { maxlength: 64 },
+      componentProps: { maxlength: 64, placeholder: '如 meter-01' },
       fieldName: 'productCode',
-      label: $t('iot.product.code'),
+      help: $t('page.iot.product.codeHelp'),
+      label: $t('page.iot.product.code'),
       rules: 'required',
     },
     {
       component: 'Input',
       componentProps: { maxlength: 128 },
       fieldName: 'productName',
-      label: $t('iot.product.name'),
+      label: $t('page.iot.product.name'),
       rules: 'required',
     },
     {
@@ -57,7 +58,7 @@ export function useFormSchema(): FormSchema[] {
         ],
       },
       fieldName: 'protocol',
-      label: $t('iot.device.protocol'),
+      label: $t('page.iot.device.protocol'),
       rules: 'required',
     },
     {
@@ -70,25 +71,25 @@ export function useFormSchema(): FormSchema[] {
       },
       defaultValue: 'JSON',
       fieldName: 'dataFormat',
-      label: $t('iot.product.dataFormat'),
+      label: $t('page.iot.product.dataFormat'),
     },
     {
       component: 'Input',
       componentProps: { maxlength: 64 },
       fieldName: 'deviceType',
-      label: $t('iot.product.deviceType'),
+      label: $t('page.iot.product.deviceType'),
     },
     {
       component: 'Input',
       componentProps: { maxlength: 120 },
       fieldName: 'manufacturerName',
-      label: $t('iot.product.manufacturer'),
+      label: $t('page.iot.product.manufacturer'),
     },
     {
       component: 'Input',
       componentProps: { maxlength: 255 },
       fieldName: 'remark',
-      label: $t('iot.device.remark'),
+      label: $t('page.iot.device.remark'),
     },
   ];
 }

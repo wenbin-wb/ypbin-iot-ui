@@ -11,7 +11,8 @@
       "onlineStatus": "Online",
       "lastSeenAt": "Last seen",
       "createTime": "Created",
-      "remark": "Remark"
+      "remark": "Remark",
+      "endpointHelp": "Include the scheme, e.g. tcp://10.0.0.9:502"
     },
     "product": {
       "title": "Products & thing model",
@@ -23,7 +24,10 @@
       "modelStatus": "Model status",
       "currentVersion": "Current version",
       "publish": "Publish model",
-      "publishConfirm": "Publish a new version for devices to bind?"
+      "publishConfirm": "Publish a new version for devices to bind?",
+      "tslImport": "Import TSL",
+      "tslExport": "Export TSL",
+      "codeHelp": "Lowercase letter first, then lowercase letters/digits/hyphens"
     },
     "group": {
       "title": "Device groups",
@@ -67,6 +71,19 @@
       "create": "Declare window",
       "close": "Close window",
       "closeConfirm": "Closed windows no longer count as maintenance. Continue?"
+    },
+    "ledger": {
+      "title": "Ledger changes"
+    },
+    "point": {
+      "title": "Point mapping"
+    },
+    "shadow": {
+      "get": "Read shadow",
+      "update": "Update shadow"
+    },
+    "tag": {
+      "title": "Device tags"
     }
   },
   "auth": {
