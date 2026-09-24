@@ -1,4 +1,91 @@
 {
+  "iot": {
+    "device": {
+      "title": "设备台账",
+      "code": "设备编码",
+      "name": "设备名称",
+      "protocol": "接入协议",
+      "protocolPlaceholder": "选择接入协议（modbus/tcp/mqtt/opcua）",
+      "endpoint": "端点",
+      "endpointPlaceholder": "如 tcp://10.0.0.9:502 或 modbus://10.0.0.9:502",
+      "onlineStatus": "在线状态",
+      "lastSeenAt": "最近在线",
+      "createTime": "创建时间",
+      "remark": "备注",
+      "endpointHelp": "必须带协议头，如 tcp://10.0.0.9:502"
+    },
+    "product": {
+      "title": "产品与物模型",
+      "code": "产品编码",
+      "name": "产品名称",
+      "dataFormat": "数据格式",
+      "deviceType": "设备类型",
+      "manufacturer": "厂商",
+      "modelStatus": "物模型状态",
+      "currentVersion": "当前版本",
+      "publish": "发布物模型",
+      "publishConfirm": "发布后生成新版本并供设备绑定，确认发布？",
+      "tslImport": "导入 TSL",
+      "tslExport": "导出 TSL",
+      "codeHelp": "小写字母开头，可含小写字母/数字/连字符"
+    },
+    "group": {
+      "title": "设备分组",
+      "name": "分组名称",
+      "sort": "排序"
+    },
+    "availability": {
+      "title": "可用率 / 断档{0}",
+      "window": "统计窗口",
+      "effectiveWindow": "统计总时长",
+      "availability": "可用率",
+      "meetsTarget": "达标",
+      "notMeetsTarget": "未达标",
+      "maintenanceSeconds": "维护窗口",
+      "outageInMaintenance": "维护内断档（已剔除）",
+      "outageSeconds": "断档合计",
+      "longestOutage": "最长单次断档",
+      "outageCount": "断档次数",
+      "outages": "断档明细",
+      "noOutage": "窗口内没有断档",
+      "start": "开始",
+      "end": "结束",
+      "duration": "时长",
+      "reason": "原因码",
+      "ongoing": "进行中"
+    },
+    "maintenance": {
+      "title": "维护窗口（计划停机）",
+      "empty": "暂无维护窗口",
+      "device": "设备",
+      "tenantWide": "租户全部设备",
+      "devicePlaceholder": "留空 = 该租户全部设备",
+      "start": "开始",
+      "end": "结束",
+      "endHelp": "留空 = 进行中（手动关闭）",
+      "ongoing": "进行中",
+      "source": "来源",
+      "sourceManual": "人工维护",
+      "sourceHandover": "租约交接",
+      "reason": "说明",
+      "create": "声明维护窗口",
+      "close": "关闭窗口",
+      "closeConfirm": "关闭后该时段不再从可用率里排除，确认关闭？"
+    },
+    "ledger": {
+      "title": "设备台账变更"
+    },
+    "point": {
+      "title": "点位映射"
+    },
+    "shadow": {
+      "get": "读取影子",
+      "update": "更新影子"
+    },
+    "tag": {
+      "title": "设备标签"
+    }
+  },
   "ai": {
     "title": "AI 助手",
     "chat": {

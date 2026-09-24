@@ -1,4 +1,91 @@
 {
+  "iot": {
+    "device": {
+      "title": "Devices",
+      "code": "Device code",
+      "name": "Device name",
+      "protocol": "Protocol",
+      "protocolPlaceholder": "Pick a protocol (modbus/tcp/mqtt/opcua)",
+      "endpoint": "Endpoint",
+      "endpointPlaceholder": "e.g. tcp://10.0.0.9:502",
+      "onlineStatus": "Online",
+      "lastSeenAt": "Last seen",
+      "createTime": "Created",
+      "remark": "Remark",
+      "endpointHelp": "Include the scheme, e.g. tcp://10.0.0.9:502"
+    },
+    "product": {
+      "title": "Products & thing model",
+      "code": "Product code",
+      "name": "Product name",
+      "dataFormat": "Data format",
+      "deviceType": "Device type",
+      "manufacturer": "Manufacturer",
+      "modelStatus": "Model status",
+      "currentVersion": "Current version",
+      "publish": "Publish model",
+      "publishConfirm": "Publish a new version for devices to bind?",
+      "tslImport": "Import TSL",
+      "tslExport": "Export TSL",
+      "codeHelp": "Lowercase letter first, then lowercase letters/digits/hyphens"
+    },
+    "group": {
+      "title": "Device groups",
+      "name": "Group name",
+      "sort": "Sort"
+    },
+    "availability": {
+      "title": "Availability / outages{0}",
+      "window": "Window",
+      "effectiveWindow": "Effective window",
+      "availability": "Availability",
+      "meetsTarget": "Meets target",
+      "notMeetsTarget": "Below target",
+      "maintenanceSeconds": "Maintenance",
+      "outageInMaintenance": "Outage inside maintenance",
+      "outageSeconds": "Outage total",
+      "longestOutage": "Longest outage",
+      "outageCount": "Outage count",
+      "outages": "Outage details",
+      "noOutage": "No outage in this window",
+      "start": "Start",
+      "end": "End",
+      "duration": "Duration",
+      "reason": "Reason",
+      "ongoing": "Ongoing"
+    },
+    "maintenance": {
+      "title": "Maintenance windows",
+      "empty": "No maintenance window",
+      "device": "Device",
+      "tenantWide": "All devices of tenant",
+      "devicePlaceholder": "Empty = all devices of the tenant",
+      "start": "Start",
+      "end": "End",
+      "endHelp": "Empty = ongoing (close manually)",
+      "ongoing": "Ongoing",
+      "source": "Source",
+      "sourceManual": "Manual",
+      "sourceHandover": "Lease handover",
+      "reason": "Reason",
+      "create": "Declare window",
+      "close": "Close window",
+      "closeConfirm": "Closed windows no longer count as maintenance. Continue?"
+    },
+    "ledger": {
+      "title": "Ledger changes"
+    },
+    "point": {
+      "title": "Point mapping"
+    },
+    "shadow": {
+      "get": "Read shadow",
+      "update": "Update shadow"
+    },
+    "tag": {
+      "title": "Device tags"
+    }
+  },
   "auth": {
     "login": "Login",
     "register": "Register",

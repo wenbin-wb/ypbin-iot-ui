@@ -29,6 +29,11 @@ jobs:
       - name: 安装依赖
         run: pnpm install --frozen-lockfile
 
+      # ⚠️ 本仓 CI 原本没有 lint，也没有任何 i18n 校验；实测过一次「键少了 page. 前缀」导致
+      # IoT 页面 95 处文案渲染成原始 key（CI 全绿也发现不了）。此步骤补上该盲区。
+      - name: IoT i18n 键存在性校验
+        run: node scripts/check-iot-i18n-keys.mjs
+
       - name: Typecheck（web-antd）
         run: pnpm -F @vben/web-antd run typecheck
 
