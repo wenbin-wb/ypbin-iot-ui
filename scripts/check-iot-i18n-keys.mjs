@@ -22,7 +22,6 @@ const LANGS = ['zh-CN', 'en-US'];
 const LOCALE_DIRS = [
   'apps/web-antd/src/locales/langs',
   'packages/locales/src/langs',
-  'packages/effects/locales/src/langs',
 ];
 
 function walk(dir) {

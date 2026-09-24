@@ -28,10 +28,15 @@ const [Drawer, drawerApi] = useVbenDrawer<AvailabilityDrawerData>({
     drawerApi.setState({
       title: $t('page.iot.availability.title', [device?.deviceName ?? device?.id ?? '']),
     });
+    // 没有设备 id 不发请求：否则会打 /iot/devices//availability（后端 404，白跑一趟还留噪音）
+    if (!device?.id) {
+      data.value = undefined;
+      return;
+    }
     loading.value = true;
     data.value = undefined;
     try {
-      data.value = await getDeviceAvailability(device?.id ?? '');
+      data.value = await getDeviceAvailability(device.id);
     } finally {
       loading.value = false;
     }
