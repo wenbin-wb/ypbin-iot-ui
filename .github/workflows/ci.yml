@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 检出代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 配置 pnpm
         uses: pnpm/action-setup@v4
@@ -57,17 +57,17 @@ jobs:
       # 若还没合入「base 迁出 / 宿主目录」，本门禁必然失败，而此时失败性质是**检出/配置**而非事件码漂移，
       # 生成器会以退出码 2 明确区分（见 scripts/sync-tracking-events.mjs 头部说明）。
       - name: 检出代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 检出 starter（base 层事件目录事实源）
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: wenbin-wb/ypbin-starter
           ref: master
           path: ypbin-starter
 
       - name: 检出 admin（宿主 project 层事件目录）
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: wenbin-wb/ypbin-admin
           ref: main
