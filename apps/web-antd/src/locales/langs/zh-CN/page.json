@@ -179,7 +179,29 @@
       "closeConfirm": "关闭后该时段不再从可用率里排除，确认关闭？"
     },
     "ledger": {
-      "title": "设备台账变更"
+      "title": "设备台账变更",
+      "pageTitle": "租户接入台账",
+      "tenant": "租户",
+      "assignable": "接入状态",
+      "assignableOn": "可接入",
+      "assignableOff": "不可接入",
+      "suspend": "撤销接入",
+      "suspendConfirm": "撤销后不再为该租户分配新的接入租约；已分配的租约不会被回收，接入侧会在下一租约周期重新对账，确认撤销？",
+      "resume": "恢复接入",
+      "resumeConfirm": "恢复后该租户可重新被分配接入租约，确认恢复？",
+      "configEpoch": "配置代次",
+      "updateTime": "更新时间",
+      "deviceCount": "设备数",
+      "lastReportAt": "最近上报",
+      "credential": "是否有凭据",
+      "pending": "待接入",
+      "noticeTitle": "部分列暂无可信数据源",
+      "noticeText": "「设备数」「最近上报」「是否有凭据」三列留空并标注「待接入」：IoT 服务未提供跨租户聚合与凭据接口，本页不填充任何推测值，补齐这三列需要后端新增聚合接口。「租户」列显示的是 tenantId；租户名称需 sys_tenant 接口，IoT 服务未暴露，同样待接入。",
+      "change": {
+        "created": "首次接入",
+        "revived": "恢复接入",
+        "updated": "仅更新开关"
+      }
     },
     "point": {
       "title": "点位映射",
