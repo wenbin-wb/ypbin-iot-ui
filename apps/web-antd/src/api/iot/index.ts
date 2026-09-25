@@ -2,6 +2,7 @@ export * from './availability';
 export * from './device';
 export * from './event';
 export * from './group';
+export * from './ledger';
 export * from './maintenance';
 export * from './point';
 export * from './product';

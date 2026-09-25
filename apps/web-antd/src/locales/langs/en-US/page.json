@@ -241,7 +241,29 @@
       "templateRelayPointVoltage": "Holding register 0x0010 (40017), unsigned 16-bit ×0.1, unit V"
     },
     "ledger": {
-      "title": "Ledger changes"
+      "title": "Ledger changes",
+      "pageTitle": "Tenant Access Ledger",
+      "tenant": "Tenant",
+      "assignable": "Access status",
+      "assignableOn": "Assignable",
+      "assignableOff": "Not assignable",
+      "suspend": "Revoke access",
+      "suspendConfirm": "Revoking stops new access leases from being assigned to this tenant. Already-assigned leases are not reclaimed; the access node re-reconciles on its next lease cycle. Revoke anyway?",
+      "resume": "Restore access",
+      "resumeConfirm": "Once restored, this tenant can be assigned access leases again. Restore?",
+      "configEpoch": "Config epoch",
+      "updateTime": "Updated at",
+      "deviceCount": "Devices",
+      "lastReportAt": "Last reported",
+      "credential": "Has credentials",
+      "pending": "Pending integration",
+      "noticeTitle": "Some columns have no trustworthy data source yet",
+      "noticeText": "The Devices, Last reported and Has credentials columns are intentionally left blank and marked Pending integration: the IoT service exposes no cross-tenant aggregation or credential endpoint, so this page never fills in guessed values. Enabling those columns requires a new backend aggregation API. The Tenant column shows the raw tenantId; resolving tenant names needs the sys_tenant API, which the IoT service does not expose, so it is pending integration too.",
+      "change": {
+        "created": "First-time onboarding",
+        "revived": "Onboarding resumed",
+        "updated": "Access switch updated"
+      }
     },
     "point": {
       "title": "Point mapping",
