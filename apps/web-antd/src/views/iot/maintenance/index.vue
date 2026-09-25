@@ -15,6 +15,9 @@ import {
 } from '#/api/iot';
 import { $t } from '#/locales';
 
+import EmptyGuide from '../onboarding/modules/empty-guide.vue';
+import OnboardingGuide from '../onboarding/modules/guide.vue';
+
 import { useColumns } from './data';
 import Form from './modules/form.vue';
 
@@ -27,6 +30,8 @@ type MaintenanceWindowRow = IotMaintenanceApi.MaintenanceWindowDto & {
 };
 
 const [FormDrawer, FormDrawerApi] = useVbenDrawer({ connectedComponent: Form });
+/** 接入向导（F6）抽屉：空态引导的「下一步」入口（保持与设备/产品页同一处）。 */
+const [GuideDrawer, GuideDrawerApi] = useVbenDrawer();
 
 /**
  * 拉取窗口列表并把 `deviceId` 换成设备名（F3：解决「看不出关联」最直观的一处）。
@@ -77,12 +82,23 @@ function onClose(row: IotMaintenanceApi.MaintenanceWindowDto) {
     })
     .catch(() => {});
 }
+
+/** 打开接入向导抽屉（空态引导的「下一步」）。 */
+function openGuide() {
+  GuideDrawerApi.open();
+}
 </script>
 <template>
   <Page auto-content-height>
     <FormDrawer @reload="gridApi.query()" />
+    <GuideDrawer :title="$t('page.iot.onboarding.title')" class="w-[900px]">
+      <OnboardingGuide @done="gridApi.query()" />
+    </GuideDrawer>
     <Grid>
       <template #toolbar-tools>
+        <Button class="mr-2" @click="openGuide">
+          {{ $t('page.iot.onboarding.openGuide') }}
+        </Button>
         <Button
           v-access:code="['iot:maintenance:create']"
           type="primary"
@@ -91,6 +107,14 @@ function onClose(row: IotMaintenanceApi.MaintenanceWindowDto) {
           <template #icon><Plus /></template>
           {{ $t('page.iot.maintenance.create') }}
         </Button>
+      </template>
+
+      <!-- 空态引导：维护窗口为空时说明「为什么是空的 + 下一步点哪里」 -->
+      <template #empty>
+        <EmptyGuide
+          :reason="$t('page.iot.maintenance.emptyReason')"
+          @open-guide="openGuide"
+        />
       </template>
 
       <template #action="{ row }">

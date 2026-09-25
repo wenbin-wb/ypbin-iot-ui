@@ -11,6 +11,9 @@ import { useVbenVxeGrid, VbenTableAction } from '#/adapter/vxe-table';
 import { deleteProduct, getProductPage, publishProduct } from '#/api/iot';
 import { $t } from '#/locales';
 
+import EmptyGuide from '../onboarding/modules/empty-guide.vue';
+import OnboardingGuide from '../onboarding/modules/guide.vue';
+
 import { useColumns } from './data';
 import Detail from './modules/detail.vue';
 import Form from './modules/form.vue';
@@ -19,6 +22,8 @@ const [FormDrawer, FormDrawerApi] = useVbenDrawer({ connectedComponent: Form });
 const [DetailDrawer, DetailDrawerApi] = useVbenDrawer({
   connectedComponent: Detail,
 });
+/** 接入向导（F6）抽屉：内容组件不自带抽屉容器（它还要被独立页面复用）⇒ 用默认插槽挂进来。 */
+const [GuideDrawer, GuideDrawerApi] = useVbenDrawer();
 
 const [Grid, gridApi] = useVbenVxeGrid({
   gridOptions: {
@@ -66,13 +71,24 @@ function onPublish(row: IotProductApi.ProductResp) {
     })
     .catch(() => {});
 }
+
+/** 打开接入向导抽屉（空态引导与工具栏按钮共用同一个入口）。 */
+function openGuide() {
+  GuideDrawerApi.open();
+}
 </script>
 <template>
   <Page auto-content-height>
     <FormDrawer @reload="gridApi.query()" />
     <DetailDrawer @reload="gridApi.query()" />
+    <GuideDrawer :title="$t('page.iot.onboarding.title')" class="w-[900px]">
+      <OnboardingGuide @done="gridApi.query()" />
+    </GuideDrawer>
     <Grid>
       <template #toolbar-tools>
+        <Button class="mr-2" @click="openGuide">
+          {{ $t('page.iot.onboarding.openGuide') }}
+        </Button>
         <Button
           v-access:code="['iot:product:create']"
           type="primary"
@@ -81,6 +97,14 @@ function onPublish(row: IotProductApi.ProductResp) {
           <template #icon><Plus /></template>
           {{ $t('ui.actionTitle.create', [$t('page.iot.product.name')]) }}
         </Button>
+      </template>
+
+      <!-- 空态引导：说明「为什么是空的 + 下一步点哪里」，而不是一张空白表格 -->
+      <template #empty>
+        <EmptyGuide
+          :reason="$t('page.iot.product.emptyReason')"
+          @open-guide="openGuide"
+        />
       </template>
 
       <template #action="{ row }">
