@@ -342,13 +342,16 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
           </Descriptions>
 
           <div class="mt-4 flex flex-wrap gap-2">
-            <Button @click="onExportTsl">
+            <Button v-access:code="['iot:product:tsl-export']" @click="onExportTsl">
               {{ $t('page.iot.product.tslExport') }}
             </Button>
-            <Button @click="activeTab = 'tsl'">
+            <Button
+              v-access:code="['iot:product:tsl-import']"
+              @click="activeTab = 'tsl'"
+            >
               {{ $t('page.iot.product.tslImport') }}
             </Button>
-            <Button @click="onNewDraft">
+            <Button v-access:code="['iot:product:update']" @click="onNewDraft">
               {{ $t('page.iot.product.newDraft') }}
             </Button>
             <Button
@@ -383,6 +386,7 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
               {{ $t('page.iot.product.service') }}
             </span>
             <Button
+              v-access:code="['iot:product:update']"
               size="small"
               type="primary"
               @click="openEditor('service', null)"
@@ -423,6 +427,7 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
                 <td class="py-1">{{ service.description || '-' }}</td>
                 <td class="py-1">
                   <Button
+                    v-access:code="['iot:product:update']"
                     size="small"
                     type="link"
                     @click="openEditor('service', service)"
@@ -433,7 +438,12 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
                     :title="$t('ui.actionMessage.deleteConfirm', [service.serviceId])"
                     @confirm="onDeleteService(service)"
                   >
-                    <Button danger size="small" type="link">
+                    <Button
+                      v-access:code="['iot:product:update']"
+                      danger
+                      size="small"
+                      type="link"
+                    >
                       {{ $t('common.delete') }}
                     </Button>
                   </Popconfirm>
@@ -453,7 +463,11 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
               <span class="font-semibold">
                 {{ $t('page.iot.product.property') }}
               </span>
-              <Button size="small" @click="openEditor('property', null)">
+              <Button
+                v-access:code="['iot:product:update']"
+                size="small"
+                @click="openEditor('property', null)"
+              >
                 {{ $t('page.iot.product.addProperty') }}
               </Button>
             </div>
@@ -489,6 +503,7 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
                   </td>
                   <td class="py-1">
                     <Button
+                      v-access:code="['iot:product:update']"
                       size="small"
                       type="link"
                       @click="openEditor('property', row)"
@@ -501,7 +516,12 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
                       "
                       @confirm="onDeleteProperty(row)"
                     >
-                      <Button danger size="small" type="link">
+                      <Button
+                        v-access:code="['iot:product:update']"
+                        danger
+                        size="small"
+                        type="link"
+                      >
                         {{ $t('common.delete') }}
                       </Button>
                     </Popconfirm>
@@ -515,7 +535,11 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
               <span class="font-semibold">
                 {{ $t('page.iot.product.command') }}
               </span>
-              <Button size="small" @click="openEditor('command', null)">
+              <Button
+                v-access:code="['iot:product:update']"
+                size="small"
+                @click="openEditor('command', null)"
+              >
                 {{ $t('page.iot.product.addCommand') }}
               </Button>
             </div>
@@ -539,6 +563,7 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
                   <td class="py-1">{{ row.timeoutMs ?? '-' }}</td>
                   <td class="py-1">
                     <Button
+                      v-access:code="['iot:product:update']"
                       size="small"
                       type="link"
                       @click="openEditor('command', row)"
@@ -551,7 +576,12 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
                       "
                       @confirm="onDeleteCommand(row)"
                     >
-                      <Button danger size="small" type="link">
+                      <Button
+                        v-access:code="['iot:product:update']"
+                        danger
+                        size="small"
+                        type="link"
+                      >
                         {{ $t('common.delete') }}
                       </Button>
                     </Popconfirm>
@@ -565,7 +595,11 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
               <span class="font-semibold">
                 {{ $t('page.iot.product.event') }}
               </span>
-              <Button size="small" @click="openEditor('event', null)">
+              <Button
+                v-access:code="['iot:product:update']"
+                size="small"
+                @click="openEditor('event', null)"
+              >
                 {{ $t('page.iot.product.addEvent') }}
               </Button>
             </div>
@@ -591,6 +625,7 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
                   <td class="py-1">{{ row.unit || '-' }}</td>
                   <td class="py-1">
                     <Button
+                      v-access:code="['iot:product:update']"
                       size="small"
                       type="link"
                       @click="openEditor('event', row)"
@@ -603,7 +638,12 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
                       "
                       @confirm="onDeleteEvent(row)"
                     >
-                      <Button danger size="small" type="link">
+                      <Button
+                        v-access:code="['iot:product:update']"
+                        danger
+                        size="small"
+                        type="link"
+                      >
                         {{ $t('common.delete') }}
                       </Button>
                     </Popconfirm>
@@ -623,10 +663,14 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
             type="info"
           />
           <div class="mb-2 flex gap-2">
-            <Button @click="onExportTsl">
+            <Button v-access:code="['iot:product:tsl-export']" @click="onExportTsl">
               {{ $t('page.iot.product.tslExport') }}
             </Button>
-            <Button type="primary" @click="onImportTsl">
+            <Button
+              v-access:code="['iot:product:tsl-import']"
+              type="primary"
+              @click="onImportTsl"
+            >
               {{ $t('page.iot.product.tslImport') }}
             </Button>
           </div>
