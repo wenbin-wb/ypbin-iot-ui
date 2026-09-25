@@ -172,17 +172,27 @@ async function loadVersions() {
 async function reloadAll() {
   emit('reload');
   loading.value = true;
+  // 两块数据源相互独立：物模型是草稿态的接口、版本列表任何状态都能读 ⇒
+  // 不能用同一个 try 包住，否则已发布产品的 409 会连带把「版本」页签清空（复核实测指出）
   try {
     await loadModel();
-    await loadVersions();
   } catch (error) {
+    services.value = [];
+    properties.value = [];
+    commands.value = [];
+    events.value = [];
     modelError.value = extractErrorMessage(
       error,
       $t('page.iot.product.modelLoadFailed'),
     );
-  } finally {
-    loading.value = false;
   }
+  try {
+    await loadVersions();
+  } catch (error) {
+    versions.value = [];
+    console.warn('[iot] 产品版本列表加载失败，版本页签回落为空', error);
+  }
+  loading.value = false;
 }
 
 function onSelectService(serviceId: string) {

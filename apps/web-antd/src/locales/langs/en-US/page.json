@@ -37,7 +37,8 @@
       "runtimeEvents": "Runtime events",
       "eventsNotAvailable": "The runtime event pipeline is not implemented yet (proposal P1-5); this block stays empty and shows no placeholder data",
       "recentEvents": "Recent events",
-      "modelNeedsDraft": "Property names come from the product thing model, and those read APIs require draft state (backend contract). For a published product only the point mappings and property IDs are shown; create a draft or export the TSL to see names."
+      "modelNeedsDraft": "Property names come from the product thing model, and those read APIs require draft state (backend contract). For a published product only the point mappings and property IDs are shown; create a draft or export the TSL to see names.",
+      "modelFromTsl": "This product is PUBLISHED, and the thing-model list APIs require draft state (backend contract, observed 409). The properties below come from \"Export TSL\": identifiers only, no property primary keys, so they are listed side by side with the point mappings — no join and no \"unmapped\" tag."
     },
     "product": {
       "title": "Products & thing model",
