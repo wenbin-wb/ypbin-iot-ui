@@ -36,9 +36,7 @@
       "seriesReuseHint": "This section reuses the device ledger history-curve drawer (same query, chart and CSV export) instead of a second chart implementation",
       "runtimeEvents": "Runtime events",
       "eventsNotAvailable": "The runtime event pipeline is not implemented yet (proposal P1-5); this block stays empty and shows no placeholder data",
-      "recentEvents": "Recent events",
-      "modelNeedsDraft": "Property names come from the product thing model, and those read APIs require draft state (backend contract). For a published product only the point mappings and property IDs are shown; create a draft or export the TSL to see names.",
-      "modelFromTsl": "This product is PUBLISHED, and the thing-model list APIs require draft state (backend contract, observed 409). The properties below come from \"Export TSL\": identifiers only, no property primary keys, so they are listed side by side with the point mappings — no join and no \"unmapped\" tag."
+      "recentEvents": "Recent events"
     },
     "product": {
       "title": "Products & thing model",
@@ -107,8 +105,9 @@
       "tslImportFailed": "Import failed; per-item errors (nothing persisted):",
       "tslSuccessCount": "{0} item(s) imported",
       "deviceTabHint": "Filtering devices by product needs a backend productId query condition (proposal G8, not in this round); use the button below to add a device, and the device ledger to browse them",
-      "draftRequired": "A published product's thing model can only be listed after creating a new draft (backend contract: the read APIs require draft state); to inspect the published structure use \"Export TSL\".",
-      "newDraftConfirm": "Creating a draft puts the product back into editable state and advances the version. Continue?"
+      "newDraftConfirm": "Creating a draft puts the product back into editable state and advances the version. Continue?",
+      "readonlyPublished": "The thing model of a published product is READ-ONLY (services/properties/commands/events can be listed and the TSL exported); editing requires creating a new draft first (the write APIs require draft state).",
+      "readonlyEditBlocked": "This product is published and its thing model is read-only; create a new draft before editing."
     },
     "group": {
       "title": "Device groups",
