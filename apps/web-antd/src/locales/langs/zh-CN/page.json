@@ -36,7 +36,8 @@
       "seriesReuseHint": "本区块复用设备台账的「历史曲线」抽屉（同一套查询、图表与 CSV 导出），不另画一套图表",
       "runtimeEvents": "运行期事件",
       "eventsNotAvailable": "运行期事件链路尚未实现（方案 P1-5），本区块留空位；未接入前不展示任何数据",
-      "recentEvents": "最近事件"
+      "recentEvents": "最近事件",
+      "emptyReason": "该租户还没有设备：设备必须先属于一个产品（产品的物模型决定它能上报哪些属性），所以接入的第一步是建产品与定义物模型。"
     },
     "product": {
       "title": "产品与物模型",
@@ -107,7 +108,8 @@
       "deviceTabHint": "按产品筛选设备需要后端补 productId 查询条件（方案 G8，本轮未做）；此处先给「添加设备」入口，设备清单请到设备台账查看",
       "newDraftConfirm": "新建草稿会把产品置回可编辑态并推进版本号，确认新建？",
       "readonlyPublished": "已发布产品的物模型为**只读**（可查看服务/属性/命令/事件，也可导出 TSL）；编辑需要先「新建草稿」（后端写接口要求草稿态）。",
-      "readonlyEditBlocked": "该产品已发布，物模型只读；编辑请先「新建草稿」。"
+      "readonlyEditBlocked": "该产品已发布，物模型只读；编辑请先「新建草稿」。",
+      "emptyReason": "该租户还没有产品：产品是「同型号设备的集合」，物模型（服务/属性/命令/事件）挂在产品上；设备只能绑定已发布的产品，所以这里有数据之后才能添加设备。"
     },
     "group": {
       "title": "设备分组",
@@ -176,7 +178,52 @@
       "reason": "说明",
       "create": "声明维护窗口",
       "close": "关闭窗口",
-      "closeConfirm": "关闭后该时段不再从可用率里排除，确认关闭？"
+      "closeConfirm": "关闭后该时段不再从可用率里排除，确认关闭？",
+      "emptyReason": "还没有维护窗口：维护窗口用于把计划停机（检修、换件）从可用率统计里排除；不声明的话这段停机就会算成断档、拉低可用率。"
+    },
+    "onboarding": {
+      "title": "接入向导",
+      "openGuide": "接入向导",
+      "emptyTitle": "这里还是空的",
+      "emptyNext": "不熟悉物模型也没关系：向导里有内置模板，三步就能接入第一台设备",
+      "readyHint": "该租户已有产品/设备。接入向导仍可打开：新建产品、按模板建物模型或加设备时都能用。",
+      "showGuide": "打开向导",
+      "hideGuide": "收起向导",
+      "step1Title": "① 新建产品（或从模板）",
+      "step1Desc": "产品 = 同型号设备的集合，物模型（属性/服务/命令/事件）挂在产品上；先用模板一键建好，比从零填表快得多。",
+      "step2Title": "② 定义物模型（属性/服务）",
+      "step2Desc": "物模型决定设备能上报哪些数据。模板已带好温湿度等属性；要改就到产品详情的「物模型」页签，改完记得发布。",
+      "step3Title": "③ 添加设备并查看数据",
+      "step3Desc": "设备必须绑定一个已发布的产品；建好设备后在设备详情看最新值、历史曲线与运行期事件。",
+      "createFromTemplate": "用模板一键创建",
+      "createSuccess": "已按模板创建产品与物模型",
+      "createFailed": "按模板创建失败",
+      "publishSuccess": "物模型已发布，版本",
+      "publishFailed": "发布失败",
+      "createdFromTemplate": "由接入向导的模板「{0}」创建",
+      "createdProduct": "已创建产品：{0}（设备只能绑定已发布产品，请先发布）",
+      "codeRequired": "请先填写产品名称与编码",
+      "pointSuggest": "点位建议（在设备详情的「属性与点位」里落地，模板不会替设备建点位）",
+      "goProducts": "去产品与物模型",
+      "openThingModel": "查看/编辑物模型",
+      "addDevice": "添加设备",
+      "goDevices": "去设备台账",
+      "propertyTemperature": "温度",
+      "propertyHumidity": "湿度",
+      "propertyPower": "开关状态",
+      "propertyVoltage": "电压",
+      "templateTempHumidityName": "温湿度传感器",
+      "templateTempHumidityDesc": "最常见的环境监测设备：温度 + 湿度两个只读属性，Modbus 从站。",
+      "templateTempHumidityProduct": "温湿度传感器",
+      "templateTempHumidityService": "温湿度采集",
+      "templateTempHumidityPointTemp": "保持寄存器 0x0000（40001），16 位有符号 ×0.1，单位 ℃",
+      "templateTempHumidityPointHumidity": "保持寄存器 0x0001（40002），16 位无符号 ×0.1，单位 %RH",
+      "templateRelayName": "继电器开关",
+      "templateRelayDesc": "可读可写的开关量：开关状态（读写）+ 电压（只读），适合远程控制类设备。",
+      "templateRelayProduct": "继电器开关",
+      "templateRelayService": "开关控制",
+      "templateRelayPointPower": "线圈 0x0000（00001），1 = 合闸、0 = 分闸；属性读写权限为 RW 才可下发",
+      "templateRelayPointVoltage": "保持寄存器 0x0010（40017），16 位无符号 ×0.1，单位 V"
     },
     "ledger": {
       "title": "设备台账变更"

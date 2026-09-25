@@ -14,6 +14,9 @@ import { useVbenVxeGrid, VbenTableAction } from '#/adapter/vxe-table';
 import { deleteDevice, getDevicePage } from '#/api/iot';
 import { $t } from '#/locales';
 
+import EmptyGuide from '../onboarding/modules/empty-guide.vue';
+import OnboardingGuide from '../onboarding/modules/guide.vue';
+
 import { useColumns } from './data';
 import Availability from './modules/availability.vue';
 import Detail from './modules/detail.vue';
@@ -33,6 +36,14 @@ const [AvailabilityDrawer, AvailabilityDrawerApi] = useVbenDrawer({
 const [SeriesDrawer, SeriesDrawerApi] = useVbenDrawer({
   connectedComponent: Series,
 });
+/**
+ * 接入向导（F6）抽屉。
+ *
+ * 用**默认插槽**而不是 `connectedComponent`：向导内容组件（`onboarding/modules/guide.vue`）
+ * 同时要被独立页面复用，因此它不自带抽屉容器；`connectedComponent` 形态要求子组件自己渲染
+ * `<Drawer>`（vben 只 provide 上下文、父侧不渲染容器），两者不能兼得。
+ */
+const [GuideDrawer, GuideDrawerApi] = useVbenDrawer();
 
 const [Grid, gridApi] = useVbenVxeGrid({
   gridOptions: {
@@ -100,6 +111,19 @@ function onDelete(row: IotDeviceApi.DeviceResp) {
     // 失败提示由全局请求拦截器统一处理，这里仅兜底避免未处理拒绝
     .catch(() => {});
 }
+
+/** 打开接入向导抽屉（空态引导与工具栏按钮共用同一个入口）。 */
+function openGuide() {
+  GuideDrawerApi.open();
+}
+
+/**
+ * 向导第 3 步点了「添加设备」：先关向导，否则它会盖在设备表单抽屉上；
+ * 表单本身由 `consumeCreateQuery()` 消费 `?productId=&action=create` 后打开（同一条既有链路）。
+ */
+function onGuideAddDevice() {
+  GuideDrawerApi.close();
+}
 </script>
 <template>
   <Page auto-content-height>
@@ -107,8 +131,19 @@ function onDelete(row: IotDeviceApi.DeviceResp) {
     <DetailDrawer />
     <AvailabilityDrawer />
     <SeriesDrawer />
+    <GuideDrawer :title="$t('page.iot.onboarding.title')" class="w-[900px]">
+      <OnboardingGuide
+        @add-device="onGuideAddDevice"
+        @done="gridApi.query()"
+      />
+    </GuideDrawer>
     <Grid>
       <template #toolbar-tools>
+        <!-- 接入向导入口：不带权限码（方案 §6.1：所有角色可见，先知道下一步做什么）； -->
+        <!-- 向导里的写动作各自沿用 iot:product:create / iot:product:publish / iot:device:create。 -->
+        <Button class="mr-2" @click="openGuide">
+          {{ $t('page.iot.onboarding.openGuide') }}
+        </Button>
         <Button
           v-access:code="['iot:device:create']"
           type="primary"
@@ -117,6 +152,14 @@ function onDelete(row: IotDeviceApi.DeviceResp) {
           <template #icon><Plus /></template>
           {{ $t('ui.actionTitle.create', [$t('page.iot.device.name')]) }}
         </Button>
+      </template>
+
+      <!-- 空态引导：说明「为什么是空的 + 下一步点哪里」，而不是一张空白表格 -->
+      <template #empty>
+        <EmptyGuide
+          :reason="$t('page.iot.device.emptyReason')"
+          @open-guide="openGuide"
+        />
       </template>
 
       <template #action="{ row }">
