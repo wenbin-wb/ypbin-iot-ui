@@ -22,7 +22,9 @@ const [Form, formApi] = useVbenForm({
   showDefaultActions: false,
 });
 
-const [Drawer, drawerApi] = useVbenDrawer<null | IotDeviceApi.DeviceResp>({
+const [Drawer, drawerApi] = useVbenDrawer<
+  null | Partial<IotDeviceApi.DeviceResp>
+>({
   onCancel() {
     drawerApi.close();
   },

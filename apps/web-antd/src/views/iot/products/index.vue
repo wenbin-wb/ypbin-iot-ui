@@ -12,9 +12,13 @@ import { deleteProduct, getProductPage, publishProduct } from '#/api/iot';
 import { $t } from '#/locales';
 
 import { useColumns } from './data';
+import Detail from './modules/detail.vue';
 import Form from './modules/form.vue';
 
 const [FormDrawer, FormDrawerApi] = useVbenDrawer({ connectedComponent: Form });
+const [DetailDrawer, DetailDrawerApi] = useVbenDrawer({
+  connectedComponent: Detail,
+});
 
 const [Grid, gridApi] = useVbenVxeGrid({
   gridOptions: {
@@ -40,6 +44,11 @@ function onEdit(row: IotProductApi.ProductResp) {
   FormDrawerApi.setData(row).open();
 }
 
+/** 产品详情（F2）：5 页签 + 物模型编辑器 + 添加设备入口，全部走已存在的物模型接口。 */
+function onDetail(row: IotProductApi.ProductResp) {
+  DetailDrawerApi.setData(row).open();
+}
+
 function onDelete(row: IotProductApi.ProductResp) {
   deleteProduct(row.id)
     .then(() => {
@@ -61,6 +70,7 @@ function onPublish(row: IotProductApi.ProductResp) {
 <template>
   <Page auto-content-height>
     <FormDrawer @reload="gridApi.query()" />
+    <DetailDrawer @reload="gridApi.query()" />
     <Grid>
       <template #toolbar-tools>
         <Button
@@ -76,6 +86,12 @@ function onPublish(row: IotProductApi.ProductResp) {
       <template #action="{ row }">
         <VbenTableAction
           :actions="[
+            {
+              text: $t('page.iot.product.detail'),
+              icon: 'lucide:info',
+              auth: 'iot:product:list',
+              onClick: () => onDetail(row),
+            },
             {
               text: $t('page.iot.product.publish'),
               icon: 'lucide:upload',
