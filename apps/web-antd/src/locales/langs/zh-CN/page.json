@@ -35,8 +35,23 @@
       "openSeries": "打开历史曲线",
       "seriesReuseHint": "本区块复用设备台账的「历史曲线」抽屉（同一套查询、图表与 CSV 导出），不另画一套图表",
       "runtimeEvents": "运行期事件",
-      "eventsNotAvailable": "运行期事件链路尚未实现（方案 P1-5），本区块留空位；未接入前不展示任何数据",
       "recentEvents": "最近事件"
+    },
+    "event": {
+      "title": "运行期事件",
+      "level": "级别",
+      "levelInfo": "信息",
+      "levelWarn": "告警",
+      "levelError": "错误",
+      "allLevels": "全部级别",
+      "refresh": "刷新",
+      "params": "参数",
+      "eventTs": "发生时间",
+      "empty": "该设备暂无运行期事件（设备尚未上报事件，或当前筛选条件下没有记录）",
+      "loadFailed": "运行期事件查询失败",
+      "total": "共 {0} 条",
+      "truncated": "仅显示最近 {0} 条，更多请按级别或时间收窄",
+      "goToTab": "更多事件请在「事件与断档」页签查看"
     },
     "product": {
       "title": "产品与物模型",

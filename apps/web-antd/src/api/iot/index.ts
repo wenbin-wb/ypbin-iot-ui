@@ -1,5 +1,6 @@
 export * from './availability';
 export * from './device';
+export * from './event';
 export * from './group';
 export * from './maintenance';
 export * from './point';
