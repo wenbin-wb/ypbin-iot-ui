@@ -2,5 +2,8 @@ export * from './availability';
 export * from './device';
 export * from './group';
 export * from './maintenance';
+export * from './point';
 export * from './product';
 export * from './series';
+export * from './shadow';
+export * from './thingmodel';

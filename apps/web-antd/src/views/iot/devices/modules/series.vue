@@ -34,6 +34,11 @@ interface SeriesDrawerData {
   deviceCode?: string;
   deviceName?: string;
   id: string;
+  /**
+   * 可选：打开时就填好的点位标识。
+   * 供设备详情「属性与点位」逐行点「历史曲线」复用本抽屉（不重画一套图表逻辑）。
+   */
+  propertyId?: string;
 }
 
 type SeriesPoint = IotSeriesApi.TimeSeriesPointResp;
@@ -78,7 +83,8 @@ const [Drawer, drawerApi] = useVbenDrawer<SeriesDrawerData>({
     deviceId.value = device?.id ?? '';
     deviceLabel.value =
       device?.deviceName ?? device?.deviceCode ?? deviceId.value;
-    propertyId.value = '';
+    // 详情页逐行点「历史曲线」时会把点位带进来；不带时仍是空白（原行为不变）
+    propertyId.value = device?.propertyId ?? '';
     fromValue.value = undefined;
     toValue.value = undefined;
     limit.value = IOT_SERIES_DEFAULT_LIMIT;

@@ -2,6 +2,7 @@ import type { VbenFormSchema as FormSchema } from '#/adapter/form';
 import type { VxeTableGridColumns } from '#/adapter/vxe-table';
 import type { IotDeviceApi } from '#/api/iot';
 
+import { getPublishedProductOptions } from '#/api/iot';
 import { $t } from '#/locales';
 
 /** 设备台账列表列（可用率/历史曲线入口放在操作列：逐台设备的数据面查询是 M-2 的核心观感）。 */
@@ -34,6 +35,24 @@ export function useColumns(): VxeTableGridColumns {
 /** 新增/编辑设备表单。 */
 export function useFormSchema(): FormSchema[] {
   return [
+    {
+      component: 'ApiSelect',
+      // G9：此前 `productId` 只出现在 `api/iot/device.ts` 的类型声明里（0 处视图使用），
+      // 于是「产品 → 设备」这条线在界面上完全断掉（设备台账看不出归属哪个产品）。
+      // 只列**已发布**产品：设备要绑定物模型版本，草稿态结构随时会变，绑上去无从校验。
+      componentProps: {
+        allowClear: true,
+        api: getPublishedProductOptions,
+        class: 'w-full',
+        labelField: 'productName',
+        placeholder: $t('page.iot.device.productPlaceholder'),
+        showSearch: true,
+        valueField: 'id',
+      },
+      fieldName: 'productId',
+      help: $t('page.iot.device.productHelp'),
+      label: $t('page.iot.device.product'),
+    },
     {
       component: 'Input',
       componentProps: { maxlength: 64 },

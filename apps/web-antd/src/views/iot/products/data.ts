@@ -23,7 +23,8 @@ export function useColumns(): VxeTableGridColumns {
       title: $t('common.action'),
       field: 'action',
       fixed: 'right',
-      width: 240,
+      // 4 个带图标+文字的按钮（详情 / 发布 / 编辑 / 删除）排一行，240 会被省略号截断
+      width: 330,
       align: 'center',
       slots: { default: 'action' },
     },
