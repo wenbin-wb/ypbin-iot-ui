@@ -1,0 +1,1022 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>平台级导航原型 · Ypbin 平台</title>
+<style>
+:root{
+  --primary:#1677ff;
+  --bg:#f5f5f5;
+  --line:#e8e8e8;
+  --text:#1f1f1f;
+  --text-2:#595959;
+  --text-3:#8c8c8c;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  font-size:14px;
+  line-height:1.5715;
+}
+a{color:inherit;text-decoration:none;}
+h3{margin:0;font-size:15px;font-weight:600;}
+.muted{color:var(--text-3);font-size:12px;}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;}
+
+/* ---------- 顶栏：logo + 大模块条 + 右侧工具 ---------- */
+.topbar{
+  position:sticky;top:0;z-index:20;
+  display:flex;align-items:center;gap:6px;
+  height:56px;padding:0 16px;
+  background:#fff;border-bottom:1px solid var(--line);
+}
+.brand{display:flex;align-items:center;gap:8px;flex:none;margin-right:10px;}
+.brand-name{font-size:16px;font-weight:600;letter-spacing:.4px;white-space:nowrap;}
+.mod-tabs{display:flex;align-items:stretch;height:56px;flex:1 1 auto;min-width:0;overflow:hidden;}
+.mod-tab{
+  display:flex;align-items:center;
+  padding:0 14px;font-size:14px;color:#404040;white-space:nowrap;
+  border-bottom:2px solid transparent;
+}
+.mod-tab:hover{color:var(--primary);}
+.mod-tab.active{color:var(--primary);font-weight:500;border-bottom-color:var(--primary);}
+.topbar-right{display:flex;align-items:center;gap:10px;flex:none;margin-left:auto;}
+.search-box{
+  display:flex;align-items:center;gap:6px;
+  height:32px;width:210px;min-width:0;
+  padding:0 10px;border:1px solid #d9d9d9;border-radius:4px;background:#fff;
+}
+.search-box:focus-within{border-color:var(--primary);}
+.search-ico{display:inline-flex;color:var(--text-3);flex:none;}
+.search-input{border:0;outline:0;min-width:0;width:100%;font:inherit;font-size:13px;background:transparent;color:var(--text);}
+.icon-btn{
+  position:relative;display:inline-flex;align-items:center;justify-content:center;
+  width:32px;height:32px;border:1px solid transparent;border-radius:4px;
+  background:transparent;color:#404040;cursor:pointer;
+}
+.icon-btn:hover{background:#f5f5f5;color:var(--primary);}
+.red-dot{
+  position:absolute;top:4px;right:4px;
+  width:7px;height:7px;border-radius:50%;background:#ff4d4f;border:1px solid #fff;
+}
+.user-menu{
+  display:flex;align-items:center;gap:4px;
+  height:32px;padding:0 10px;border:1px solid var(--line);border-radius:4px;
+  font-size:13px;color:#404040;cursor:pointer;white-space:nowrap;
+}
+.user-menu:hover{border-color:var(--primary);color:var(--primary);}
+.caret{font-size:10px;color:var(--text-3);}
+
+/* ---------- 主体：左侧二级菜单 + 内容区 ---------- */
+.app-body{display:flex;align-items:flex-start;min-height:calc(100vh - 56px);}
+.sidebar{
+  position:sticky;top:56px;
+  flex:0 0 224px;width:224px;max-height:calc(100vh - 56px);overflow:auto;
+  background:#fff;border-right:1px solid var(--line);padding:8px 0 24px;
+}
+.nav-group+.nav-group{border-top:1px solid #f5f5f5;margin-top:4px;}
+.group-title{
+  display:flex;align-items:center;gap:6px;width:100%;
+  padding:10px 16px 6px;border:0;background:none;
+  font:inherit;font-size:12px;color:var(--text-3);cursor:pointer;text-align:left;
+}
+.group-title:hover{color:var(--primary);}
+.chev{font-size:10px;width:10px;flex:none;}
+.nav-item{
+  display:flex;align-items:center;gap:8px;
+  padding:7px 16px;font-size:14px;color:#404040;
+  border-left:2px solid transparent;
+}
+.nav-item:hover{background:#f5f8ff;color:var(--primary);}
+.nav-item.active{background:#e6f4ff;color:var(--primary);font-weight:500;border-left-color:var(--primary);}
+.nav-dot{
+  display:none;flex:none;align-items:center;justify-content:center;
+  width:22px;height:22px;border-radius:4px;
+  background:#f0f5ff;color:var(--primary);font-size:12px;font-weight:600;
+}
+.nav-text{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.nav-group.collapsed .group-items{display:none;}
+
+/* 来源标记 */
+.src-tag{
+  flex:none;font-size:11px;line-height:16px;padding:0 5px;border-radius:3px;
+  border:1px solid;white-space:nowrap;
+}
+.t-reuse{color:#1677ff;border-color:#91caff;background:#e6f4ff;}
+.t-new{color:#389e0d;border-color:#b7eb8f;background:#f6ffed;}
+.t-miss{color:#d4380d;border-color:#ffbb96;background:#fff2e8;}
+
+.main{flex:1 1 auto;min-width:0;padding:16px;}
+.crumb{font-size:13px;color:var(--text-3);margin-bottom:6px;}
+.crumb .sep{margin:0 6px;color:#d9d9d9;}
+.page-title{font-size:20px;font-weight:600;margin:0 0 12px;}
+
+/* 设计标注 */
+.annot{
+  border:1px dashed #faad14;background:#fffbe6;border-radius:4px;
+  padding:10px 12px;margin:0 0 16px;font-size:13px;color:#614700;
+}
+.annot>div+div{margin-top:4px;}
+.annot b{display:inline-block;min-width:54px;color:#d48806;font-weight:600;}
+
+/* 卡片 */
+.card{background:#fff;border:1px solid var(--line);border-radius:4px;padding:16px;}
+.card+.card{margin-top:12px;}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;}
+.card-head h3{font-size:15px;}
+.grid-4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;}
+.grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+.mini-link{color:var(--primary);font-size:13px;}
+.mini-link:hover{text-decoration:underline;}
+
+/* 模块卡片（工作台） */
+.mod-card{display:block;cursor:pointer;transition:border-color .15s,box-shadow .15s;}
+.mod-card:hover{border-color:#91caff;box-shadow:0 2px 8px rgba(22,119,255,.12);}
+.mod-card-head{display:flex;align-items:center;gap:8px;}
+.mod-ico{
+  flex:none;display:inline-flex;align-items:center;justify-content:center;
+  width:30px;height:30px;border-radius:6px;
+  background:#e6f4ff;color:var(--primary);font-weight:600;font-size:14px;
+}
+.mod-desc{margin:8px 0 10px;font-size:13px;color:var(--text-2);min-height:40px;}
+.mod-links{display:flex;flex-wrap:wrap;gap:4px 12px;}
+
+/* 数字卡 */
+.stat{background:#fff;border:1px solid var(--line);border-radius:4px;padding:14px 16px;}
+.stat .k{font-size:13px;color:var(--text-3);}
+.stat .v{font-size:26px;font-weight:600;line-height:1.25;margin-top:6px;}
+.stat .u{font-size:13px;font-weight:400;color:var(--text-3);margin-left:4px;}
+
+/* 告警 / 维护窗口 */
+.alarm-row{
+  display:flex;align-items:center;gap:12px;
+  padding:10px 12px;border:1px solid var(--line);border-radius:4px;background:#fff;
+}
+.alarm-row+.alarm-row{margin-top:8px;}
+.alarm-row.critical{background:#fff1f0;border-color:#ffa39e;}
+.alarm-name{flex:1 1 auto;min-width:0;font-weight:500;}
+.alarm-text{flex:2 1 auto;min-width:0;color:var(--text-2);font-size:13px;}
+.alarm-time{flex:none;color:var(--text-3);font-size:12px;}
+.st{
+  flex:none;display:inline-block;font-size:12px;line-height:20px;padding:0 7px;
+  border:1px solid;border-radius:3px;white-space:nowrap;
+}
+.st-on{color:#389e0d;border-color:#b7eb8f;background:#f6ffed;}
+.st-off{color:#595959;border-color:#d9d9d9;background:#fafafa;}
+.st-none{color:#d46b08;border-color:#ffd591;background:#fff7e6;}
+.st-err{color:#cf1322;border-color:#ffa39e;background:#fff1f0;}
+.st-warn{color:#d46b08;border-color:#ffd591;background:#fff7e6;}
+.st-info{color:#0958d9;border-color:#91caff;background:#e6f4ff;}
+.st-ok{color:#389e0d;border-color:#b7eb8f;background:#f6ffed;}
+
+/* 工具条 + 表格 */
+.toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+.toolbar-left{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;}
+.t-input,.t-select{
+  height:32px;padding:0 10px;border:1px solid #d9d9d9;border-radius:4px;
+  font:inherit;font-size:13px;background:#fff;color:var(--text);outline:0;
+}
+.t-input{width:230px;}
+.t-input:focus,.t-select:focus{border-color:var(--primary);}
+.table-wrap{overflow-x:auto;}
+table.ant-table{width:100%;border-collapse:collapse;font-size:14px;}
+.ant-table th{
+  background:#fafafa;color:#262626;font-weight:600;text-align:left;
+  padding:11px 12px;border-bottom:1px solid #f0f0f0;white-space:nowrap;
+}
+.ant-table td{padding:11px 12px;border-bottom:1px solid #f0f0f0;color:#262626;vertical-align:middle;}
+.ant-table tbody tr:hover{background:#fafafa;}
+.ant-table tbody tr:last-child td{border-bottom:0;}
+.row-actions{display:flex;gap:10px;white-space:nowrap;}
+.table-foot{display:flex;align-items:center;justify-content:space-between;margin-top:12px;}
+.pager{display:flex;gap:6px;}
+.pg{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:28px;height:28px;padding:0 6px;font-size:13px;
+  border:1px solid #d9d9d9;border-radius:4px;color:#404040;
+}
+.pg.on{border-color:var(--primary);color:var(--primary);}
+.btn{
+  display:inline-flex;align-items:center;gap:4px;height:32px;padding:0 14px;
+  border:1px solid var(--primary);border-radius:4px;background:var(--primary);
+  color:#fff;font:inherit;font-size:14px;cursor:pointer;
+}
+.btn:hover{background:#4096ff;border-color:#4096ff;}
+.link-btn{
+  border:0;background:none;padding:0;font:inherit;font-size:14px;
+  color:var(--primary);cursor:pointer;
+}
+.link-btn:hover{text-decoration:underline;}
+
+/* 知识库卡片 */
+.kb-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;}
+.kb-card{display:flex;flex-direction:column;gap:8px;}
+.kb-name{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;}
+.kb-meta{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--text-2);}
+.kb-meta i{font-style:normal;color:var(--text-3);}
+
+/* 占位页 */
+.placeholder{text-align:left;padding:28px 24px;}
+.ph-ico{display:flex;justify-content:center;margin-bottom:10px;}
+.ph-title{font-size:16px;font-weight:600;text-align:center;margin:0 0 6px;}
+.ph-sub{text-align:center;color:var(--text-3);font-size:13px;margin:0 0 16px;}
+.ph-line{font-size:13px;color:var(--text-2);margin:0 0 8px;}
+.ph-label{
+  display:inline-block;min-width:66px;margin-right:6px;padding:0 6px;
+  font-size:12px;line-height:20px;border-radius:3px;
+  background:#f5f5f5;color:var(--text-2);border:1px solid var(--line);
+}
+
+/* toast */
+.toast{
+  position:fixed;left:50%;bottom:32px;z-index:60;
+  transform:translateX(-50%) translateY(8px);
+  padding:8px 14px;border-radius:4px;background:rgba(0,0,0,.82);
+  color:#fff;font-size:13px;opacity:0;pointer-events:none;
+  transition:opacity .18s ease,transform .18s ease;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* 窄屏：左侧菜单收成窄条 */
+@media (max-width:1300px){
+  .search-box{width:150px;}
+}
+@media (max-width:1100px){
+  .search-box{width:118px;}
+  .mod-tab{padding:0 10px;}
+  .sidebar{flex-basis:56px;width:56px;}
+  .nav-text,.src-tag,.chev,.group-name{display:none;}
+  .group-title{justify-content:center;padding:10px 0 4px;}
+  .group-title::after{content:"···";font-size:11px;color:#bfbfbf;letter-spacing:1px;}
+  .nav-item{justify-content:center;padding:6px 0;}
+  .nav-dot{display:inline-flex;}
+  .grid-4{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .kb-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+</style>
+</head>
+<body>
+
+<header id="topbar" class="topbar"></header>
+
+<div class="app-body">
+  <aside id="sidebar" class="sidebar" aria-label="模块二级菜单"></aside>
+  <main id="main" class="main"></main>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* =====================================================================
+ * 硬编码假数据（DB）——本原型不请求任何后端，所有数字/名称均为演示用假数据。
+ * 事实来源标记（复用 / 新增 / 缺接口）见各菜单项的 tag 字段，与需求事实清单一致。
+ * ===================================================================== */
+const DB = {
+  brand: "Ypbin 平台",
+  operator: "平台管理员",
+
+  modules: [
+    { key: "workbench", name: "工作台", path: "/dashboard", home: "/workbench", desc: "统一入口：跨模块总览与待办" },
+    { key: "admin", name: "基础管理", path: "/admin", home: "/admin/users", desc: "平台基础配置与组织权限" },
+    { key: "ai", name: "知识与 AI", path: "/ai", home: "/ai/knowledge", desc: "知识库与 AI 能力" },
+    { key: "iot", name: "物联网", path: "/iot", home: "/iot/devices", desc: "IoT 平台" },
+    { key: "ops", name: "运维与监控", path: "/ops", home: "/ops/op-logs", desc: "平台运维、埋点与开发者工具" }
+  ],
+
+  menus: {
+    workbench: [
+      { group: "模块导航", items: [
+        { name: "工作台", route: "/workbench" },
+        { name: "基础管理", route: "/admin/users" },
+        { name: "知识与 AI", route: "/ai/knowledge" },
+        { name: "物联网", route: "/iot/devices" },
+        { name: "运维与监控", route: "/ops/op-logs" }
+      ] }
+    ],
+
+    admin: [
+      { group: "组织管理", items: [
+        { name: "用户管理", route: "/admin/users", tag: "复用", target: "用户列表 + 用户表单 + 角色/部门分配，沿用已有用户接口与权限码。" },
+        { name: "部门管理", route: "/admin/depts", tag: "复用", target: "部门树维护、部门下用户、负责人与排序。" },
+        { name: "岗位管理", route: "/admin/posts", tag: "复用", target: "岗位字典维护，并与用户绑定，作为数据权限的一个维度。" }
+      ] },
+      { group: "权限管理", items: [
+        { name: "角色管理", route: "/admin/roles", tag: "复用", target: "角色列表 + 菜单权限与数据权限勾选，权限码与后端保持一致。" },
+        { name: "菜单管理", route: "/admin/menus", tag: "复用", target: "菜单树 + 权限码 + 路由/组件配置，驱动前端动态菜单。" },
+        { name: "客户端管理", route: "/admin/clients", tag: "复用", target: "客户端注册信息与回调、有效期配置。" }
+      ] },
+      { group: "系统管理", items: [
+        { name: "字典管理", route: "/admin/dicts", tag: "复用", target: "字典类型 + 字典项维护，供各业务下拉复用。" },
+        { name: "参数配置", route: "/admin/params", tag: "复用", target: "系统参数键值维护，标注生效范围与刷新方式。" }
+      ] },
+      { group: "租户管理", items: [
+        { name: "租户列表", route: "/admin/tenants", tag: "复用", target: "租户开通/停用、套餐与管理员初始化。" },
+        { name: "权限模板", route: "/admin/tenant-templates", tag: "复用", target: "可复用权限包，租户开通时一键套用。" }
+      ] },
+      { group: "消息中心", items: [
+        { name: "通知公告", route: "/admin/notices", tag: "复用", target: "公告发布、可见范围与已读统计。" },
+        { name: "我的消息", route: "/admin/my-messages", tag: "复用", target: "站内消息列表、已读标记与跳转。" }
+      ] },
+      /* 规格中「文件管理」是基础管理下的独立单项（不带分组括号），故 group 为 null：平铺渲染，不显示分组标题 */
+      { group: null, items: [
+        { name: "文件管理", route: "/admin/files", tag: "复用", target: "文件上传/预览/下载与存储配置。" }
+      ] },
+      { group: "授权管理", items: [
+        { name: "授权列表", route: "/admin/licenses", tag: "复用", target: "授权记录、到期提醒与续期。" },
+        { name: "开放应用", route: "/admin/open-apps", tag: "复用", target: "开放平台应用与授权范围管理。" }
+      ] }
+    ],
+
+    /* 规格中「知识与 AI」的二级菜单是平铺列表（无分组括号），故 group 为 null：只渲染菜单项，不显示分组标题 */
+    ai: [
+      { group: null, items: [
+        { name: "AI 对话", route: "/ai/chat", tag: "复用", target: "会话列表 + 流式回答 + 引用来源展示。" },
+        { name: "知识库", route: "/ai/knowledge", tag: "复用", target: "知识库卡片列表 + 新建向导 + 文档与向量统计。" },
+        { name: "Wiki 文档", route: "/ai/wiki", tag: "复用", target: "树形文档 + 协同编辑，并与知识库联动。" },
+        { name: "提示词", route: "/ai/prompts", tag: "复用", target: "提示词模板管理与变量占位。" },
+        { name: "AI 角色", route: "/ai/roles", tag: "复用", target: "角色人设，绑定模型、知识库与提示词。" },
+        { name: "模型配置", route: "/ai/models", tag: "复用", target: "模型接入与参数配置、连通性测试。" },
+        { name: "用量统计", route: "/ai/usage", tag: "复用", target: "调用量、Token 与命中率的趋势与拆分。" }
+      ] }
+    ],
+
+    iot: [
+      { group: "接入配置", items: [
+        { name: "接入向导", route: "/iot/wizard", tag: "新增", target: "分步引导接入：新建产品 → 定义物模型 → 生成设备凭证 → 连接测试。" },
+        { name: "产品模板中心", route: "/iot/templates", tag: "缺接口", target: "产品模板列表与一键套用；模板列表/套用接口后端尚未提供。" },
+        { name: "产品与物模型", route: "/iot/products", tag: "复用", target: "产品列表 + 物模型（属性/事件/服务）编辑与版本管理。" },
+        { name: "产品详情", route: "/iot/product-detail", tag: "新增", target: "概览 / 物模型 / 点位模板 / 设备 / 版本，共 5 个页签。" }
+      ] },
+      { group: "设备管理", items: [
+        { name: "设备台账", route: "/iot/devices", tag: "复用", target: "设备列表 + 详情 + 新增/编辑，是全平台的设备主数据入口。" },
+        { name: "设备详情", route: "/iot/device-detail", tag: "新增", target: "7 个区块；其中「属性与点位」区块复用已有 iot:point:* 四个权限码与 /devices/{id}/points 接口。" },
+        { name: "设备分组", route: "/iot/device-groups", tag: "复用", target: "分组树维护与批量打组，作为批量下发与统计口径。" }
+      ] },
+      { group: "运维中心", items: [
+        { name: "健康总览", route: "/iot/health", tag: "缺接口", target: "设备健康分、在线率与异常 TopN；聚合统计接口后端尚未提供。" },
+        { name: "断档与可用率", route: "/iot/availability", tag: "缺接口", target: "断档区间识别与可用率口径；逐台查询已有，批量端点需新增。" },
+        { name: "维护窗口", route: "/iot/maintenance", tag: "复用", target: "计划停机窗口维护，窗口内告警抑制。" },
+        { name: "事件与告警", route: "/iot/events", tag: "缺接口", target: "规则配置 + 告警事件流 + 通知渠道；后端目前无事件模型。" }
+      ] },
+      { group: "数据与调试", items: [
+        { name: "时序查询", route: "/iot/history", tag: "复用", target: "跨设备时序入口：多测点叠加、时间范围选择与降采样、导出。" },
+        { name: "在线调试", route: "/iot/debug", tag: "缺接口", target: "实时上下行报文与指令下发；依赖目前完全不存在的下行通道，后端需先补通道能力。" },
+        { name: "设备影子", route: "/iot/shadow", tag: "复用", target: "期望值与上报值对照；接口已有，但 reported 恒为空（后端从不写入）。" }
+      ] },
+      { group: "系统", items: [
+        { name: "数据保留与清理", route: "/iot/retention", tag: "缺接口", target: "分级保留策略、归档与清理任务；目前只有定时任务与只读配置，无接口。" },
+        { name: "租户接入台账", route: "/iot/tenant-ledger", tag: "复用", target: "按租户统计接入设备与消息量；平台级权限（platform_only=1）。" }
+      ] }
+    ],
+
+    ops: [
+      { group: "系统监控", items: [
+        { name: "操作日志", route: "/ops/op-logs", tag: "复用", target: "操作日志列表，支持时间与操作人筛选。" },
+        { name: "在线用户", route: "/ops/online-users", tag: "复用", target: "在线会话列表与强制下线。" }
+      ] },
+      { group: "埋点分析", items: [
+        { name: "事件列表", route: "/ops/event-list", tag: "复用", target: "埋点事件定义与字段维护。" },
+        { name: "事件目录", route: "/ops/event-catalog", tag: "复用", target: "事件分类目录与归属维护。" },
+        { name: "埋点分析", route: "/ops/tracking", tag: "复用", target: "事件趋势与维度下钻。" },
+        { name: "漏斗分析", route: "/ops/funnel", tag: "复用", target: "步骤漏斗配置与转化率。" },
+        { name: "留存分析", route: "/ops/retention-analysis", tag: "复用", target: "留存矩阵与同期群对比。" }
+      ] },
+      { group: "开发者工具", items: [
+        { name: "接口文档", route: "/ops/api-docs", tag: "复用", target: "在线接口文档与调试入口。" }
+      ] }
+    ]
+  },
+
+  pages: {
+    "/workbench": {
+      kind: "workbench",
+      annot: {
+        enter: "打开原型默认落到本页（地址栏 hash 为空时自动跳到 #/workbench）",
+        act: "顶部大模块条任一项，或下方任意模块卡片 / 卡片内常用入口",
+        next: "路由切到该模块首页，左侧二级菜单同步切换为该模块"
+      }
+    },
+    "/admin/users": {
+      kind: "users",
+      annot: {
+        enter: "顶部大模块条『基础管理』→ 左侧『组织管理』",
+        act: "左侧菜单『用户管理』；表头『搜索』『新建』与行内『编辑』",
+        next: "打开用户列表；行内『编辑』在真实系统里打开用户表单（原型不接逻辑）"
+      }
+    },
+    "/ai/knowledge": {
+      kind: "knowledge",
+      annot: {
+        enter: "顶部大模块条『知识与 AI』（该模块二级菜单为平铺列表，无分组标题）",
+        act: "左侧菜单『知识库』；右上角『新建知识库』按钮",
+        next: "打开知识库卡片列表；『新建知识库』在真实系统里打开创建向导（原型不接逻辑）"
+      }
+    },
+    "/ai/usage": {
+      kind: "usage",
+      annot: {
+        enter: "顶部大模块条『知识与 AI』（该模块二级菜单为平铺列表，无分组标题）",
+        act: "左侧菜单『用量统计』",
+        next: "展示 4 个计量卡片与近 7 日调用趋势折线图（内联 SVG，假数据）"
+      }
+    },
+    "/iot/devices": {
+      kind: "devices",
+      annot: {
+        enter: "顶部大模块条『物联网』→ 左侧『设备管理』",
+        act: "左侧菜单『设备台账』；表头搜索框、状态下拉与『新建』按钮",
+        next: "打开设备台账表格；『新建』在真实系统里打开设备新增抽屉（原型不接逻辑）"
+      },
+      source: "本页是复用页：设备台账的后端接口与权限码已在生产库中存在，原型只还原前端形态；表内数据为硬编码假数据。"
+    },
+    "/ops/op-logs": {
+      kind: "oplogs",
+      annot: {
+        enter: "顶部大模块条『运维与监控』→ 左侧『系统监控』",
+        act: "左侧菜单『操作日志』；表头时间/操作人筛选条件",
+        next: "打开操作日志表格；筛选与导出的真实查询在既有接口上完成（原型仅展示）"
+      }
+    }
+  },
+
+  moduleCards: [
+    { name: "基础管理", route: "/admin/users", desc: "平台基础配置与组织权限：用户、角色、菜单、租户与消息中心。", links: [
+      { name: "用户管理", route: "/admin/users" },
+      { name: "角色管理", route: "/admin/roles" },
+      { name: "租户列表", route: "/admin/tenants" }
+    ] },
+    { name: "知识与 AI", route: "/ai/knowledge", desc: "知识库、对话与模型能力的统一入口。", links: [
+      { name: "知识库", route: "/ai/knowledge" },
+      { name: "AI 对话", route: "/ai/chat" },
+      { name: "模型配置", route: "/ai/models" }
+    ] },
+    { name: "物联网", route: "/iot/devices", desc: "设备接入、台账、运维中心与数据调试。", links: [
+      { name: "设备台账", route: "/iot/devices" },
+      { name: "产品与物模型", route: "/iot/products" },
+      { name: "健康总览", route: "/iot/health" }
+    ] },
+    { name: "运维与监控", route: "/ops/op-logs", desc: "平台运维、埋点分析与开发者工具。", links: [
+      { name: "操作日志", route: "/ops/op-logs" },
+      { name: "埋点分析", route: "/ops/tracking" },
+      { name: "接口文档", route: "/ops/api-docs" }
+    ] }
+  ],
+
+  overview: [
+    { k: "设备总数", v: "128", u: "台" },
+    { k: "在线", v: "117", u: "台" },
+    { k: "离线", v: "9", u: "台" },
+    { k: "从未上报", v: "2", u: "台" }
+  ],
+
+  alarms: [
+    { name: "注塑机网关 G-07", text: "设备离线超过 30 分钟，最近在线 2026-10-11 09:03", time: "2026-10-12 13:58", level: "严重", cls: "st-err", critical: true },
+    { name: "冷链温度记录仪 C-3", text: "接入后从未上报数据，请检查凭证与网络", time: "2026-10-12 11:20", level: "警告", cls: "st-warn" },
+    { name: "空压站控制器 PLC-01", text: "近 1 小时通信重连 3 次", time: "2026-10-12 08:12", level: "提示", cls: "st-info" }
+  ],
+
+  windows: [
+    { device: "电能表 EM-230", span: "2026-10-15 01:00 ~ 2026-10-15 03:00", state: "计划中", cls: "st-info" },
+    { device: "锅炉压力变送器 P-12", span: "2026-10-09 22:00 ~ 2026-10-09 23:30", state: "已完成", cls: "st-ok" }
+  ],
+
+  devices: [
+    { code: "DEV-1001", name: "车间温湿度采集器 A1", proto: "MQTT", state: "在线", last: "2026-10-12 14:22:31", product: "环境监测终端", group: "一号车间" },
+    { code: "DEV-1002", name: "空压机主控 PLC-01", proto: "Modbus TCP", state: "在线", last: "2026-10-12 14:22:05", product: "空压站控制器", group: "动力车间" },
+    { code: "DEV-1003", name: "注塑机网关 G-07", proto: "OPC UA", state: "离线", last: "2026-10-11 09:03:12", product: "注塑机数据网关", group: "注塑车间" },
+    { code: "DEV-1004", name: "电能表 EM-230", proto: "DL/T 645", state: "在线", last: "2026-10-12 14:21:48", product: "智能电表", group: "配电房" },
+    { code: "DEV-1005", name: "冷链温度记录仪 C-3", proto: "MQTT", state: "从未上报", last: "—", product: "冷链温控终端", group: "冷库" },
+    { code: "DEV-1006", name: "锅炉压力变送器 P-12", proto: "Modbus RTU", state: "在线", last: "2026-10-12 14:20:59", product: "锅炉监测终端", group: "锅炉房" }
+  ],
+
+  users: [
+    { account: "admin", nick: "系统管理员", dept: "平台研发部", phone: "13800000001", state: "启用" },
+    { account: "zhangsan", nick: "张三", dept: "生产制造部", phone: "13800000002", state: "启用" },
+    { account: "lisi", nick: "李四", dept: "设备运维部", phone: "13800000003", state: "启用" },
+    { account: "wangwu", nick: "王五", dept: "质量安全部", phone: "13800000004", state: "停用" },
+    { account: "zhaoliu", nick: "赵六", dept: "信息技术部", phone: "13800000005", state: "启用" }
+  ],
+
+  knowledgeBases: [
+    { name: "设备运维知识库", docs: 128, vectors: 3420, updated: "2026-10-10 18:20", note: "设备手册与运维 SOP" },
+    { name: "安全生产制度库", docs: 76, vectors: 1980, updated: "2026-10-08 11:05", note: "制度、预案与检查表" },
+    { name: "产品手册库", docs: 254, vectors: 7610, updated: "2026-10-12 09:41", note: "对外产品资料与 FAQ" },
+    { name: "故障案例库", docs: 43, vectors: 1120, updated: "2026-09-30 16:12", note: "历史故障与处置记录" }
+  ],
+
+  usage: {
+    cards: [
+      { k: "本月调用次数", v: "128,460", u: "次" },
+      { k: "Token 消耗", v: "8,932,140", u: "token" },
+      { k: "命中率", v: "87.4", u: "%" },
+      { k: "配额余量", v: "42", u: "%" }
+    ],
+    labels: ["10-06", "10-07", "10-08", "10-09", "10-10", "10-11", "10-12"],
+    trend: [12400, 15800, 14100, 18900, 21300, 17600, 19800],
+    byKb: [
+      { name: "设备运维知识库", calls: 42180, ratio: "32.8%" },
+      { name: "产品手册库", calls: 38940, ratio: "30.3%" },
+      { name: "安全生产制度库", calls: 26310, ratio: "20.5%" },
+      { name: "故障案例库", calls: 21030, ratio: "16.4%" }
+    ]
+  },
+
+  opLogs: [
+    { time: "2026-10-12 14:02:11", who: "平台管理员", mod: "物联网", act: "新增设备 DEV-1006", result: "成功", ms: 128 },
+    { time: "2026-10-12 13:40:52", who: "张三", mod: "基础管理", act: "将用户「王五」状态改为停用", result: "成功", ms: 96 },
+    { time: "2026-10-12 11:15:07", who: "李四", mod: "物联网", act: "导出设备台账（6 条）", result: "成功", ms: 412 },
+    { time: "2026-10-12 09:58:33", who: "王五", mod: "知识与 AI", act: "新建知识库「故障案例库」", result: "失败", ms: 230 },
+    { time: "2026-10-11 22:31:19", who: "平台管理员", mod: "运维与监控", act: "清理 30 天前的操作日志", result: "成功", ms: 1876 }
+  ]
+};
+
+/* ===================== 常量与图标（内联 SVG / Unicode） ===================== */
+const STATE_CLS = { "在线": "st-on", "离线": "st-off", "从未上报": "st-none" };
+const TAG_CLS = { "复用": "t-reuse", "新增": "t-new", "缺接口": "t-miss" };
+const TAG_MEAN = {
+  "复用": "后端接口与权限码已存在（含已有前端页面）",
+  "新增": "后端能力具备，需要新增前端页面",
+  "缺接口": "后端完全无此能力，需先补后端"
+};
+const DEFAULT_ANNOT = {
+  act: "左侧二级菜单中对应的菜单项",
+  next: "打开该页面；本原型只给占位与目标形态说明，字段与交互细节不在此展开"
+};
+
+const ICON_LOGO = '<svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true">'
+  + '<rect x="2" y="2" width="28" height="28" rx="7" fill="#1677ff"/>'
+  + '<path d="M10 10.5 16 17.5 22 10.5" fill="none" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>'
+  + '<path d="M16 17.5V23" fill="none" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round"/>'
+  + '</svg>';
+
+const ICON_SEARCH = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+  + '<circle cx="11" cy="11" r="7"/><path d="m20.2 20.2-3.6-3.6"/></svg>';
+
+const ICON_BELL = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+  + '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>'
+  + '<path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>';
+
+const ICON_BOX = '<svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#bfbfbf" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+  + '<path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5v-9Z"/><path d="M3 7.5 12 12l9-4.5"/><path d="M12 12v9"/></svg>';
+
+/* ===================== 工具函数 ===================== */
+function esc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function $(id) { return document.getElementById(id); }
+
+/** 路由索引：route -> { module, group, name, tag, target } */
+const INDEX = {};
+let ROUTE_ORDER = [];
+DB.modules.forEach(function (mod) {
+  (DB.menus[mod.key] || []).forEach(function (g) {
+    g.items.forEach(function (it) {
+      INDEX[it.route] = { module: mod, group: g.group || "", name: it.name, tag: it.tag || "", target: it.target || "" };
+      ROUTE_ORDER.push(it.route);
+    });
+  });
+});
+
+function parseHash() {
+  let h = location.hash || "";
+  if (h.charAt(0) === "#") h = h.slice(1);
+  if (h === "" || h === "/") return "/workbench";
+  if (h === "/dashboard") return "/workbench";
+  return h;
+}
+function moduleOf(route) {
+  if (route === "/workbench") return DB.modules[0];
+  let best = null;
+  DB.modules.forEach(function (m) {
+    if (m.path === "/dashboard") return;
+    if (route === m.path || route.indexOf(m.path + "/") === 0) {
+      if (!best || m.path.length > best.path.length) best = m;
+    }
+  });
+  return best || DB.modules[0];
+}
+function moduleByKey(key) {
+  for (let i = 0; i < DB.modules.length; i++) {
+    if (DB.modules[i].key === key) return DB.modules[i];
+  }
+  return DB.modules[0];
+}
+function statCard(c) {
+  return '<div class="stat"><div class="k">' + c.k + '</div><div class="v">' + c.v
+    + (c.u ? '<span class="u">' + c.u + '</span>' : '') + '</div></div>';
+}
+function tagSpan(tag) {
+  if (!tag) return "";
+  return '<span class="src-tag ' + (TAG_CLS[tag] || "") + '">' + tag + '</span>';
+}
+
+/* 状态 */
+const state = { collapsed: {} };
+
+/* ===================== 顶栏 ===================== */
+function renderTopbar(active) {
+  let h = '<div class="brand"><span class="logo">' + ICON_LOGO + '</span>'
+    + '<span class="brand-name">' + esc(DB.brand) + '</span></div>';
+  h += '<nav class="mod-tabs">';
+  DB.modules.forEach(function (m) {
+    h += '<a class="mod-tab' + (m.key === active.key ? ' active' : '') + '" href="#' + m.home
+      + '" title="' + esc(m.name + " · " + m.desc) + '">' + esc(m.name) + '</a>';
+  });
+  h += '</nav>';
+  h += '<div class="topbar-right">'
+    + '<div class="search-box" title="原型占位：不接搜索"><span class="search-ico">' + ICON_SEARCH + '</span>'
+    + '<input class="search-input" type="text" placeholder="搜索菜单 / 设备 / 知识库" aria-label="搜索（原型占位）" /></div>'
+    + '<button class="icon-btn" type="button" data-todo="通知中心（原型占位，红点示意有待处理告警）" title="通知（原型占位）">'
+    + ICON_BELL + '<span class="red-dot"></span></button>'
+    + '<div class="user-menu" data-todo="平台管理员菜单（登录/退出不在本原型范围内）" title="平台管理员（原型占位）">'
+    + esc(DB.operator) + '<span class="caret">▾</span></div>'
+    + '</div>';
+  $("topbar").innerHTML = h;
+}
+
+/* ===================== 左侧二级菜单 ===================== */
+function renderSidebar(active, route) {
+  const groups = DB.menus[active.key] || [];
+  let h = "";
+  groups.forEach(function (g) {
+    const flat = !g.group;
+    const gkey = active.key + "|" + (g.group || "flat");
+    const collapsed = !flat && !!state.collapsed[gkey];
+    h += '<div class="nav-group' + (flat ? " flat" : "") + (collapsed ? " collapsed" : "") + '">';
+    if (!flat) {
+      h += '<button class="group-title" type="button" data-gkey="' + esc(gkey) + '" title="' + esc(g.group + "（点击折叠/展开）") + '">'
+        + '<span class="chev">' + (collapsed ? "▸" : "▾") + '</span>'
+        + '<span class="group-name">' + esc(g.group) + '</span></button>';
+    }
+    h += '<div class="group-items">';
+    g.items.forEach(function (it) {
+      const cur = it.route === route;
+      const tip = it.name + (it.tag ? " · " + it.tag + "：" + TAG_MEAN[it.tag] : "");
+      h += '<a class="nav-item' + (cur ? " active" : "") + '" href="#' + it.route + '" title="' + esc(tip) + '">'
+        + '<span class="nav-dot">' + esc(it.name.slice(0, 1)) + '</span>'
+        + '<span class="nav-text">' + esc(it.name) + '</span>'
+        + tagSpan(it.tag)
+        + '</a>';
+    });
+    h += '</div></div>';
+  });
+  $("sidebar").innerHTML = h;
+}
+
+/* ===================== 设计标注框 ===================== */
+function annotBox(a, source) {
+  let h = '<div class="annot">'
+    + '<div><b>进入</b>' + esc(a.enter) + '</div>'
+    + '<div><b>点</b>' + esc(a.act) + '</div>'
+    + '<div><b>下一步</b>' + esc(a.next) + '</div>';
+  if (source) h += '<div><b>来源</b>' + esc(source) + '</div>';
+  h += '</div>';
+  return h;
+}
+
+/* ===================== 各页面视图 ===================== */
+function viewWorkbench() {
+  let h = '<div class="grid-4">';
+  DB.moduleCards.forEach(function (c) {
+    h += '<div class="card mod-card" data-route="' + c.route + '" role="link" tabindex="0" title="点击进入' + esc(c.name) + '">'
+      + '<div class="mod-card-head"><span class="mod-ico">' + esc(c.name.slice(0, 1)) + '</span><h3>' + esc(c.name) + '</h3></div>'
+      + '<p class="mod-desc">' + esc(c.desc) + '</p>'
+      + '<div class="mod-links">';
+    c.links.forEach(function (l) {
+      h += '<a class="mini-link" href="#' + l.route + '">' + esc(l.name) + ' →</a>';
+    });
+    h += '</div></div>';
+  });
+  h += '</div>';
+
+  h += '<section class="card"><div class="card-head"><h3>我的设备概览</h3>'
+    + '<a class="mini-link" href="#/iot/devices">查看设备台账 →</a></div>'
+    + '<div class="grid-4">';
+  DB.overview.forEach(function (c) { h += statCard(c); });
+  h += '</div></section>';
+
+  h += '<section class="card"><div class="card-head"><h3>待处理告警</h3>'
+    + '<a class="mini-link" href="#/iot/events">事件与告警 →</a></div>';
+  DB.alarms.forEach(function (a) {
+    h += '<div class="alarm-row' + (a.critical ? " critical" : "") + '">'
+      + '<span class="alarm-name">' + esc(a.name) + '</span>'
+      + '<span class="alarm-text">' + esc(a.text) + '</span>'
+      + '<span class="st ' + a.cls + '">' + esc(a.level) + '</span>'
+      + '<span class="alarm-time">' + esc(a.time) + '</span>'
+      + '</div>';
+  });
+  h += '</section>';
+
+  h += '<section class="card"><div class="card-head"><h3>最近维护窗口</h3>'
+    + '<a class="mini-link" href="#/iot/maintenance">维护窗口 →</a></div>';
+  DB.windows.forEach(function (w) {
+    h += '<div class="alarm-row">'
+      + '<span class="alarm-name">' + esc(w.device) + '</span>'
+      + '<span class="alarm-text">' + esc(w.span) + '</span>'
+      + '<span class="st ' + w.cls + '">' + esc(w.state) + '</span>'
+      + '</div>';
+  });
+  h += '</section>';
+
+  h += '<p class="muted" style="margin:12px 0 0;">提示：普通用户从这里点模块卡片，或点顶部大模块条，都可以进入任一模块；'
+    + '模块内的页面切换交给左侧二级菜单。</p>';
+  return h;
+}
+
+function viewDevices() {
+  const head = '<thead><tr>'
+    + '<th>设备编码</th><th>设备名称</th><th>接入协议</th><th>在线状态</th>'
+    + '<th>最近在线</th><th>所属产品</th><th>分组</th><th>操作</th></tr></thead>';
+  const rows = DB.devices.map(function (d) {
+    return '<tr>'
+      + '<td class="mono">' + esc(d.code) + '</td>'
+      + '<td>' + esc(d.name) + '</td>'
+      + '<td>' + esc(d.proto) + '</td>'
+      + '<td><span class="st ' + (STATE_CLS[d.state] || "st-off") + '">' + esc(d.state) + '</span></td>'
+      + '<td class="mono">' + esc(d.last) + '</td>'
+      + '<td>' + esc(d.product) + '</td>'
+      + '<td>' + esc(d.group) + '</td>'
+      + '<td><span class="row-actions">'
+      + '<button class="link-btn" type="button" data-todo="查看设备详情">查看</button>'
+      + '<button class="link-btn" type="button" data-todo="编辑设备">编辑</button>'
+      + '</span></td></tr>';
+  }).join("");
+  return '<section class="card">'
+    + '<div class="toolbar">'
+    + '<div class="toolbar-left">'
+    + '<input class="t-input" type="text" placeholder="设备编码 / 名称 / 产品" aria-label="设备搜索（原型占位）" />'
+    + '<select class="t-select" aria-label="在线状态筛选（原型占位）"><option>全部状态</option><option>在线</option><option>离线</option><option>从未上报</option></select>'
+    + '</div>'
+    + '<div class="toolbar-right"><button class="btn" type="button" data-todo="新建设备">+ 新建</button></div>'
+    + '</div>'
+    + '<div class="table-wrap"><table class="ant-table">' + head + '<tbody>' + rows + '</tbody></table></div>'
+    + '<div class="table-foot"><span class="muted">共 6 条（原型假数据）</span>'
+    + '<span class="pager"><span class="pg on">1</span></span></div>'
+    + '</section>';
+}
+
+function viewUsers() {
+  const head = '<thead><tr>'
+    + '<th>用户名</th><th>昵称</th><th>部门</th><th>手机号</th><th>状态</th><th>操作</th></tr></thead>';
+  const rows = DB.users.map(function (u) {
+    const cls = u.state === "启用" ? "st-on" : "st-off";
+    return '<tr>'
+      + '<td class="mono">' + esc(u.account) + '</td>'
+      + '<td>' + esc(u.nick) + '</td>'
+      + '<td>' + esc(u.dept) + '</td>'
+      + '<td class="mono">' + esc(u.phone) + '</td>'
+      + '<td><span class="st ' + cls + '">' + esc(u.state) + '</span></td>'
+      + '<td><span class="row-actions">'
+      + '<button class="link-btn" type="button" data-todo="编辑用户">编辑</button>'
+      + '<button class="link-btn" type="button" data-todo="重置用户密码">重置密码</button>'
+      + '</span></td></tr>';
+  }).join("");
+  return '<section class="card">'
+    + '<div class="toolbar">'
+    + '<div class="toolbar-left">'
+    + '<input class="t-input" type="text" placeholder="用户名 / 昵称 / 手机号" aria-label="用户搜索（原型占位）" />'
+    + '<select class="t-select" aria-label="部门筛选（原型占位）"><option>全部部门</option><option>平台研发部</option><option>生产制造部</option><option>设备运维部</option></select>'
+    + '</div>'
+    + '<div class="toolbar-right"><button class="btn" type="button" data-todo="新建用户">+ 新建</button></div>'
+    + '</div>'
+    + '<div class="table-wrap"><table class="ant-table">' + head + '<tbody>' + rows + '</tbody></table></div>'
+    + '<div class="table-foot"><span class="muted">共 5 条（原型假数据）</span>'
+    + '<span class="pager"><span class="pg on">1</span></span></div>'
+    + '</section>';
+}
+
+function viewKnowledge() {
+  let h = '<section class="card"><div class="card-head"><h3>知识库</h3>'
+    + '<button class="btn" type="button" data-todo="新建知识库">+ 新建知识库</button></div>'
+    + '<div class="kb-grid">';
+  DB.knowledgeBases.forEach(function (kb) {
+    h += '<div class="kb-card card">'
+      + '<div class="kb-name">' + ICON_BOX + esc(kb.name) + '</div>'
+      + '<div class="kb-meta">'
+      + '<span><i>文档数</i> ' + kb.docs + '</span>'
+      + '<span><i>向量数</i> ' + kb.vectors + '</span>'
+      + '</div>'
+      + '<div class="kb-meta"><span><i>更新时间</i> ' + esc(kb.updated) + '</span></div>'
+      + '<div class="muted">' + esc(kb.note) + '</div>'
+      + '</div>';
+  });
+  h += '</div></section>';
+  return h;
+}
+
+function lineChart(data, labels) {
+  const W = 640, H = 240, padL = 58, padR = 20, padT = 20, padB = 36;
+  const iw = W - padL - padR, ih = H - padT - padB;
+  const maxRaw = Math.max.apply(null, data);
+  const max = Math.ceil(maxRaw / 5000) * 5000;
+  const n = data.length;
+  const stepX = n > 1 ? iw / (n - 1) : 0;
+  const pts = data.map(function (v, i) {
+    return [padL + i * stepX, padT + ih - (v / max) * ih];
+  });
+  const poly = pts.map(function (p) { return p[0].toFixed(1) + "," + p[1].toFixed(1); }).join(" ");
+  const area = padL + "," + (padT + ih) + " " + poly + " " + (padL + iw).toFixed(1) + "," + (padT + ih);
+  let grid = "";
+  for (let i = 0; i <= 4; i++) {
+    const y = padT + (ih / 4) * i;
+    const val = Math.round(max - (max / 4) * i);
+    grid += '<line x1="' + padL + '" y1="' + y.toFixed(1) + '" x2="' + (padL + iw) + '" y2="' + y.toFixed(1) + '" stroke="#f0f0f0" stroke-width="1"/>'
+      + '<text x="' + (padL - 10) + '" y="' + (y + 4).toFixed(1) + '" text-anchor="end" fill="#8c8c8c" font-size="11">' + val + '</text>';
+  }
+  let dots = "", xlabels = "";
+  pts.forEach(function (p, i) {
+    dots += '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="3" fill="#ffffff" stroke="#1677ff" stroke-width="2"/>';
+    xlabels += '<text x="' + p[0].toFixed(1) + '" y="' + (padT + ih + 22) + '" text-anchor="middle" fill="#8c8c8c" font-size="11">' + esc(labels[i]) + '</text>';
+  });
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="240" preserveAspectRatio="xMidYMid meet" role="img" aria-label="近 7 日调用趋势折线图">'
+    + '<polygon points="' + area + '" fill="#1677ff" fill-opacity="0.08"/>'
+    + grid
+    + '<polyline points="' + poly + '" fill="none" stroke="#1677ff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'
+    + dots + xlabels
+    + '</svg>';
+}
+
+function viewUsage() {
+  const u = DB.usage;
+  let h = '<div class="grid-4">';
+  u.cards.forEach(function (c) { h += statCard(c); });
+  h += '</div>';
+  h += '<section class="card"><div class="card-head"><h3>近 7 日调用趋势</h3>'
+    + '<span class="muted">单位：次 · 折线为内联 SVG，坐标为脚本按假数据计算</span></div>'
+    + lineChart(u.trend, u.labels) + '</section>';
+  h += '<section class="card"><div class="card-head"><h3>按知识库拆分</h3>'
+    + '<span class="muted">本月累计</span></div>'
+    + '<div class="table-wrap"><table class="ant-table"><thead><tr>'
+    + '<th>知识库</th><th>调用次数</th><th>占比</th></tr></thead><tbody>';
+  u.byKb.forEach(function (r) {
+    h += '<tr><td>' + esc(r.name) + '</td><td class="mono">' + r.calls + '</td><td>' + esc(r.ratio) + '</td></tr>';
+  });
+  h += '</tbody></table></div></section>';
+  return h;
+}
+
+function viewOpLogs() {
+  const head = '<thead><tr>'
+    + '<th>操作时间</th><th>操作人</th><th>所属模块</th><th>操作内容</th><th>结果</th><th>耗时</th></tr></thead>';
+  const rows = DB.opLogs.map(function (r) {
+    const cls = r.result === "成功" ? "st-ok" : "st-err";
+    return '<tr>'
+      + '<td class="mono">' + esc(r.time) + '</td>'
+      + '<td>' + esc(r.who) + '</td>'
+      + '<td>' + esc(r.mod) + '</td>'
+      + '<td>' + esc(r.act) + '</td>'
+      + '<td><span class="st ' + cls + '">' + esc(r.result) + '</span></td>'
+      + '<td class="mono">' + r.ms + ' ms</td>'
+      + '</tr>';
+  }).join("");
+  return '<section class="card">'
+    + '<div class="toolbar">'
+    + '<div class="toolbar-left">'
+    + '<input class="t-input" type="text" placeholder="操作人 / 操作内容" aria-label="日志搜索（原型占位）" />'
+    + '<select class="t-select" aria-label="模块筛选（原型占位）"><option>全部模块</option><option>基础管理</option><option>知识与 AI</option><option>物联网</option><option>运维与监控</option></select>'
+    + '</div>'
+    + '<div class="toolbar-right"><button class="btn" type="button" data-todo="导出操作日志">导出</button></div>'
+    + '</div>'
+    + '<div class="table-wrap"><table class="ant-table">' + head + '<tbody>' + rows + '</tbody></table></div>'
+    + '<div class="table-foot"><span class="muted">共 5 条（原型假数据）</span>'
+    + '<span class="pager"><span class="pg on">1</span></span></div>'
+    + '</section>';
+}
+
+function viewPlaceholder(info, mod) {
+  return '<section class="card placeholder">'
+    + '<div class="ph-ico">' + ICON_BOX + '</div>'
+    + '<h3 class="ph-title">该页面在本原型中未展开</h3>'
+    + '<p class="ph-sub">所属位置：' + esc(mod.name) + (info.group ? " / " + esc(info.group) : "") + ' / ' + esc(info.name) + '</p>'
+    + '<p class="ph-line"><span class="ph-label">目标形态</span>' + esc(info.target || "待补充") + '</p>'
+    + '<p class="ph-line"><span class="ph-label">来源标记</span>' + tagSpan(info.tag) + ' ' + esc(TAG_MEAN[info.tag] || "") + '</p>'
+    + '<p class="ph-line"><span class="ph-label">本原型范围</span>本文件只回答「平台该怎么分模块」——顶部大模块与模块内二级菜单的归属。'
+    + '该页面的字段、表格与交互细节留待内页原型展开。</p>'
+    + '</section>';
+}
+
+function viewUnknown(route) {
+  return '<section class="card placeholder">'
+    + '<div class="ph-ico">' + ICON_BOX + '</div>'
+    + '<h3 class="ph-title">未收录的路由</h3>'
+    + '<p class="ph-sub">地址：' + esc(route) + '</p>'
+    + '<p class="ph-line"><span class="ph-label">可用路由</span>请从左侧二级菜单或顶部大模块条进入；'
+    + '本原型的全部可点路由见 README 的「可点路由清单」。</p>'
+    + '</section>';
+}
+
+const VIEWS = {
+  workbench: viewWorkbench,
+  devices: viewDevices,
+  users: viewUsers,
+  knowledge: viewKnowledge,
+  usage: viewUsage,
+  oplogs: viewOpLogs
+};
+
+/* ===================== 内容区 ===================== */
+function renderContent(active, route) {
+  const info = INDEX[route];
+  const page = DB.pages[route];
+  const kind = page ? page.kind : "placeholder";
+  const unknown = route !== "/workbench" && !info;
+
+  let crumbs, title;
+  if (route === "/workbench") {
+    crumbs = ["工作台"];
+    title = "工作台";
+  } else if (unknown) {
+    crumbs = [route];
+    title = "未收录的路由";
+  } else {
+    crumbs = info.group ? [active.name, info.group, info.name] : [active.name, info.name];
+    title = info.name;
+  }
+
+  const annot = page ? page.annot : {
+    enter: "顶部大模块条『" + active.name + "』" + (info && info.group ? "→ 左侧『" + info.group + "』" : "（该模块二级菜单为平铺列表）"),
+    act: "左侧二级菜单『" + (info ? info.name : route) + "』",
+    next: DEFAULT_ANNOT.next
+  };
+
+  let h = '<div class="crumb">';
+  crumbs.forEach(function (c, i) {
+    if (i > 0) h += '<span class="sep">/</span>';
+    h += esc(c);
+  });
+  h += '</div>';
+  h += '<h2 class="page-title">' + esc(title) + '</h2>';
+  h += annotBox(annot, page ? page.source : "");
+
+  if (unknown) h += viewUnknown(route);
+  else if (kind === "placeholder") h += viewPlaceholder(info, active);
+  else h += (VIEWS[kind] || viewWorkbench)();
+  $("main").innerHTML = h;
+}
+
+/* ===================== 渲染入口与交互 ===================== */
+function render() {
+  const route = parseHash();
+  const active = moduleOf(route);
+  renderTopbar(active);
+  renderSidebar(active, route);
+  renderContent(active, route);
+  if (route === "/workbench") document.title = "工作台 · 平台级导航原型";
+  else if (INDEX[route]) document.title = INDEX[route].name + ' · ' + active.name + ' · 平台级导航原型';
+  else document.title = "未收录的路由 · 平台级导航原型";
+  window.scrollTo(0, 0);
+}
+
+let toastTimer = null;
+function toast(msg) {
+  const el = $("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { el.classList.remove("show"); }, 1900);
+}
+
+document.addEventListener("click", function (ev) {
+  const todo = ev.target.closest("[data-todo]");
+  if (todo) {
+    toast("原型占位：「" + todo.getAttribute("data-todo") + "」未接入逻辑");
+    return;
+  }
+  const title = ev.target.closest(".group-title");
+  if (title) {
+    const key = title.getAttribute("data-gkey");
+    state.collapsed[key] = !state.collapsed[key];
+    const keep = $("sidebar").scrollTop;
+    renderSidebar(moduleOf(parseHash()), parseHash());
+    $("sidebar").scrollTop = keep;
+    return;
+  }
+  if (ev.target.closest("a")) return;
+  const card = ev.target.closest("[data-route]");
+  if (card) location.hash = "#" + card.getAttribute("data-route");
+});
+
+document.addEventListener("keydown", function (ev) {
+  if (ev.key !== "Enter" && ev.key !== " ") return;
+  const el = ev.target.closest ? ev.target.closest("[data-route]") : null;
+  if (el) {
+    ev.preventDefault();
+    location.hash = "#" + el.getAttribute("data-route");
+  }
+});
+
+window.addEventListener("hashchange", render);
+
+(function init() {
+  if (!location.hash || location.hash === "#" || location.hash === "#/") {
+    location.replace("#/workbench");
+  }
+  render();
+})();
+</script>
+</body>
+</html>
