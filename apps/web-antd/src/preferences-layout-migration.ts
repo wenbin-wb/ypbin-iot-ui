@@ -73,10 +73,17 @@ function clearCachedLayout(namespace: string): boolean {
  * @returns 是否已确保缓存侧不含旧布局；`false` 时调用方应用 `updatePreferences` 兜底
  */
 export function normalizeCachedLayoutPreference(namespace: string): boolean {
-  if (typeof window === 'undefined' || !window.localStorage) {
+  if (typeof window === 'undefined') {
     return false;
   }
   try {
+    // `window.localStorage` **取值本身**在部分环境就会抛 SecurityError（沙箱 iframe、cookie 全禁、
+    // 某些隐私设置），因此这个判断也必须放进 try 里——取值留在 try 之外会让异常直穿 main.ts 的
+    // initApplication()，把应用启动整个带崩（白屏）。口径与 @vben-core/shared 的
+    // StorageManager#createDefaultDriver 一致：拿不到存储就降级跳过，绝不阻断启动。
+    if (!window.localStorage) {
+      return false;
+    }
     const appliedVersion = window.localStorage.getItem(
       migrationVersionKey(namespace),
     );
