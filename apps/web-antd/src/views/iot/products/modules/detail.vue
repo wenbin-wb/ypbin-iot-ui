@@ -704,6 +704,7 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
                 </tr>
               </tbody>
             </table>
+          </template>
         </Tabs.TabPane>
 
         <!-- ===== TSL ===== -->
