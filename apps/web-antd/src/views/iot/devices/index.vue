@@ -16,6 +16,7 @@ import { $t } from '#/locales';
 
 import EmptyGuide from '../onboarding/modules/empty-guide.vue';
 import OnboardingGuide from '../onboarding/modules/guide.vue';
+import TenantLedger from '../tenant-ledger/modules/ledger.vue';
 
 import { useColumns } from './data';
 import Availability from './modules/availability.vue';
@@ -44,6 +45,16 @@ const [SeriesDrawer, SeriesDrawerApi] = useVbenDrawer({
  * `<Drawer>`（vben 只 provide 上下文、父侧不渲染容器），两者不能兼得。
  */
 const [GuideDrawer, GuideDrawerApi] = useVbenDrawer();
+/**
+ * 租户接入台账（F5）抽屉。
+ *
+ * **为什么挂在设备台账页**：平台级权限码 `iot:ledger:list/update` 本来就挂在设备菜单（`sys_menu`
+ * 320014/320015，`platform_only=1`，见 `deploy/sql/007-iot-data.sql`），而**台账页暂时没有页面级菜单**
+ * （本轮不新建 `sys_menu` 记录，避开与其它改动的冲突）。挂在设备页的工具栏里，平台管理员今天就能用，
+ * 且不影响任何非平台角色（按钮由 `v-access:code` 按权限码隐藏）。
+ * 页面级落点 `views/iot/tenant-ledger/index.vue` 已备好，接上菜单即生效。
+ */
+const [LedgerDrawer, LedgerDrawerApi] = useVbenDrawer();
 
 const [Grid, gridApi] = useVbenVxeGrid({
   gridOptions: {
@@ -124,6 +135,11 @@ function openGuide() {
 function onGuideAddDevice() {
   GuideDrawerApi.close();
 }
+
+/** 打开租户接入台账抽屉（仅平台管理员可见：按钮由 `iot:ledger:list` 权限码门禁）。 */
+function openLedger() {
+  LedgerDrawerApi.open();
+}
 </script>
 <template>
   <Page auto-content-height>
@@ -137,12 +153,26 @@ function onGuideAddDevice() {
         @done="gridApi.query()"
       />
     </GuideDrawer>
+    <LedgerDrawer
+      :title="$t('page.iot.ledger.pageTitle')"
+      class="w-[1000px]"
+    >
+      <TenantLedger />
+    </LedgerDrawer>
     <Grid>
       <template #toolbar-tools>
         <!-- 接入向导入口：不带权限码（方案 §6.1：所有角色可见，先知道下一步做什么）； -->
         <!-- 向导里的写动作各自沿用 iot:product:create / iot:product:publish / iot:device:create。 -->
         <Button class="mr-2" @click="openGuide">
           {{ $t('page.iot.onboarding.openGuide') }}
+        </Button>
+        <!-- 租户接入台账：平台级权限（platform_only=1），非平台管理员看不到这个按钮 -->
+        <Button
+          v-access:code="['iot:ledger:list']"
+          class="mr-2"
+          @click="openLedger"
+        >
+          {{ $t('page.iot.ledger.pageTitle') }}
         </Button>
         <Button
           v-access:code="['iot:device:create']"
