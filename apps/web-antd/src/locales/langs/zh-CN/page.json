@@ -1,5 +1,6 @@
 {
   "iot": {
+    "title": "IoT 平台",
     "device": {
       "title": "设备台账",
       "code": "设备编码",
