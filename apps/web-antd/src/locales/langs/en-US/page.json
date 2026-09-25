@@ -1,5 +1,6 @@
 {
   "iot": {
+    "title": "IoT Platform",
     "device": {
       "title": "Devices",
       "code": "Device code",
