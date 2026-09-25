@@ -167,6 +167,9 @@ onMounted(load);
           （{{ $t('page.iot.device.propertyPointHint') }}）
         </span>
       </div>
+      <div v-if="modelError" class="mb-2 text-xs text-muted-foreground">
+        {{ $t('page.iot.device.modelNeedsDraft') }}
+      </div>
       <Empty
         v-if="mergedRows.length === 0"
         :description="$t('page.iot.product.noProperty')"

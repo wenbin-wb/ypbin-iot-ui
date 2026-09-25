@@ -100,6 +100,15 @@ const selectedService = computed(() =>
   services.value.find((service) => service.id === selectedServiceId.value),
 );
 
+/**
+ * 物模型的**读**接口也要求草稿态（后端 `IotThingModelServiceImpl` 里 listServices /
+ * listProperties / listCommands / listEvents 全部先走 `requireProductDraft`）：
+ * 已发布产品的服务清单会返回业务码 409「仅草稿状态可编辑物模型，请先新建草稿」。
+ * 这不是 bug 而是既有契约 ⇒ 页面必须把该状态**显式讲清并给出下一步动作**（新建草稿 / 导出 TSL），
+ * 而不是只丢一个空表让人以为「这个产品没有物模型」。
+ */
+const isDraft = computed(() => product.value?.modelStatus === 'draft');
+
 function openEditor(
   kind: 'command' | 'event' | 'property' | 'service',
   // 行对象按 unknown 透传：编辑器内部只取 `id`，不在父组件里复制一份 DTO 类型
@@ -351,16 +360,22 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
             >
               {{ $t('page.iot.product.tslImport') }}
             </Button>
-            <Button v-access:code="['iot:product:update']" @click="onNewDraft">
-              {{ $t('page.iot.product.newDraft') }}
-            </Button>
-            <Button
-              v-access:code="['iot:product:publish']"
-              type="primary"
-              @click="onPublish"
+            <Popconfirm
+              :title="$t('page.iot.product.newDraftConfirm')"
+              @confirm="onNewDraft"
             >
-              {{ $t('page.iot.product.publish') }}
-            </Button>
+              <Button v-access:code="['iot:product:update']">
+                {{ $t('page.iot.product.newDraft') }}
+              </Button>
+            </Popconfirm>
+            <Popconfirm
+              :title="$t('page.iot.product.publishConfirm')"
+              @confirm="onPublish"
+            >
+              <Button v-access:code="['iot:product:publish']" type="primary">
+                {{ $t('page.iot.product.publish') }}
+              </Button>
+            </Popconfirm>
             <Button
               v-access:code="['iot:device:create']"
               type="primary"
@@ -381,6 +396,28 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
             type="error"
           />
 
+          <Alert
+            v-if="product && !isDraft"
+            :message="$t('page.iot.product.draftRequired')"
+            class="mb-3"
+            show-icon
+            type="warning"
+          />
+          <div v-if="product && !isDraft" class="mb-3 flex flex-wrap gap-2">
+            <Popconfirm
+              :title="$t('page.iot.product.newDraftConfirm')"
+              @confirm="onNewDraft"
+            >
+              <Button v-access:code="['iot:product:update']" type="primary">
+                {{ $t('page.iot.product.newDraft') }}
+              </Button>
+            </Popconfirm>
+            <Button @click="activeTab = 'tsl'">
+              {{ $t('page.iot.product.tabTsl') }}
+            </Button>
+          </div>
+
+          <template v-if="isDraft">
           <div class="mb-2 flex items-center gap-2">
             <span class="font-semibold">
               {{ $t('page.iot.product.service') }}
@@ -651,6 +688,7 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
                 </tr>
               </tbody>
             </table>
+          </template>
           </template>
         </Tabs.TabPane>
 
