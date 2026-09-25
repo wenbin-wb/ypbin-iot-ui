@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { IotOnboardingTemplate } from './templates';
+import type { OnboardingTemplate } from './templates';
 
 import { computed, onMounted, ref } from 'vue';
 
@@ -98,7 +98,7 @@ const stepItems = computed(() => [
  * 选模板：把产品名/编码预填进表单（这就是「后端不支持模板能力」时的降级形态——
  * 预填 + 一键调用既有写接口，而不是等后端出模板表）。
  */
-function selectTemplate(template: IotOnboardingTemplate) {
+function selectTemplate(template: OnboardingTemplate) {
   selectedKey.value = template.key;
   productName.value = template.productName;
   productCode.value = nextProductCode(template.productCodePrefix);
@@ -243,7 +243,7 @@ function goAddDevice() {
 }
 
 onMounted(async () => {
-  selectTemplate(templates[0] as IotOnboardingTemplate);
+  selectTemplate(templates[0] as OnboardingTemplate);
   await reloadCounts();
 });
 </script>
