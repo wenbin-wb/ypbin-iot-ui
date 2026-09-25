@@ -21,6 +21,10 @@ export const overridesPreferences = defineOverridesPreferences({
     name: import.meta.env.VITE_APP_TITLE,
     // 菜单从后端获取（走 /menu/all），而非前端内置路由
     accessMode: 'backend',
+    // 平台级导航：顶部一级大模块 + 左侧二级菜单（vben 原生 mixed-nav）。
+    // 偏好是「缓存优先」——老用户的 localStorage 会盖掉这里，所以启动时还要跑一次性
+    // 布局归一（见 preferences-layout-migration.ts），否则本行对老用户不生效。
+    layout: 'mixed-nav',
     locale: 'zh-CN',
     // Sa-Token 为续期机制、无 refresh token，关闭前端刷新逻辑
     enableRefreshToken: false,

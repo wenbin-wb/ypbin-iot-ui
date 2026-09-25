@@ -113,7 +113,7 @@
     }
   },
   "ai": {
-    "title": "AI 助手",
+    "title": "知识与 AI",
     "chat": {
       "title": "AI 对话",
       "history": "会话历史",
@@ -526,7 +526,7 @@
     "demoTip": "演示环境数据每日重置"
   },
   "dashboard": {
-    "title": "概览",
+    "title": "工作台",
     "analytics": "分析页",
     "workspace": "工作台",
     "welcome": "早安",
@@ -628,5 +628,11 @@
     "remote": "远程",
     "businessRatio": "商业占比",
     "month": "{0}月"
+  },
+  "admin": {
+    "title": "基础管理"
+  },
+  "ops": {
+    "title": "运维与监控"
   }
 }
