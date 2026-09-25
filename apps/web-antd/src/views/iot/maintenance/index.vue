@@ -39,7 +39,14 @@ async function loadWindowRows(): Promise<MaintenanceWindowRow[]> {
   const deviceIds = rows
     .map((row) => row.deviceId)
     .filter((id): id is string => !!id);
-  const names = await getDeviceNameMap(deviceIds);
+  let names: Record<string, string> = {};
+  try {
+    names = await getDeviceNameMap(deviceIds);
+  } catch (error) {
+    // 设备名是**展示增强**，不是这条列表的前提：该角色可能只有维护窗口权限、没有设备列表权限
+    // ⇒ 解析失败时回落显示裸 deviceId，绝不让整页窗口列表跟着失败（F3 不引入新的权限依赖）
+    console.warn('[iot] 设备名解析失败，维护窗口列表回落显示设备 ID', error);
+  }
   return rows.map((row) => ({
     ...row,
     deviceName: row.deviceId
