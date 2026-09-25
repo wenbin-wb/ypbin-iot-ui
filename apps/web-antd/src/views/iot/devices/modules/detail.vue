@@ -2,6 +2,7 @@
 import type {
   IotAvailabilityApi,
   IotDeviceApi,
+  IotEventApi,
   IotShadowApi,
 } from '#/api/iot';
 
@@ -15,14 +16,19 @@ import {
   Descriptions,
   DescriptionsItem,
   Empty,
+  Select,
+  SelectOption,
   Spin,
   Tabs,
   Tag,
+  Timeline,
+  TimelineItem,
 } from 'ant-design-vue';
 import dayjs from 'dayjs';
 
 import {
   getDeviceAvailability,
+  getDeviceEvents,
   getDeviceLatest,
   getDeviceShadow,
   getProductDetail,
@@ -62,6 +68,23 @@ const availabilityError = ref('');
 const shadow = ref<IotShadowApi.ShadowResp>();
 
 const shadowError = ref('');
+
+/** 运行期事件（G6）：命中 / 空 / 失败三态分别展示，禁把失败显示成「没有事件」。 */
+const events = ref<IotEventApi.EventLogResp[]>([]);
+
+/** 事件总数（可能大于本页条数：抽屉只取一页，事件页签据此提示收窄条件）。 */
+const eventsTotal = ref(0);
+
+const eventsError = ref('');
+
+/** 事件页签的级别过滤（空=全部）。概览区的「最近事件」固定看最新，不受它影响。 */
+const eventLevel = ref('');
+
+/** 一次取多少条：后端单页上限 100，抽屉里取 20 条足够。 */
+const EVENT_PAGE_SIZE = 20;
+
+/** 概览区只展示最近几条（完整时间线在「事件与断档」页签）。 */
+const RECENT_EVENT_SIZE = 3;
 
 /** 产品名（只有绑了产品才查；「看不出关联」最直观的一处：设备到底属于哪个产品）。 */
 const productName = ref('');
@@ -146,6 +169,67 @@ const ongoingOutageCount = computed(
   () => availability.value?.outages.filter((item) => !item.endTs).length ?? 0,
 );
 
+/** 概览区的「最近事件」（时间线已按发生时刻倒序，直接取前几条）。 */
+const recentEvents = computed(() =>
+  events.value.slice(0, RECENT_EVENT_SIZE),
+);
+
+/** 是否还有更多事件没在本页展示（提示用户去页签或用级别/时间收窄）。 */
+const eventsTruncated = computed(() => eventsTotal.value > events.value.length);
+
+/** a-timeline 的颜色：错误=红、告警=橙、其余=蓝（与 Tag 同色，避免两处口径不一致）。 */
+function eventColor(level?: string): string {
+  if (level === 'error') {
+    return 'red';
+  }
+  if (level === 'warn') {
+    return 'orange';
+  }
+  return 'blue';
+}
+
+/** 级别码 → 文案（后端只回码，文案在前端 i18n）。 */
+function eventLevelText(level?: string): string {
+  if (level === 'error') {
+    return $t('page.iot.event.levelError');
+  }
+  if (level === 'warn') {
+    return $t('page.iot.event.levelWarn');
+  }
+  return $t('page.iot.event.levelInfo');
+}
+
+/**
+ * 重新拉取事件（初始加载与级别过滤共用）。
+ *
+ * 失败必须落到 `eventsError` 上单独展示：把「查询失败」显示成「没有事件」会让用户
+ * 以为设备从没报过事件（与最新值/影子区块同一口径）。
+ */
+async function reloadEvents() {
+  if (!deviceId.value) {
+    events.value = [];
+    eventsTotal.value = 0;
+    return;
+  }
+  try {
+    const result = await getDeviceEvents(deviceId.value, {
+      level: eventLevel.value === '' ? undefined : eventLevel.value,
+      page: 1,
+      pageSize: EVENT_PAGE_SIZE,
+    });
+    events.value = result.items ?? [];
+    eventsTotal.value = result.total ?? 0;
+    eventsError.value = '';
+  } catch (error) {
+    events.value = [];
+    eventsTotal.value = 0;
+    eventsError.value = extractErrorMessage(
+      error,
+      $t('page.iot.event.loadFailed'),
+    );
+  }
+}
+
 /** 打平影子键值（键=属性标识），供表格渲染。 */
 function shadowRows(map?: Record<string, unknown>) {
   return Object.entries(map ?? {}).map(([key, value]) => ({
@@ -162,19 +246,24 @@ async function load() {
   availabilityError.value = '';
   shadow.value = undefined;
   shadowError.value = '';
+  events.value = [];
+  eventsTotal.value = 0;
+  eventsError.value = '';
   productName.value = '';
   if (!deviceId.value) {
     loading.value = false;
     return;
   }
   const id = deviceId.value;
-  // 四个只读接口互不依赖：并发发出去，各自独立报错（一处失败不影响其它区块展示）
+  // 只读接口互不依赖：并发发出去，各自独立报错（一处失败不影响其它区块展示）
   const [latestResult, availabilityResult, shadowResult] =
     await Promise.allSettled([
       getDeviceLatest(id),
       getDeviceAvailability(id),
       getDeviceShadow(id),
     ]);
+  // 事件单独走 reloadEvents（它还要被级别过滤复用），失败语义与上面三块一致：独立错误态
+  await reloadEvents();
 
   if (latestResult.status === 'fulfilled') {
     latest.value = latestResult.value ?? [];
@@ -359,16 +448,48 @@ const [Drawer, drawerApi] = useVbenDrawer<null | IotDeviceApi.DeviceResp>({
             </div>
           </div>
 
-          <!-- 事件数：后端没有运行期事件链路（方案 G6/P1-5），留空位并如实标注，绝不造数 -->
+          <!-- 最近事件（G6）：有数据给时间线，无数据给空态，查询失败单独报错 -->
           <div class="mt-4">
             <div class="mb-2 font-semibold">
               {{ $t('page.iot.device.recentEvents') }}
             </div>
             <Alert
-              :message="$t('page.iot.device.eventsNotAvailable')"
+              v-if="eventsError"
+              :message="eventsError"
               show-icon
-              type="warning"
+              type="error"
             />
+            <Empty
+              v-else-if="recentEvents.length === 0"
+              :description="$t('page.iot.event.empty')"
+            />
+            <template v-else>
+              <Timeline>
+                <TimelineItem
+                  v-for="event in recentEvents"
+                  :key="event.id"
+                  :color="eventColor(event.level)"
+                >
+                  <div class="flex items-center gap-2">
+                    <Tag :color="eventColor(event.level)">
+                      {{ eventLevelText(event.level) }}
+                    </Tag>
+                    <span class="font-medium">
+                      {{ event.eventName || event.eventCode }}
+                    </span>
+                  </div>
+                  <div class="text-xs text-muted-foreground">
+                    {{ event.eventTs ?? '-' }}
+                  </div>
+                </TimelineItem>
+              </Timeline>
+              <div
+                v-if="eventsTruncated"
+                class="text-xs text-muted-foreground"
+              >
+                {{ $t('page.iot.event.goToTab') }}
+              </div>
+            </template>
           </div>
 
           <div class="mt-4 grid grid-cols-2 gap-4">
@@ -463,14 +584,79 @@ const [Drawer, drawerApi] = useVbenDrawer<null | IotDeviceApi.DeviceResp>({
 
         <!-- ===== 事件与断档 ===== -->
         <Tabs.TabPane key="events" :tab="$t('page.iot.device.tabEvents')">
-          <div class="mb-2 font-semibold">
-            {{ $t('page.iot.device.runtimeEvents') }}
+          <div class="mb-2 flex items-center justify-between">
+            <div class="font-semibold">
+              {{ $t('page.iot.device.runtimeEvents') }}
+            </div>
+            <div class="flex items-center gap-2">
+              <Select
+                v-model:value="eventLevel"
+                :placeholder="$t('page.iot.event.allLevels')"
+                size="small"
+                style="width: 130px"
+                @change="reloadEvents"
+              >
+                <SelectOption value="">
+                  {{ $t('page.iot.event.allLevels') }}
+                </SelectOption>
+                <SelectOption value="info">
+                  {{ $t('page.iot.event.levelInfo') }}
+                </SelectOption>
+                <SelectOption value="warn">
+                  {{ $t('page.iot.event.levelWarn') }}
+                </SelectOption>
+                <SelectOption value="error">
+                  {{ $t('page.iot.event.levelError') }}
+                </SelectOption>
+              </Select>
+              <Button size="small" @click="reloadEvents">
+                {{ $t('page.iot.event.refresh') }}
+              </Button>
+            </div>
           </div>
           <Alert
-            :message="$t('page.iot.device.eventsNotAvailable')"
+            v-if="eventsError"
+            :message="eventsError"
             show-icon
-            type="warning"
+            type="error"
           />
+          <Empty
+            v-else-if="events.length === 0"
+            :description="$t('page.iot.event.empty')"
+          />
+          <template v-else>
+            <div class="mb-1 text-xs text-muted-foreground">
+              {{ $t('page.iot.event.total', [eventsTotal]) }}
+              <span v-if="eventsTruncated">
+                · {{ $t('page.iot.event.truncated', [EVENT_PAGE_SIZE]) }}
+              </span>
+            </div>
+            <Timeline>
+              <TimelineItem
+                v-for="event in events"
+                :key="event.id"
+                :color="eventColor(event.level)"
+              >
+                <div class="flex items-center gap-2">
+                  <Tag :color="eventColor(event.level)">
+                    {{ eventLevelText(event.level) }}
+                  </Tag>
+                  <span class="font-medium">
+                    {{ event.eventName || event.eventCode }}
+                  </span>
+                  <span class="text-xs text-muted-foreground">
+                    {{ event.eventTs ?? '-' }}
+                  </span>
+                </div>
+                <div
+                  v-if="event.params"
+                  class="mt-1 text-xs break-all text-muted-foreground"
+                >
+                  {{ $t('page.iot.event.params') }}: {{ event.params }}
+                </div>
+              </TimelineItem>
+            </Timeline>
+          </template>
 
           <div class="mt-4 mb-2 font-semibold">
             {{ $t('page.iot.availability.outages') }}

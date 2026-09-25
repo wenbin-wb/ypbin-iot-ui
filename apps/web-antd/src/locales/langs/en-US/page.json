@@ -35,9 +35,24 @@
       "openSeries": "Open history curve",
       "seriesReuseHint": "This section reuses the device ledger history-curve drawer (same query, chart and CSV export) instead of a second chart implementation",
       "runtimeEvents": "Runtime events",
-      "eventsNotAvailable": "The runtime event pipeline is not implemented yet (proposal P1-5); this block stays empty and shows no placeholder data",
       "recentEvents": "Recent events",
       "emptyReason": "This tenant has no devices yet: every device must belong to a product (the product's thing model defines what it can report), so onboarding starts with creating a product and defining its thing model."
+    },
+    "event": {
+      "title": "Runtime events",
+      "level": "Level",
+      "levelInfo": "Info",
+      "levelWarn": "Warning",
+      "levelError": "Error",
+      "allLevels": "All levels",
+      "refresh": "Refresh",
+      "params": "Params",
+      "eventTs": "Occurred at",
+      "empty": "No runtime events for this device yet (nothing reported, or nothing matches the current filter)",
+      "loadFailed": "Failed to load runtime events",
+      "total": "{0} in total",
+      "truncated": "showing the latest {0}; narrow by level or time for more",
+      "goToTab": "See the \"Events & outages\" tab for more"
     },
     "product": {
       "title": "Products & thing model",
