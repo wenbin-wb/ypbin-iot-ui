@@ -129,7 +129,15 @@
     "group": {
       "title": "设备分组",
       "name": "分组名称",
-      "sort": "排序"
+      "sort": "排序",
+      "members": "成员管理",
+      "memberAdd": "加入分组",
+      "memberSelectPlaceholder": "选择要加入分组的设备",
+      "memberRemove": "移出分组",
+      "memberRemoveConfirm": "确认把该设备移出本分组？",
+      "memberEmpty": "该分组暂无设备",
+      "memberEmptyHint": "设备在「设备台账」创建并绑定产品后再加入分组；加入后可在此处查看与移除。",
+      "memberGoDevices": "去设备台账"
     },
     "availability": {
       "title": "可用率 / 断档{0}",

@@ -129,7 +129,15 @@
     "group": {
       "title": "Device groups",
       "name": "Group name",
-      "sort": "Sort"
+      "sort": "Sort",
+      "members": "Members",
+      "memberAdd": "Add to group",
+      "memberSelectPlaceholder": "Select a device to add",
+      "memberRemove": "Remove",
+      "memberRemoveConfirm": "Remove this device from the group?",
+      "memberEmpty": "No devices in this group yet",
+      "memberEmptyHint": "Create devices under Devices and bind a product, then add them here. Members can be reviewed and removed on this page.",
+      "memberGoDevices": "Go to Devices"
     },
     "availability": {
       "title": "Availability / outages{0}",
