@@ -325,9 +325,10 @@ const DB = {
       { group: null, items: [
         { name: "文件管理", route: "/admin/files", tag: "复用", target: "文件上传/预览/下载与存储配置。" }
       ] },
-      { group: "授权管理", items: [
+      { group: "授权与开发", items: [
         { name: "授权列表", route: "/admin/licenses", tag: "复用", target: "授权记录、到期提醒与续期。" },
-        { name: "开放应用", route: "/admin/open-apps", tag: "复用", target: "开放平台应用与授权范围管理。" }
+        { name: "开放应用", route: "/admin/open-apps", tag: "复用", target: "开放平台应用与授权范围管理（含应用凭证与 4 个 system:app:* 权限码）。" },
+        { name: "接口文档", route: "/admin/api-docs", tag: "复用", target: "内嵌 springdoc swagger-ui 的接口文档与调试入口。" }
       ] }
     ],
 
@@ -384,9 +385,6 @@ const DB = {
         { name: "埋点分析", route: "/ops/tracking", tag: "复用", target: "事件趋势与维度下钻。" },
         { name: "漏斗分析", route: "/ops/funnel", tag: "复用", target: "步骤漏斗配置与转化率。" },
         { name: "留存分析", route: "/ops/retention-analysis", tag: "复用", target: "留存矩阵与同期群对比。" }
-      ] },
-      { group: "开发者工具", items: [
-        { name: "接口文档", route: "/ops/api-docs", tag: "复用", target: "在线接口文档与调试入口。" }
       ] }
     ]
   },
@@ -444,7 +442,7 @@ const DB = {
   },
 
   moduleCards: [
-    { name: "基础管理", route: "/admin/users", desc: "平台基础配置与组织权限：用户、角色、菜单、租户与消息中心。", links: [
+    { name: "基础管理", route: "/admin/users", desc: "平台基础配置与组织权限：用户、角色、菜单、租户、消息与开放应用。", links: [
       { name: "用户管理", route: "/admin/users" },
       { name: "角色管理", route: "/admin/roles" },
       { name: "租户列表", route: "/admin/tenants" }
@@ -459,10 +457,10 @@ const DB = {
       { name: "产品与物模型", route: "/iot/products" },
       { name: "健康总览", route: "/iot/health" }
     ] },
-    { name: "运维与监控", route: "/ops/op-logs", desc: "平台运维、埋点分析与开发者工具。", links: [
+    { name: "运维与监控", route: "/ops/op-logs", desc: "平台运维与埋点分析：日志、在线会话与分析报表。", links: [
       { name: "操作日志", route: "/ops/op-logs" },
-      { name: "埋点分析", route: "/ops/tracking" },
-      { name: "接口文档", route: "/ops/api-docs" }
+      { name: "在线用户", route: "/ops/online-users" },
+      { name: "埋点分析", route: "/ops/tracking" }
     ] }
   ],
 
