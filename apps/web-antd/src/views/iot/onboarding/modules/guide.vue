@@ -64,6 +64,9 @@ const error = ref('');
 
 const counts = ref({ devices: 0, products: 0 });
 
+/** 统计查询是否失败：失败时按「暂无数据」展示完整引导（对新人友好），但**必须让用户看见**。 */
+const countsFailed = ref(false);
+
 /** 是否被用户手动展开（有数据时的弱化态）。 */
 const expanded = ref(false);
 
@@ -123,9 +126,12 @@ async function reloadCounts() {
       devices: devices?.total ?? 0,
       products: products?.total ?? 0,
     };
+    countsFailed.value = false;
   } catch (caught) {
-    // 计数只用于「是否弱化引导」这一个判断，取不到就当作「没有数据」把引导显示全——
-    // 宁可多显示引导，也不能因为一次统计失败让新用户看不到入口（并留痕便于排查）
+    // 计数只用于「是否弱化引导」这一个判断：取不到就按「没有数据」把引导显示全（失败开放），
+    // 宁愿多显示引导也不能因为一次统计失败让新用户看不到入口。
+    // 但**不静默**：置 countsFailed 让界面明说「这是按兜底口径展示的」，并留痕便于排查。
+    countsFailed.value = true;
     console.warn('[iot] 接入向导的统计查询失败，按「暂无数据」展示完整引导', caught);
   }
 }
@@ -184,7 +190,11 @@ async function applyTemplate() {
     createdProductId.value = productId;
     createdProductCode.value = productCode.value.trim();
     message.success($t('page.iot.onboarding.createSuccess'));
+    // 关键：新建成功后租户就有产品了（hasData 变 true），若不显式展开，向导会**立刻折叠**，
+    // 把第 2 步「发布」与第 3 步「添加设备」一起藏起来——正好打断本向导自己的三步流。
+    expanded.value = true;
     await reloadCounts();
+    expanded.value = true;
     emit('done');
   } catch (caught) {
     error.value = extractErrorMessage(
@@ -243,7 +253,10 @@ function goAddDevice() {
 }
 
 onMounted(async () => {
-  selectTemplate(templates[0] as OnboardingTemplate);
+  const first = templates[0];
+  if (first) {
+    selectTemplate(first);
+  }
   await reloadCounts();
 });
 </script>
@@ -264,6 +277,13 @@ onMounted(async () => {
     </Alert>
 
     <template v-else>
+      <Alert
+        v-if="countsFailed"
+        class="mb-3"
+        :message="$t('page.iot.onboarding.countsFailed')"
+        show-icon
+        type="warning"
+      />
       <Steps :current="current" :items="stepItems" size="small" class="mb-4" />
 
       <div class="mb-4">

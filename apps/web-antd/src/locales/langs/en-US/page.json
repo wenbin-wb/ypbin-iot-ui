@@ -202,6 +202,7 @@
       "emptyTitle": "Nothing here yet",
       "emptyNext": "New to thing models? The guide ships with built-in templates — three steps to your first device.",
       "readyHint": "This tenant already has products or devices. You can still open the guide to create a product, apply a template, or add a device.",
+      "countsFailed": "Could not load the product/device counts, so the full guide is shown assuming there is no data yet (nothing is blocked, creating still works)",
       "showGuide": "Open guide",
       "hideGuide": "Collapse guide",
       "step1Title": "1. Create a product (or use a template)",
