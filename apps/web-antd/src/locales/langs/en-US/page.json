@@ -106,7 +106,8 @@
       "tslSuccessCount": "{0} item(s) imported",
       "deviceTabHint": "Filtering devices by product needs a backend productId query condition (proposal G8, not in this round); use the button below to add a device, and the device ledger to browse them",
       "newDraftConfirm": "Creating a draft puts the product back into editable state and advances the version. Continue?",
-      "readonlyPublished": "The thing model of a published product is READ-ONLY (services/properties/commands/events can be listed and the TSL exported); editing requires creating a new draft first (the write APIs require draft state)."
+      "readonlyPublished": "The thing model of a published product is READ-ONLY (services/properties/commands/events can be listed and the TSL exported); editing requires creating a new draft first (the write APIs require draft state).",
+      "readonlyEditBlocked": "This product is published and its thing model is read-only; create a new draft before editing."
     },
     "group": {
       "title": "Device groups",

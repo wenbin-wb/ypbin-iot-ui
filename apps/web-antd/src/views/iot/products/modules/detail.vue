@@ -113,6 +113,12 @@ function openEditor(
   // 行对象按 unknown 透传：编辑器内部只取 `id`，不在父组件里复制一份 DTO 类型
   row?: unknown,
 ) {
+  // 纵深防御：调用方按钮已按草稿态隐藏（`v-if="isDraft"`），这里再拦一道，
+  // 避免将来新增入口时漏掉而让用户点到必然 409 的按钮（后端写接口要求草稿态）。
+  if (!isDraft.value) {
+    message.warning($t('page.iot.product.readonlyEditBlocked'));
+    return;
+  }
   thingModelModalApi
     .setData({
       kind,
@@ -373,7 +379,7 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
               :title="$t('page.iot.product.newDraftConfirm')"
               @confirm="onNewDraft"
             >
-              <Button v-access:code="['iot:product:update']">
+              <Button v-access:code="['iot:product:update']" v-if="!isDraft">
                 {{ $t('page.iot.product.newDraft') }}
               </Button>
             </Popconfirm>
@@ -381,7 +387,7 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
               :title="$t('page.iot.product.publishConfirm')"
               @confirm="onPublish"
             >
-              <Button v-access:code="['iot:product:publish']" type="primary">
+              <Button v-access:code="['iot:product:publish']" type="primary" v-if="isDraft">
                 {{ $t('page.iot.product.publish') }}
               </Button>
             </Popconfirm>
@@ -473,6 +479,7 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
                 <td class="py-1">{{ service.description || '-' }}</td>
                 <td class="py-1">
                   <Button
+                    v-if="isDraft"
                     v-access:code="['iot:product:update']"
                     size="small"
                     type="link"
@@ -511,6 +518,7 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
                 {{ $t('page.iot.product.property') }}
               </span>
               <Button
+                v-if="isDraft"
                 v-access:code="['iot:product:update']"
                 size="small"
                 @click="openEditor('property', null)"
@@ -585,6 +593,7 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
                 {{ $t('page.iot.product.command') }}
               </span>
               <Button
+                v-if="isDraft"
                 v-access:code="['iot:product:update']"
                 size="small"
                 @click="openEditor('command', null)"
@@ -647,6 +656,7 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
                 {{ $t('page.iot.product.event') }}
               </span>
               <Button
+                v-if="isDraft"
                 v-access:code="['iot:product:update']"
                 size="small"
                 @click="openEditor('event', null)"
