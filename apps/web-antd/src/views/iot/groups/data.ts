@@ -13,7 +13,8 @@ export function useColumns(): VxeTableGridColumns {
       title: $t('common.action'),
       field: 'action',
       fixed: 'right',
-      width: 160,
+      // 三个动作（成员管理/编辑/删除）比原来的两个按钮更宽，160 会把「成员管理」挤掉
+      width: 240,
       align: 'center',
       slots: { default: 'action' },
     },
