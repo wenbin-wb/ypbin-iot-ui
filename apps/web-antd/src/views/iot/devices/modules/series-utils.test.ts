@@ -232,6 +232,18 @@ describe('resolveModelHint（物模型不可用要告警，不能让它显示成
     expect(countOrphanPoints(options)).toBe(1);
     expect(countOrphanPoints([])).toBe(0);
   });
+
+  it('同一属性多条映射（DDL 唯一键含 raw_address）的孤儿点只出一条，避免下拉出现两行同值候选', () => {
+    const options = buildPointOptions(
+      [
+        mapping({ id: '1', propertyId: '9139999' }),
+        mapping({ id: '2', propertyId: '9139999', rawAddress: 'holding:2' }),
+      ],
+      [],
+    );
+    expect(options).toHaveLength(1);
+    expect(countOrphanPoints(options)).toBe(1);
+  });
 });
 
 describe('toNumeric / formatSeriesTs / formatRangeLabel', () => {

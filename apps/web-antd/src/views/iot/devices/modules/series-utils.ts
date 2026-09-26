@@ -164,6 +164,15 @@ export function buildPointOptions(
     }
     const property = propertyById.get(point.propertyId);
     if (!property) {
+      // 孤儿点按属性主键查历史。**必须按属性主键去重**：DDL 的唯一键是
+      // `uk_iot_point_mapping (tenant_id, device_id, property_id, raw_address)` ⇒ 同一属性可以有
+      // 多条不同地址的映射；不去重会在下拉里出现两行**同值**候选（选一个等于选两个），
+      // 告警文案里的个数也会把 1 个点位说成 2 个（2026-09-27 第三轮独立复核 P1）。
+      const key = `#${point.propertyId}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
       orphans.push({
         identifier: '',
         mapped: true,

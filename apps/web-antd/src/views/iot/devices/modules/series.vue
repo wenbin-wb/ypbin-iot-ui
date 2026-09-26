@@ -763,6 +763,11 @@ function onExport(): void {
         show-icon
         type="warning"
       />
+      <!--
+        降级提示按「最相关的先说」排成 v-else-if 链，同一时刻**只给一条**：
+        物模型不可用（根因 + 动作）→ 个别点位解析不出标识符（数量 + 手动补录）→ 候选为空（去配点位映射）。
+        上面的两条 error Alert 是**真实失败**，与提示不互斥（失败必须报，提示负责给下一步）。
+      -->
       <Alert
         v-if="modelWarning"
         :message="modelWarning"
@@ -771,15 +776,14 @@ function onExport(): void {
         type="warning"
       />
       <Alert
-        v-if="orphanWarning"
+        v-else-if="orphanWarning"
         :message="orphanWarning"
         class="mb-2"
         show-icon
         type="warning"
       />
-      <!-- 没有任何候选、且物模型也没给出原因（如点位映射为空但产品物模型正常）时才谈「配置点位映射」 -->
       <Alert
-        v-if="optionsEmpty && !modelWarning"
+        v-else-if="optionsEmpty"
         :message="$t('page.iot.series.optionsEmpty')"
         class="mb-2"
         show-icon
