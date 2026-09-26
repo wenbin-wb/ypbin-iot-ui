@@ -247,6 +247,20 @@ export function resolveModelHint(
 /** 物模型不可用的两种情形（组件据此选文案，纯函数便于单测）。 */
 export type ModelHint = 'emptyModel' | 'noProduct' | null;
 
+/**
+ * 解析不出标识符的点位个数（`orphan`）。
+ *
+ * 这个数字与「物模型是否可用」**不是同一件事**：物模型只有部分属性（TSL 重导入物理删了属性、
+ * 或产品物模型读取失败）时，未绑产品/空物模型的告警不会出现，但那些点位**同样只能按属性主键查**
+ * （坐标统一后存的是标识符 ⇒ 多半 0 条）。故组件按这个数字单独给一条告警，不靠 `ModelHint` 兜。
+ *
+ * @param options 点位候选
+ * @returns 解析不出属性标识符的候选个数
+ */
+export function countOrphanPoints(options: SeriesPointOption[]): number {
+  return options.filter((option) => option.orphan).length;
+}
+
 // ---------- 数值与时间格式 ----------
 
 /** 值转数字：空/非数值（文本点位）返回 null —— 折线在这些点断开，而不是被画成 0。 */

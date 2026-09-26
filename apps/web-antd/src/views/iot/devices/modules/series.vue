@@ -56,6 +56,7 @@ import {
   buildDetailRows,
   buildPointOptions,
   chartUnits,
+  countOrphanPoints,
   flattenProperties,
   formatAxisTs,
   formatRangeLabel,
@@ -260,6 +261,9 @@ const optionByValue = computed(
   () => new Map(selectOptions.value.map((option) => [option.value, option])),
 );
 
+/** 解析不出属性标识符的候选个数（这些点位只能按属性主键查，多半查不到）。 */
+const orphanCount = computed(() => countOrphanPoints(pointOptions.value));
+
 const optionsEmpty = computed(
   () =>
     !optionsLoading.value &&
@@ -278,6 +282,19 @@ const modelWarning = computed(() => {
   }
   return '';
 });
+
+/**
+ * 「解析不出属性标识符」的点位个数告警。
+ *
+ * 与 `modelWarning` 分开判：物模型只有部分属性（部分属性被删）或物模型读取失败时，
+ * `modelHint` 是 `null`，但那些点位**同样只能按属性主键查**（坐标统一后存的是标识符 ⇒ 多半 0 条），
+ * 不能因为「物模型整体可用」就不告警。
+ */
+const orphanWarning = computed(() =>
+  orphanCount.value > 0
+    ? $t('page.iot.series.orphanHint', [String(orphanCount.value)])
+    : '',
+);
 
 // ---------- 取点位候选 ----------
 
@@ -332,7 +349,11 @@ async function loadOptions(presetPropertyId: string) {
     );
   }
   pointOptions.value = buildPointOptions(points, properties);
-  modelHint.value = resolveModelHint(productId.value !== '', properties.length);
+  // 物模型**读取失败**时不给「物模型里没有属性」的结论（原因不同，别把失败说成空）
+  modelHint.value =
+    propertiesResult.status === 'rejected'
+      ? null
+      : resolveModelHint(productId.value !== '', properties.length);
   optionsLoading.value = false;
 
   // 详情页逐行点进来时会把标识符带进来：候选里有就选它；没有就当作手工点位补进候选（不丢入口）
@@ -750,7 +771,15 @@ function onExport(): void {
         type="warning"
       />
       <Alert
-        v-if="optionsEmpty"
+        v-if="orphanWarning"
+        :message="orphanWarning"
+        class="mb-2"
+        show-icon
+        type="warning"
+      />
+      <!-- 没有任何候选、且物模型也没给出原因（如点位映射为空但产品物模型正常）时才谈「配置点位映射」 -->
+      <Alert
+        v-if="optionsEmpty && !modelWarning"
         :message="$t('page.iot.series.optionsEmpty')"
         class="mb-2"
         show-icon

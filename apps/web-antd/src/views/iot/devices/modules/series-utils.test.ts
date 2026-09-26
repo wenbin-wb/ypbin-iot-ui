@@ -11,6 +11,7 @@ import {
   buildDetailRows,
   buildPointOptions,
   chartUnits,
+  countOrphanPoints,
   csvCell,
   formatRangeLabel,
   formatSeriesTs,
@@ -215,6 +216,21 @@ describe('resolveModelHint（物模型不可用要告警，不能让它显示成
 
   it('物模型可用 ⇒ 不告警', () => {
     expect(resolveModelHint(true, 6)).toBeNull();
+  });
+
+  it('解析不出标识符的点位个数用于「部分属性被删」这类物模型整体可用时的告警', () => {
+    const properties = [
+      property({ id: '9130001', identifier: 'temperature' }),
+    ];
+    const options = buildPointOptions(
+      [
+        mapping({ id: '1', propertyId: '9130001' }),
+        mapping({ id: '2', propertyId: '9139999' }),
+      ],
+      properties,
+    );
+    expect(countOrphanPoints(options)).toBe(1);
+    expect(countOrphanPoints([])).toBe(0);
   });
 });
 
