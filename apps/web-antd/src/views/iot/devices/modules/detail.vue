@@ -107,6 +107,7 @@ function onOpenSeries(propertyId?: string) {
   SeriesDrawerApi.setData({
     deviceName: device.value?.deviceName ?? device.value?.deviceCode,
     id: deviceId.value,
+    productId: device.value?.productId,
     propertyId,
   }).open();
 }
