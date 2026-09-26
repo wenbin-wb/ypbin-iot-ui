@@ -31,6 +31,8 @@ jobs:
         run: node scripts/check-iot-i18n-keys.mjs
       - name: Typecheck（web-antd）
         run: pnpm -F @vben/web-antd run typecheck
+      - name: 构建（web-antd）
+        run: pnpm -F @vben/web-antd run build
       - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
