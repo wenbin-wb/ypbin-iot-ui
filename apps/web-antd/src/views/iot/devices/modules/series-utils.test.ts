@@ -17,6 +17,7 @@ import {
   IOT_SERIES_MAX_SELECTED_POINTS,
   isValidPropertyId,
   loadSeriesPreferences,
+  resolveModelHint,
   resolveSeriesRange,
   saveSeriesPreferences,
   seriesCsvFileName,
@@ -199,6 +200,21 @@ describe('buildPointOptions', () => {
 
   it('多点位上限是个正数常量（多点位 = 前端扇出请求，不能无上限）', () => {
     expect(IOT_SERIES_MAX_SELECTED_POINTS).toBeGreaterThan(0);
+  });
+});
+
+describe('resolveModelHint（物模型不可用要告警，不能让它显示成「无数据」）', () => {
+  it('未绑产品 ⇒ noProduct（映射只能按属性主键查，多半查不到）', () => {
+    expect(resolveModelHint(false, 0)).toBe('noProduct');
+    expect(resolveModelHint(false, 6)).toBe('noProduct');
+  });
+
+  it('绑了产品但物模型没有属性 ⇒ emptyModel', () => {
+    expect(resolveModelHint(true, 0)).toBe('emptyModel');
+  });
+
+  it('物模型可用 ⇒ 不告警', () => {
+    expect(resolveModelHint(true, 6)).toBeNull();
   });
 });
 

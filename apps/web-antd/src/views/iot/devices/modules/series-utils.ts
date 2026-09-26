@@ -222,6 +222,31 @@ export function flattenProperties(
   return groups.flatMap((group) => group.properties);
 }
 
+/**
+ * 物模型是否**不可用**（拿不到属性 ⇒ 映射里的属性主键翻译不出标识符）。
+ *
+ * 为什么必须显式区分（2026-09-27 独立复核提出）：设备未绑产品、或产品物模型属性为空时，
+ * `buildPointOptions` 会把所有映射降级成「孤儿点」按**属性主键**查询；而坐标统一后写进 IoTDB 的是
+ * **标识符**，按主键查会返回 0 条 —— 界面于是显示「该时间范围内无数据」，可数据其实存在。
+ * 这是「把查不到演成没有数据」，必须给用户一句明确的降级告警，而不是让他自己猜。
+ *
+ * @param hasProduct    设备是否绑定了产品（未绑定 ⇒ 无法取物模型）
+ * @param propertyCount 取到的物模型属性个数
+ * @returns 降级原因；`null` 表示物模型可用
+ */
+export function resolveModelHint(
+  hasProduct: boolean,
+  propertyCount: number,
+): ModelHint {
+  if (!hasProduct) {
+    return 'noProduct';
+  }
+  return propertyCount === 0 ? 'emptyModel' : null;
+}
+
+/** 物模型不可用的两种情形（组件据此选文案，纯函数便于单测）。 */
+export type ModelHint = 'emptyModel' | 'noProduct' | null;
+
 // ---------- 数值与时间格式 ----------
 
 /** 值转数字：空/非数值（文本点位）返回 null —— 折线在这些点断开，而不是被画成 0。 */

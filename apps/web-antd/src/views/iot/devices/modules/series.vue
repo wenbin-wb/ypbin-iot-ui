@@ -4,6 +4,7 @@ import type { EchartsUIType } from '@vben/plugins/echarts';
 import type { Dayjs } from 'dayjs';
 
 import type {
+  ModelHint,
   SeriesPointOption,
   SeriesQueryResult,
   SeriesRangeMode,
@@ -65,6 +66,7 @@ import {
   isValidPropertyId,
   loadSeriesPreferences,
   numericCount,
+  resolveModelHint,
   resolveSeriesRange,
   saveSeriesPreferences,
   seriesCsvFileName,
@@ -121,6 +123,8 @@ const optionErrors = ref<{ model: string; points: string }>({
 const optionsLoading = ref(false);
 const selectedPoints = ref<string[]>([]);
 const manualInput = ref('');
+/** 物模型不可用（未绑产品 / 产品无属性）⇒ 映射点位只能按主键查，必须告警而不是让它显示成「无数据」 */
+const modelHint = ref<ModelHint>(null);
 
 const rangeMode = ref<SeriesRangeMode>(IOT_SERIES_DEFAULT_RANGE_MODE);
 const customRange = ref<[Dayjs, Dayjs]>();
@@ -184,6 +188,7 @@ const [Drawer, drawerApi] = useVbenDrawer<SeriesDrawerData>({
     optionErrors.value = { model: '', points: '' };
     results.value = [];
     queried.value = false;
+    modelHint.value = null;
     usedPoints.value = [];
     usedRange.value = { unbounded: false };
     usedLimit.value = IOT_SERIES_DEFAULT_LIMIT;
@@ -263,6 +268,17 @@ const optionsEmpty = computed(
     optionErrors.value.model === '',
 );
 
+/** 物模型不可用的告警文案（降级原因由 {@link resolveModelHint} 判定，这里只负责选词）。 */
+const modelWarning = computed(() => {
+  if (modelHint.value === 'noProduct') {
+    return $t('page.iot.series.noProductHint');
+  }
+  if (modelHint.value === 'emptyModel') {
+    return $t('page.iot.series.emptyModelHint');
+  }
+  return '';
+});
+
 // ---------- 取点位候选 ----------
 
 /** 物模型属性（属性挂在服务下，故先取服务再扇出取属性；服务数量是个位数，不存在按设备循环的 N+1）。 */
@@ -316,6 +332,7 @@ async function loadOptions(presetPropertyId: string) {
     );
   }
   pointOptions.value = buildPointOptions(points, properties);
+  modelHint.value = resolveModelHint(productId.value !== '', properties.length);
   optionsLoading.value = false;
 
   // 详情页逐行点进来时会把标识符带进来：候选里有就选它；没有就当作手工点位补进候选（不丢入口）
@@ -324,8 +341,10 @@ async function loadOptions(presetPropertyId: string) {
     selectedPoints.value = [presetPropertyId];
     return;
   }
+  // 解析不出标识符（孤儿点）**不默认选中**：按属性主键查多半是 0 条，自动选它再自动查一次，
+  // 等于把「查不到」摆成「没有数据」。让用户显式选（或用高级选项里的手动输入填标识符）。
   const first = selectOptions.value[0];
-  selectedPoints.value = first ? [first.value] : [];
+  selectedPoints.value = first && !first.orphan ? [first.value] : [];
 }
 
 // ---------- 查询 ----------
@@ -719,6 +738,13 @@ function onExport(): void {
       <Alert
         v-if="optionErrors.model"
         :message="optionErrors.model"
+        class="mb-2"
+        show-icon
+        type="warning"
+      />
+      <Alert
+        v-if="modelWarning"
+        :message="modelWarning"
         class="mb-2"
         show-icon
         type="warning"
