@@ -2,10 +2,12 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { IotMaintenanceApi } from '#/api/iot';
 
+import { ref } from 'vue';
+
 import { Page, useVbenDrawer } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
-import { Button, message } from 'ant-design-vue';
+import { Alert, Button, message } from 'ant-design-vue';
 
 import { useVbenVxeGrid, VbenTableAction } from '#/adapter/vxe-table';
 import {
@@ -14,6 +16,7 @@ import {
   getMaintenanceWindowList,
 } from '#/api/iot';
 import { $t } from '#/locales';
+import { extractErrorMessage } from '#/utils/error';
 
 import EmptyGuide from '../onboarding/modules/empty-guide.vue';
 import OnboardingGuide from '../onboarding/modules/guide.vue';
@@ -60,6 +63,15 @@ async function loadWindowRows(): Promise<MaintenanceWindowRow[]> {
   }));
 }
 
+/**
+ * 列表**加载失败**的原因（非空即代表「这次没取到数据」）。
+ *
+ * 🔴 vxe 的 `#empty` 槽分不清「加载失败」与「确实没有窗口」⇒ 原来只挂 `EmptyGuide`
+ * 会把失败画成「还没有维护窗口」，而维护窗口为空的**真实含义**是「计划停机不会被排除、
+ * 可用率会偏低」——把一个查询失败说成这件事是会误导运维的。失败必须单独、持续可见。
+ */
+const listError = ref('');
+
 const [Grid, gridApi] = useVbenVxeGrid({
   gridOptions: {
     columns: useColumns(),
@@ -67,7 +79,22 @@ const [Grid, gridApi] = useVbenVxeGrid({
     keepSource: true,
     pagerConfig: { enabled: false },
     proxyConfig: {
-      ajax: { query: async () => await loadWindowRows() },
+      ajax: {
+        query: async () => {
+          try {
+            const rows = await loadWindowRows();
+            listError.value = '';
+            return rows;
+          } catch (error) {
+            // 记下失败原因（原样展示后端 message），异常继续抛出 ⇒ 不改原有失败语义
+            listError.value = extractErrorMessage(
+              error,
+              $t('page.iot.maintenance.listLoadFailed'),
+            );
+            throw error;
+          }
+        },
+      },
     },
     rowConfig: { keyField: 'id' },
     toolbarConfig: { custom: true, export: false, refresh: true, zoom: true },
@@ -94,6 +121,16 @@ function openGuide() {
     <GuideDrawer :title="$t('page.iot.onboarding.title')" class="w-[900px]">
       <OnboardingGuide @done="gridApi.query()" />
     </GuideDrawer>
+    <!-- 失败态必须挂在表格之外：真实 vxe 只在表体无行时渲染 `#empty` 槽，
+         「已有数据后刷新失败」时槽不渲染 ⇒ 放槽里的失败提示会看不见。 -->
+    <Alert
+      v-if="listError"
+      class="mb-2"
+      :description="listError"
+      :message="$t('page.iot.maintenance.listLoadFailed')"
+      show-icon
+      type="error"
+    />
     <Grid>
       <template #toolbar-tools>
         <Button class="mr-2" @click="openGuide">
@@ -111,7 +148,9 @@ function openGuide() {
 
       <!-- 空态引导：维护窗口为空时说明「为什么是空的 + 下一步点哪里」 -->
       <template #empty>
+        <!-- 失败时由上方 Alert 承担失败态，这里不得再声称「没有数据」 -->
         <EmptyGuide
+          v-if="!listError"
           :reason="$t('page.iot.maintenance.emptyReason')"
           @open-guide="openGuide"
         />

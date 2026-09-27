@@ -47,11 +47,16 @@ const router = useRouter();
 /**
  * 写操作门禁用 **computed + `v-if`**，不用 `v-access` 指令。
  *
- * 原因（已核实上游实现）：`packages/effects/access/src/directive.ts` 的 `v-access` **只注册了
- * `mounted`、没有 `updated`**，且在无权限时执行 `el.remove()`（元素被摘掉，不可逆）。
- * ⇒ 权限码若在挂载**之后**才到位（或运行期变化），本区块**永远不会**再出现
- * （表现为「功能静默消失」，比白屏更难查）。`computed` 读的是 pinia 里的 `accessCodes`，
- * 天然随权限码变化重算，语义与指令一致但**没有这个时序窗口**。
+ * **机制事实（已核实上游源码）**：`packages/effects/access/src/directive.ts` 的 `v-access`
+ * **只注册了 `mounted`、没有 `updated`**，且无权限时执行 `el.remove()`（不可逆）
+ * ⇒ 它在挂载那一刻把权限判定定死：权限码此后变化不会重算。
+ *
+ * ⚠️ **风险定性如实**（独立复核指出，采纳）：本应用的权限码在**路由守卫里、页面挂载之前**
+ * 就写入 store（`router/guard.ts` 先 `fetchUserInfo()` → `generateAccess()` 才放行导航），
+ * 故「权限码迟到」窗口在正常流程中**不可达**。因此这是**防御性加固**（把可见性从
+ * 「依赖挂载时机」换成显式响应式判定），而**不是**在修一个已复现的线上缺陷。
+ * 范围口径：只对**区块级**功能区（如本页的「加入成员」工具栏）使用；行内单个按钮沿用指令亦可，
+ * 本页为保持同一权限码的口径一致也一并改成了 computed。
  */
 const { hasAccessByCodes } = useAccess();
 

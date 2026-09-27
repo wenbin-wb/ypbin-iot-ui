@@ -139,7 +139,9 @@
       "memberRemoveConfirm": "确认把该设备移出本分组？",
       "memberEmpty": "该分组暂无设备",
       "memberEmptyHint": "设备在「设备台账」创建并绑定产品后再加入分组；加入后可在此处查看与移除。",
-      "memberGoDevices": "去设备台账"
+      "memberGoDevices": "去设备台账",
+      "emptyHint": "该租户还没有设备分组：分组用于把设备按用途/位置归拢，便于批量查看与维护。",
+      "listLoadFailed": "设备分组列表加载失败"
     },
     "availability": {
       "title": "可用率 / 断档{0}",
@@ -242,7 +244,8 @@
       "create": "声明维护窗口",
       "close": "关闭窗口",
       "closeConfirm": "关闭后该时段不再从可用率里排除，确认关闭？",
-      "emptyReason": "还没有维护窗口：维护窗口用于把计划停机（检修、换件）从可用率统计里排除；不声明的话这段停机就会算成断档、拉低可用率。"
+      "emptyReason": "还没有维护窗口：维护窗口用于把计划停机（检修、换件）从可用率统计里排除；不声明的话这段停机就会算成断档、拉低可用率。",
+      "listLoadFailed": "维护窗口列表加载失败"
     },
     "onboarding": {
       "title": "接入向导",

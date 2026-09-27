@@ -139,7 +139,9 @@
       "memberRemoveConfirm": "Remove this device from the group?",
       "memberEmpty": "No devices in this group yet",
       "memberEmptyHint": "Create devices under Devices and bind a product, then add them here. Members can be reviewed and removed on this page.",
-      "memberGoDevices": "Go to Devices"
+      "memberGoDevices": "Go to Devices",
+      "emptyHint": "This tenant has no device groups yet: groups collect devices by purpose or location for easier review and maintenance.",
+      "listLoadFailed": "Failed to load the device group list"
     },
     "availability": {
       "title": "Availability / outages{0}",
@@ -242,7 +244,8 @@
       "create": "Declare window",
       "close": "Close window",
       "closeConfirm": "Closed windows no longer count as maintenance. Continue?",
-      "emptyReason": "No maintenance windows yet: a window excludes planned downtime (servicing, part replacement) from availability statistics. Without one, that downtime is counted as an outage and lowers availability."
+      "emptyReason": "No maintenance windows yet: a window excludes planned downtime (servicing, part replacement) from availability statistics. Without one, that downtime is counted as an outage and lowers availability.",
+      "listLoadFailed": "Failed to load the maintenance window list"
     },
     "onboarding": {
       "title": "Onboarding guide",

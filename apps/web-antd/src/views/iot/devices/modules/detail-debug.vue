@@ -200,12 +200,22 @@ function propertyLabel(property: IotThingModelApi.PropertyResp): string {
 /**
  * 本区块的权限门禁用 **computed + `v-if`**，不用 `v-access` 指令。
  *
- * 原因（已核实上游实现）：`packages/effects/access/src/directive.ts` 里 `v-access`
- * **只注册了 `mounted`、没有 `updated`**，且无权限时直接 `el.remove()`（摘掉即不可逆）。
- * ⇒ 权限码若在挂载**之后**才到位（或运行期变化），被摘掉的区块**永远回不来**；
- * 反向（先有后撤）则元素留在页面上继续放行入口。用户看到的是「功能静默消失/静默残留」——
- * 没有报错、没有空白。`computed` 读 pinia 的 `accessCodes`，随权限码变化自动重算，
- * 可见性语义与指令一致但无此时序窗口。上游行为已由用例钉住（见 detail-debug.test.ts）。
+ * **机制事实（已核实上游源码，且有用例钉住）**：`packages/effects/access/src/directive.ts`
+ * 里 `v-access` **只注册了 `mounted`、没有 `updated`**，且无权限时直接 `el.remove()`
+ * （摘掉即不可逆）⇒ 它在**挂载那一刻**把权限判定定死：权限码此后变化不会重算，
+ * 「先无权限后补权限」的区块**永远回不来**，「先有权限后撤权」的元素则**继续留在页面上**。
+ * 两种方向都不会报错、也不会空白，属**静默**偏差。上游行为已由用例钉成 tripwire
+ * （见 `detail-debug.test.ts` 的「权限码迟到/变化」用例组）。
+ *
+ * ⚠️ **但对本项目的风险定性要如实**（独立复核指出，采纳）：本应用的权限码在**路由守卫里、
+ * 页面挂载之前**就写入 store —— `router/guard.ts` 会 `await fetchUserInfo()` → `generateAccess()`
+ * 之后才放行导航，`store/auth.ts` 在登录收尾时 `setAccessCodes`。因此「权限码迟到」这个窗口
+ * 在**正常流程中不可达**，运行期也没有重新拉取权限码的路径。所以这里**不是**在修一个已复现的
+ * 线上缺陷，而是**防御性加固**：把「可见性依赖挂载时机」这一隐式前提，换成显式的响应式判定。
+ *
+ * **改用本写法的口径（避免「只改了两处」看起来像漏改）**：只对**区块级**（整块功能区，
+ * 例如「历史记录」这一区块）使用；散落的单个操作按钮仍保留 `v-access`（摘掉一个按钮的
+ * 后果是「少一个入口」，与摘掉整块功能区的后果不同级）。这是刻意划的范围，不是遗漏。
  *
  * 注意两者权限码**不同**：看历史要 `iot:debug:get`，下发/重发要 `iot:debug:send`
  * （与后端 `@SaCheckPermission` 一一对应），不能合并成一个。

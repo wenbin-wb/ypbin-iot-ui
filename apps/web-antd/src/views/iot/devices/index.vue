@@ -188,6 +188,20 @@ function openLedger() {
     >
       <TenantLedger />
     </LedgerDrawer>
+    <!--
+      🔴 失败态**必须挂在表格之外**（不能只放 `#empty` 槽里）：
+      真实 vxe 只在**表体没有行**时才渲染 `#empty` 槽 ⇒ 若把失败提示只放槽里，
+      「已有数据后刷新失败」时旧行仍在、槽不渲染 ⇒ 失败提示**看不见**（只剩一次转瞬即逝的 toast），
+      页面会继续展示**过期数据**而用户毫不知情。放在表格上方则任何一次失败都可见。
+    -->
+    <Alert
+      v-if="listError"
+      class="mb-2"
+      :description="listError"
+      :message="$t('page.iot.device.listLoadFailed')"
+      show-icon
+      type="error"
+    />
     <Grid>
       <template #toolbar-tools>
         <!-- 接入向导入口：不带权限码（方案 §6.1：所有角色可见，先知道下一步做什么）； -->
@@ -214,17 +228,10 @@ function openLedger() {
       </template>
 
       <!-- 空态引导：说明「为什么是空的 + 下一步点哪里」，而不是一张空白表格 -->
-      <!-- 🔴 但**失败不能画成空态**：加载失败时原样展示后端 message（失败态），只有真的没数据才给引导 -->
+      <!-- 🔴 但**失败不能画成空态**：加载失败时由上方 Alert 承担失败态，这里不得再声称「没有数据」 -->
       <template #empty>
-        <Alert
-          v-if="listError"
-          :description="listError"
-          :message="$t('page.iot.device.listLoadFailed')"
-          show-icon
-          type="error"
-        />
         <EmptyGuide
-          v-else
+          v-if="!listError"
           :reason="$t('page.iot.device.emptyReason')"
           @open-guide="openGuide"
         />

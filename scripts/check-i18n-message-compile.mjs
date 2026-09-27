@@ -11,6 +11,17 @@
  * 谁编译不过就**点名谁**。含未转义 `{...}` 的文案一律失败——不止 JSON 示例，
  * 正则片段（`{\d+}`）、花括号模板串同样会失败。
  *
+ * 🔴 **必须按「每个应用一套 i18n」的口径编译，不能把所有目录合成一个大语言包。**
+ * 生产的加载顺序（一手核实：`packages/locales/src/i18n.ts` 的 `loadLocaleMessages`）是
+ * **先 `setLocaleMessage(基座 packages/locales)`，再 `mergeLocaleMessage(该应用自己的语言包)`**
+ * ⇒ **应用覆盖基座**；而且每个应用是**各自独立**的 i18n 实例（各应用的 `src/locales/index.ts`
+ * 各自提供 `loadMessages`），不同应用的 `system.json` 彼此无关。
+ *
+ * 第一版实现把 7 个目录按「应用在前、基座在后」的顺序 `{...prev, ...next}` 合并 ⇒ 优先级**正好相反**
+ * （基座覆盖应用）⇒ 被基座遮蔽的同名键**编译不到**：门禁报绿，而真实页面渲染期抛错。
+ * 这个漏报洞由独立复核用变异实证（把 web-antd 的 `system.role.status` 写成裸花括号 ⇒ 门禁 EXIT=0，
+ * 真实 `setupI18n` 探针 `$t(...)` 抛 `Message compilation error`）。**已按生产口径重写。**
+ *
  * 用法：
  *   node scripts/check-i18n-message-compile.mjs                      # 全库（zh-CN + en-US）
  *   node scripts/check-i18n-message-compile.mjs --namespace page.iot # 只查某前缀（可复用）
@@ -26,25 +37,30 @@ import { pathToFileURL } from 'node:url';
 
 export const ROOT = new URL('..', import.meta.url).pathname;
 
+/** 基座（共享）语言包：**先**加载，会被应用自己的包覆盖。 */
+export const SHARED_LOCALE_DIR = 'packages/locales/src/langs';
+
 /**
- * 语言包目录（**全库**）：各应用的文案 + 共享语言包。
- * 同一文件名即同一命名空间（`page.json` → `page.*`），应用包与共享包会按命名空间合并。
+ * 每个应用 = 一套独立的 i18n：`基座 → 应用自己`（应用胜出）。
+ *
+ * ⚠️ 顺序即优先级：数组里**后面的覆盖前面的**，必须把 `SHARED_LOCALE_DIR` 放在最前。
+ * 新增应用时要把它的 `src/locales/langs` 加进来，否则该应用的文案不被本门禁覆盖。
  */
-export const LOCALE_DIRS = [
-  'apps/web-antd/src/locales/langs',
-  'apps/web-antdv-next/src/locales/langs',
-  'apps/web-ele/src/locales/langs',
-  'apps/web-naive/src/locales/langs',
-  'apps/web-tdesign/src/locales/langs',
-  'packages/locales/src/langs',
-  'playground/src/locales/langs',
+export const APP_BUNDLES = [
+  { app: 'web-antd', dirs: ['apps/web-antd/src/locales/langs'] },
+  { app: 'web-antdv-next', dirs: ['apps/web-antdv-next/src/locales/langs'] },
+  { app: 'web-ele', dirs: ['apps/web-ele/src/locales/langs'] },
+  { app: 'web-naive', dirs: ['apps/web-naive/src/locales/langs'] },
+  { app: 'web-tdesign', dirs: ['apps/web-tdesign/src/locales/langs'] },
+  { app: 'playground', dirs: ['playground/src/locales/langs'] },
 ];
 
 export const LANGS = ['zh-CN', 'en-US'];
 
 /**
  * 全库编译条数下限（限定了 `--namespace` 时改用 1）。
- * 远低于真实规模（数千条）的保守值：只在「遍历退化 / 语言包没扫到」时触发，正常删减文案不会误报。
+ * 每应用都会编译一遍「基座 + 自己」⇒ 总量远大于单目录之和；取一个保守值，
+ * 只在「遍历退化 / 语言包没扫到」时触发，正常删减文案不会误报。
  */
 const MIN_COMPILED = 500;
 
@@ -65,6 +81,9 @@ export function createI18nFor(lang, messages) {
  *
  * 只迭代一层是空转：`page.iot` 下的中间节点是命名空间对象，vue-i18n 对对象**不编译**
  * （只打一条 Not found 警告），等于门禁没跑。
+ *
+ * 注意：数组与非字符串叶子**不由本函数返回**（vue-i18n 对它们不走消息编译路径）。
+ * 这类叶子由 `collectNonStringLeaves` 单独统计并**如实报告**，避免「静默没覆盖」。
  */
 export function collectLeafKeys(node, prefix = '') {
   if (typeof node === 'string') return prefix === '' ? [] : [prefix];
@@ -78,12 +97,30 @@ export function collectLeafKeys(node, prefix = '') {
   return keys;
 }
 
-/** 逐目录读入某语言的所有语言包，按命名空间（= 文件名）合并。 */
-export function loadLangMessages(lang, localeDirs = LOCALE_DIRS) {
+/** 收集**非字符串**叶子（数组/数字/布尔/null）——它们不被消息编译覆盖，需要如实报出。 */
+export function collectNonStringLeaves(node, prefix = '') {
+  if (typeof node === 'string') return [];
+  if (node === null || typeof node !== 'object') {
+    return prefix === '' ? [] : [prefix];
+  }
+  const keys = [];
+  for (const [key, value] of Object.entries(node)) {
+    keys.push(
+      ...collectNonStringLeaves(value, prefix === '' ? key : `${prefix}.${key}`),
+    );
+  }
+  return keys;
+}
+
+/**
+ * 读取一组目录（**按给定顺序合并，后者覆盖前者**）下某语言的全部语言包。
+ * 命名空间 = 文件名（不含 .json）。
+ */
+export function loadDirsMessages(lang, dirs) {
   const messages = {};
-  const usedDirs = [];
   const files = [];
-  for (const base of localeDirs) {
+  const usedDirs = [];
+  for (const base of dirs) {
     const dir = join(ROOT, base, lang);
     let entries;
     try {
@@ -107,50 +144,111 @@ export function loadLangMessages(lang, localeDirs = LOCALE_DIRS) {
   return { files, messages, usedDirs };
 }
 
+/** 兼容旧用法：读「基座 + 某个应用目录」。 */
+export function loadLangMessages(lang, dirs = [SHARED_LOCALE_DIR]) {
+  return loadDirsMessages(lang, dirs);
+}
+
 /**
- * 编译某语言的全部（或某前缀下的）叶子文案。
- * @returns {{compiled: number, failures: Array<{key: string, reason: string}>, scannedFiles: string[], usedDirs: string[]}}
+ * 按**生产口径**编译某语言：逐个应用（基座 → 应用自己的包，应用胜出）。
+ *
+ * @returns {{compiled:number, failures:Array<{app:string,key:string,reason:string}>,
+ *            scannedFiles:string[], usedDirs:string[], skippedNonString:string[]}}
  */
 export function compileLang(lang, { namespace } = {}) {
-  const { files, messages, usedDirs } = loadLangMessages(lang);
-  const global = createI18nFor(lang, messages);
-
-  const keys = [];
-  for (const [namespaceName, value] of Object.entries(messages)) {
-    keys.push(...collectLeafKeys(value, namespaceName));
-  }
-  const scoped = namespace
-    ? keys.filter(
-        (key) => key === namespace || key.startsWith(`${namespace}.`),
-      )
-    : keys;
-
   const failures = [];
-  for (const key of scoped) {
-    try {
-      global.t(key);
-    } catch (error) {
-      failures.push({
-        key,
-        reason: String(error?.message ?? error).split('\n')[0],
+  const scannedFiles = new Set();
+  const usedDirs = new Set();
+  const skippedNonString = new Set();
+  let compiled = 0;
+
+  for (const bundle of APP_BUNDLES) {
+    const dirs = [SHARED_LOCALE_DIR, ...bundle.dirs];
+    const { files, messages, usedDirs: dirsHit } = loadDirsMessages(lang, dirs);
+    for (const file of files) scannedFiles.add(file);
+    for (const dir of dirsHit) usedDirs.add(dir);
+
+    const global = createI18nFor(lang, messages);
+
+    const keys = [];
+    for (const [namespaceName, value] of Object.entries(messages)) {
+      keys.push(...collectLeafKeys(value, namespaceName));
+      for (const skipped of collectNonStringLeaves(value, namespaceName)) {
+        skippedNonString.add(`${bundle.app}:${skipped}`);
+      }
+    }
+    const scoped = namespace
+      ? keys.filter(
+          (key) => key === namespace || key.startsWith(`${namespace}.`),
+        )
+      : keys;
+
+    compiled += scoped.length;
+    for (const key of scoped) {
+      try {
+        global.t(key);
+      } catch (error) {
+        failures.push({
+          app: bundle.app,
+          key,
+          reason: String(error?.message ?? error).split('\n')[0],
+        });
+      }
+    }
+  }
+
+  // 同一基座键在每个应用里都会失败一次 ⇒ 按 (key, reason) 去重，并合出受影响应用列表，
+  // 否则一个基座键坏了会刷 N 行（噪声会把真正的问题埋掉）。
+  const merged = new Map();
+  for (const failure of failures) {
+    const id = `${failure.key}\u0000${failure.reason}`;
+    const hit = merged.get(id);
+    if (hit) {
+      hit.apps.push(failure.app);
+    } else {
+      merged.set(id, {
+        apps: [failure.app],
+        key: failure.key,
+        reason: failure.reason,
       });
     }
   }
-  return { compiled: scoped.length, failures, scannedFiles: files, usedDirs };
+
+  return {
+    compiled,
+    failures: [...merged.values()].map((item) => ({
+      app: item.apps.join(','),
+      apps: item.apps,
+      key: item.key,
+      reason: item.reason,
+    })),
+    scannedFiles: [...scannedFiles],
+    usedDirs: [...usedDirs],
+    skippedNonString: [...skippedNonString],
+  };
 }
 
 /** 全库扫描（默认 zh-CN + en-US）。 */
 export function scanAll({ languages = LANGS, namespace } = {}) {
   const failures = [];
   const scannedFiles = new Set();
+  const skippedNonString = new Set();
   let compiled = 0;
   for (const lang of languages) {
     const result = compileLang(lang, { namespace });
     for (const file of result.scannedFiles) scannedFiles.add(file);
+    for (const item of result.skippedNonString) skippedNonString.add(item);
     compiled += result.compiled;
-    for (const failure of result.failures) failures.push({ lang, ...failure });
+    for (const failure of result.failures) {
+      failures.push({ lang, ...failure });
+    }
   }
-  return { failures, compiled, scannedFiles: scannedFiles.size };
+  return {
+    failures,
+    compiled,
+    scannedFiles: scannedFiles.size,
+    skippedNonString: [...skippedNonString],
+  };
 }
 
 function main(argv) {
@@ -163,7 +261,9 @@ function main(argv) {
     process.exit(2);
   }
 
-  const { failures, compiled, scannedFiles } = scanAll({ namespace });
+  const { failures, compiled, scannedFiles, skippedNonString } = scanAll({
+    namespace,
+  });
   const scope = namespace ? `（限定前缀 ${namespace}）` : '（全库）';
 
   // 空跑自检优先：扫不到文件、或编译条数低得离谱 ⇒ 是门禁坏了，不是代码干净。
@@ -174,15 +274,24 @@ function main(argv) {
   if (json) {
     console.log(
       JSON.stringify(
-        { compiled, failures, scannedFiles, vacuous },
+        { compiled, failures, scannedFiles, skippedNonString, vacuous },
         null,
         2,
       ),
     );
   } else {
     console.log(
-      `[i18n-compile] ${LANGS.join(' + ')}${scope}：扫到 ${scannedFiles} 个语言包文件，编译 ${compiled} 条文案`,
+      `[i18n-compile] ${LANGS.join(' + ')}${scope}：${APP_BUNDLES.length} 个应用 × 基座，` +
+        `扫到 ${scannedFiles} 个语言包文件，编译 ${compiled} 条文案`,
     );
+    if (skippedNonString.length > 0) {
+      // 如实声明覆盖边界：这些叶子不参与消息编译（vue-i18n 对它们不走编译路径）。
+      console.log(
+        `[i18n-compile] 注意：${skippedNonString.length} 个非字符串叶子不参与编译检查：` +
+          skippedNonString.slice(0, 10).join(', ') +
+          (skippedNonString.length > 10 ? ' …' : ''),
+      );
+    }
     if (vacuous) {
       console.error(
         `[i18n-compile] 门禁空跑：scannedFiles=${scannedFiles} compiled=${compiled}（下限 ${floor}）` +
@@ -190,8 +299,8 @@ function main(argv) {
       );
     } else if (failures.length > 0) {
       console.error(`[i18n-compile] ${failures.length} 条文案编译失败：`);
-      for (const { lang, key, reason } of failures) {
-        console.error(`  - [${lang}] ${key} → ${reason}`);
+      for (const { lang, key, reason, app } of failures) {
+        console.error(`  - [${lang}][${app}] ${key} → ${reason}`);
       }
     } else {
       console.log('[i18n-compile] OK：没有编译不过的文案');
