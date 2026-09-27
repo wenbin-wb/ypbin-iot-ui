@@ -37,11 +37,18 @@ export namespace IotEventApi {
     pageSize?: number;
   }
 
+  /**
+   * 分页信封（后端 `PageResult`）。
+   *
+   * ⚠️ 计数与页码在后端都是 `long`，全局 Long→字符串序列化 ⇒ 真实返回是字符串
+   * （`{"total":"17","page":"1","pageSize":"10"}`）。消费方必须显式转数
+   * （`#/utils/backend-number` 的 `toBackendNumber`），不许 `as number`。口径同 `command.ts`。
+   */
   export interface PageResult<T> {
     items: T[];
-    total: number;
-    page: number;
-    pageSize: number;
+    total: number | string;
+    page: number | string;
+    pageSize: number | string;
   }
 }
 

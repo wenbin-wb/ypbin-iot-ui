@@ -36,7 +36,8 @@
       "seriesReuseHint": "This section reuses the device ledger history-curve drawer (same query, chart and CSV export) instead of a second chart implementation",
       "runtimeEvents": "Runtime events",
       "recentEvents": "Recent events",
-      "emptyReason": "This tenant has no devices yet: every device must belong to a product (the product's thing model defines what it can report), so onboarding starts with creating a product and defining its thing model."
+      "emptyReason": "This tenant has no devices yet: every device must belong to a product (the product's thing model defines what it can report), so onboarding starts with creating a product and defining its thing model.",
+      "listLoadFailed": "Failed to load the device list"
     },
     "event": {
       "title": "Runtime events",
@@ -124,7 +125,8 @@
       "newDraftConfirm": "Creating a draft puts the product back into editable state and advances the version. Continue?",
       "readonlyPublished": "The thing model of a published product is READ-ONLY (services/properties/commands/events can be listed and the TSL exported); editing requires creating a new draft first (the write APIs require draft state).",
       "readonlyEditBlocked": "This product is published and its thing model is read-only; create a new draft before editing.",
-      "emptyReason": "This tenant has no products yet: a product represents a device model, and the thing model (services/properties/commands/events) belongs to it. Devices can only bind published products, so devices come after this list has data."
+      "emptyReason": "This tenant has no products yet: a product represents a device model, and the thing model (services/properties/commands/events) belongs to it. Devices can only bind published products, so devices come after this list has data.",
+      "listLoadFailed": "Failed to load the product list"
     },
     "group": {
       "title": "Device groups",
@@ -137,7 +139,9 @@
       "memberRemoveConfirm": "Remove this device from the group?",
       "memberEmpty": "No devices in this group yet",
       "memberEmptyHint": "Create devices under Devices and bind a product, then add them here. Members can be reviewed and removed on this page.",
-      "memberGoDevices": "Go to Devices"
+      "memberGoDevices": "Go to Devices",
+      "emptyHint": "This tenant has no device groups yet: groups collect devices by purpose or location for easier review and maintenance.",
+      "listLoadFailed": "Failed to load the device group list"
     },
     "availability": {
       "title": "Availability / outages{0}",
@@ -240,7 +244,8 @@
       "create": "Declare window",
       "close": "Close window",
       "closeConfirm": "Closed windows no longer count as maintenance. Continue?",
-      "emptyReason": "No maintenance windows yet: a window excludes planned downtime (servicing, part replacement) from availability statistics. Without one, that downtime is counted as an outage and lowers availability."
+      "emptyReason": "No maintenance windows yet: a window excludes planned downtime (servicing, part replacement) from availability statistics. Without one, that downtime is counted as an outage and lowers availability.",
+      "listLoadFailed": "Failed to load the maintenance window list"
     },
     "onboarding": {
       "title": "Onboarding guide",
@@ -310,7 +315,9 @@
         "created": "First-time onboarding",
         "revived": "Onboarding resumed",
         "updated": "Access switch updated"
-      }
+      },
+      "listLoadFailed": "Failed to load the tenant onboarding ledger",
+      "emptyHint": "No tenant onboarding records yet: a tenant appears here after its first onboarding."
     },
     "point": {
       "title": "Point mapping",
@@ -349,6 +356,11 @@
     },
     "tag": {
       "title": "Device tags"
+    },
+    "credential": {
+      "get": "View device credential",
+      "issue": "Issue or reset device credential",
+      "revoke": "Revoke device credential"
     },
     "debug": {
       "title": "Online Debug",

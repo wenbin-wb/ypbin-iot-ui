@@ -2,14 +2,18 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { IotProductApi } from '#/api/iot';
 
+import { ref } from 'vue';
+
 import { Page, useVbenDrawer } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
-import { Button, message } from 'ant-design-vue';
+import { Alert, Button, message } from 'ant-design-vue';
 
 import { useVbenVxeGrid, VbenTableAction } from '#/adapter/vxe-table';
 import { deleteProduct, getProductPage, publishProduct } from '#/api/iot';
 import { $t } from '#/locales';
+import { toBackendNumber } from '#/utils/backend-number';
+import { extractErrorMessage } from '#/utils/error';
 
 import EmptyGuide from '../onboarding/modules/empty-guide.vue';
 import OnboardingGuide from '../onboarding/modules/guide.vue';
@@ -25,6 +29,15 @@ const [DetailDrawer, DetailDrawerApi] = useVbenDrawer({
 /** 接入向导（F6）抽屉：内容组件不自带抽屉容器（它还要被独立页面复用）⇒ 用默认插槽挂进来。 */
 const [GuideDrawer, GuideDrawerApi] = useVbenDrawer();
 
+/**
+ * 列表**加载失败**的原因（非空即代表「这次没取到数据」）。
+ *
+ * 🔴 与设备台账同一道理：vxe 的 `#empty` 插槽分不清「加载失败」与「确实没有数据」，
+ * 只挂 `EmptyGuide` 就是把失败画成「还没有产品，去创建吧」。全局拦截器的 toast 转瞬即逝，
+ * 用户错过它之后页面上永久留着「没有数据」这个**错误结论**（假空态）。
+ */
+const listError = ref('');
+
 const [Grid, gridApi] = useVbenVxeGrid({
   gridOptions: {
     columns: useColumns(),
@@ -33,11 +46,25 @@ const [Grid, gridApi] = useVbenVxeGrid({
     pagerConfig: { enabled: true },
     proxyConfig: {
       ajax: {
-        query: async ({ page }) =>
-          await getProductPage({
-            page: page.currentPage,
-            pageSize: page.pageSize,
-          }),
+        query: async ({ page }) => {
+          try {
+            const result = await getProductPage({
+              page: page.currentPage,
+              pageSize: page.pageSize,
+            });
+            listError.value = '';
+            // 后端 `PageResult.total` 是 `long` ⇒ 全局序列化成**字符串**（`"17"`），
+            // 而 vxe 的 pager 需要 number（页数 = ceil(total/pageSize)）⇒ 进入表格前先转数。
+            return { ...result, total: toBackendNumber(result.total) };
+          } catch (error) {
+            // 记下失败原因（原样展示后端 message），异常继续抛出 ⇒ 不改动原有失败语义。
+            listError.value = extractErrorMessage(
+              error,
+              $t('page.iot.product.listLoadFailed'),
+            );
+            throw error;
+          }
+        },
       },
     },
     rowConfig: { keyField: 'id' },
@@ -84,6 +111,19 @@ function openGuide() {
     <GuideDrawer :title="$t('page.iot.onboarding.title')" class="w-[900px]">
       <OnboardingGuide @done="gridApi.query()" />
     </GuideDrawer>
+    <!--
+      🔴 失败态**必须挂在表格之外**（不能只放 `#empty` 槽里）：
+      真实 vxe 只在**表体没有行**时才渲染 `#empty` 槽 ⇒ 「已有数据后刷新失败」时旧行仍在、
+      槽不渲染 ⇒ 失败提示看不见，页面继续展示**过期数据**而用户毫不知情。
+    -->
+    <Alert
+      v-if="listError"
+      class="mb-2"
+      :description="listError"
+      :message="$t('page.iot.product.listLoadFailed')"
+      show-icon
+      type="error"
+    />
     <Grid>
       <template #toolbar-tools>
         <Button class="mr-2" @click="openGuide">
@@ -100,8 +140,10 @@ function openGuide() {
       </template>
 
       <!-- 空态引导：说明「为什么是空的 + 下一步点哪里」，而不是一张空白表格 -->
+      <!-- 🔴 但**失败不能画成空态**：加载失败时由上方 Alert 承担失败态，这里不得再声称「没有数据」 -->
       <template #empty>
         <EmptyGuide
+          v-if="!listError"
           :reason="$t('page.iot.product.emptyReason')"
           @open-guide="openGuide"
         />

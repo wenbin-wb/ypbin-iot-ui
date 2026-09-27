@@ -34,6 +34,15 @@ jobs:
       - name: IoT i18n 键存在性校验
         run: node scripts/check-iot-i18n-keys.mjs
 
+      # 🔴 **新增门禁**（本 PR 提案，理由/范围/误报风险见 PR 描述与脚本头注释）：
+      # 上一步只证明「键**存在**」，证明不了「值**能不能编译**」。2026-09-27 线上「在线调试」
+      # 页签内容区全白，根因就是文案里的字面 `{`/`}` 让 vue-i18n 在**渲染期**抛 SyntaxError——
+      # 而键存在性校验、typecheck、构建**全绿**。本步用真实 vue-i18n 编译**全库**（zh-CN + en-US
+      # 共 44 个语言包文件）的每个字符串叶子键，谁编译不过就点名谁。
+      # 退出码 2 只用于「参数写错」，退出码 1 = 有文案编译不过 / 门禁空跑。
+      - name: i18n 文案编译校验（全库，zh-CN + en-US）
+        run: node scripts/check-i18n-message-compile.mjs
+
       - name: Typecheck（web-antd）
         run: pnpm -F @vben/web-antd run typecheck
 
@@ -50,8 +59,13 @@ jobs:
       # TZ=UTC 的主机上有**既存**的时区断言失败（`packages/@core/base/shared/.../date.test.ts` 的
       # `getSystemTimezone()` 断言要求 `Area/Location` 形态，与本改动无关），整体接入会把 CI 染红
       # ⇒ 那是另一条线，本 PR 不顺手改（已在 PR 说明里登记）。
+      #
+      # `apps/web-antd/src/utils` 是本 PR 追加的：`utils/backend-number.ts` 是「后端 Long
+      # 序列化成字符串」这条口径的**唯一**转换点（分页 total/page/pageSize 都过它），
+      # 它的边界用例必须进 CI——否则该 helper 可以悄悄写错而无人察觉。
+      # 该目录下目前只有 backend-number.test.ts 一个用例文件。
       - name: IoT 前端组件级用例（真实 vue-i18n，覆盖「整块空白」这类渲染期事故）
-        run: pnpm exec vitest run --dom apps/web-antd/src/views/iot
+        run: pnpm exec vitest run --dom apps/web-antd/src/views/iot apps/web-antd/src/utils
 
       - name: 单元测试（埋点 SDK）
         # 该 SDK 有真实逻辑（批量、队列、URL 截断、令牌携带）且已有单测，

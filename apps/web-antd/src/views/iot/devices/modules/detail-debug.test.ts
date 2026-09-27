@@ -1,5 +1,12 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createApp, defineComponent, h, nextTick } from 'vue';
+import {
+  createApp,
+  defineComponent,
+  h,
+  nextTick,
+  resolveDirective,
+  withDirectives,
+} from 'vue';
 
 import { registerAccessDirective } from '@vben/access';
 import { i18n } from '@vben/locales';
@@ -26,9 +33,18 @@ import PanelErrorBoundary from './panel-error-boundary.vue';
  * 只替换网络层与权限码来源，其余（antdv 组件、`v-access` 指令、`use-access` 判定、i18n）全部走真实实现。
  */
 
-const { accessState, deviceRow, drawerCalls, mockGet, mockPost } = vi.hoisted(
+const { accessStore, deviceRow, drawerCalls, mockGet, mockPost } = vi.hoisted(
   () => ({
-    accessState: { codes: [] as string[] },
+    /**
+     * 权限码桩的**响应式**代理（由下面的 `@vben/stores` 工厂填充）。
+     *
+     * 为什么必须响应式：生产里 `accessCodes` 存在 pinia（响应式），而
+     * `computed(() => hasAccessByCodes([...]))` 的失效通知**只对响应式读取生效**。
+     * 用普通对象 `{ accessCodes: codes }` 当桩，computed 读到的属性永远不会被追踪 ⇒
+     * 「权限码迟到/运行期变化」这类缺陷**结构性地抓不到**（教训二十七：桩装错了，
+     * 断言就成了恒真的装饰）。这里让桩与生产同构。
+     */
+    accessStore: { current: null as null | { accessCodes: string[] } },
     deviceRow: {
       deviceCode: 'demo-dev-curve',
       deviceName: '演示-设备-历史曲线',
@@ -50,10 +66,23 @@ vi.mock('#/api/request', () => ({
   },
 }));
 
-vi.mock('@vben/stores', () => ({
-  useAccessStore: () => ({ accessCodes: accessState.codes }),
-  useUserStore: () => ({ userRoles: [] }),
-}));
+vi.mock('@vben/stores', async () => {
+  const { reactive } = await import('vue');
+  const store = reactive({ accessCodes: [] as string[] });
+  accessStore.current = store;
+  return {
+    useAccessStore: () => store,
+    useUserStore: () => reactive({ userRoles: [] as string[] }),
+  };
+});
+
+/** 设置权限码：写**响应式代理**（与生产同一条路径），不能改原始对象。 */
+function setCodes(codes: string[]) {
+  if (!accessStore.current) {
+    throw new Error('accessStore 桩未初始化：@vben/stores 还没被 import');
+  }
+  accessStore.current.accessCodes = codes;
+}
 
 vi.mock('@vben/preferences', () => ({
   preferences: { app: { accessMode: 'frontend', locale: 'zh-CN' } },
@@ -93,27 +122,19 @@ function bizFailure(code: number, message: string) {
 }
 
 /**
- * 递归收集**字符串叶子**键。
+ * 递归收集**字符串叶子**键：**复用门禁脚本的实现**（`scripts/check-i18n-message-compile.mjs`），
+ * 不在测试里再抄一份。
  *
- * 🔴 只迭代一层是**空转**：`page.iot` 下 14 个键里 13 个是命名空间对象（如 `debug`），
- * vue-i18n 对对象只会打一条 `[intlify] Not found` 而**不编译**，等于本轮门禁没跑
- * （教训八：0 违规可能是没跑到）。真实叶子键 400+ 个，必须递归取。
+ * 为什么必须递归（而不是只迭代一层）：`page.iot` 下的中间节点是命名空间对象（如 `debug`），
+ * vue-i18n 对对象只会打一条 `[intlify] Not found` 而**不编译** ⇒ 门禁看似跑了实则空转
+ * （教训八：0 违规可能是「没跑到」）。真实叶子键 400+ 个。
+ *
+ * 「口径只有一处」的实际意义：测试与 CI 门禁若各写一份遍历，两者对「叶子」的理解迟早漂移，
+ * 于是出现「测试绿、CI 绿、线上红」。
  */
-function collectLeafKeys(node: unknown, prefix = ''): string[] {
-  if (typeof node === 'string') {
-    return prefix === '' ? [] : [prefix];
-  }
-  if (node === null || typeof node !== 'object') {
-    return [];
-  }
-  const keys: string[] = [];
-  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
-    keys.push(
-      ...collectLeafKeys(value, prefix === '' ? key : `${prefix}.${key}`),
-    );
-  }
-  return keys;
-}
+const { collectLeafKeys } = await import(
+  '../../../../../../../scripts/check-i18n-message-compile.mjs'
+);
 
 /** 后端分页响应（`PageResult`，`total/page/pageSize` 都是字符串——后端 Long 序列化口径）。 */
 function page(items: unknown[], total = items.length) {
@@ -212,7 +233,7 @@ function mountWith(
 let mounted: undefined | { app: ReturnType<typeof mountWith>['app'] };
 
 beforeEach(() => {
-  accessState.codes = ['*:*:*'];
+  setCodes(['*:*:*']);
   mockGet.mockReset();
   mockPost.mockReset();
 });
@@ -360,7 +381,7 @@ describe('detail-debug.vue 运行时（真实 i18n + 真实 antdv + 真实权限
   });
 
   it('超管通配码 `*:*:*` 放行：历史区块与下发按钮都不被 v-access 摘掉', async () => {
-    accessState.codes = ['*:*:*'];
+    setCodes(['*:*:*']);
     stubApi(() => Promise.resolve(page([])));
     const handle = mountWith(DetailDebug, {
       deviceId: '9300012',
@@ -374,8 +395,8 @@ describe('detail-debug.vue 运行时（真实 i18n + 真实 antdv + 真实权限
     expect(html).toContain('下发');
   });
 
-  it('无 `iot:debug:get` 且无通配码 ⇒ 历史区块被摘掉（门禁仍然有效，不是恒真断言）', async () => {
-    accessState.codes = ['iot:device:list'];
+  it('无 `iot:debug:get` 且无通配码 ⇒ 历史区块隐藏（门禁仍然有效，不是恒真断言）', async () => {
+    setCodes(['iot:device:list']);
     stubApi(() => Promise.resolve(page([])));
     const handle = mountWith(DetailDebug, {
       deviceId: '9300012',
@@ -388,6 +409,124 @@ describe('detail-debug.vue 运行时（真实 i18n + 真实 antdv + 真实权限
     expect(html).not.toContain('下发与回执记录');
     // 下发区仍在（它的门禁是 send，不是 get）
     expect(html).toContain('下发指令');
+  });
+
+  it('后端 `total` 是字符串 ⇒ 分页仍拿到 number（否则 antdv 报 prop 类型告警）', async () => {
+    // 后端真实返回 `{"total":"17",...}`；这里断言「进分页组件前已经转成数字」这件事
+    // **真的发生了**——仅靠渲染结果看不出来（`"17"` 会被隐式转），必须盯 prop 类型告警。
+    const messages: string[] = [];
+    const warnSpy = vi
+      .spyOn(console, 'warn')
+      .mockImplementation((...args: unknown[]) => {
+        messages.push(args.map(String).join(' '));
+      });
+    const errorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation((...args: unknown[]) => {
+        messages.push(args.map(String).join(' '));
+      });
+    try {
+      stubApi(() => Promise.resolve(page([REAL_SUCCEEDED_ROW], 17)));
+      const handle = mountWith(DetailDebug, {
+        deviceId: '9300012',
+        productId: '9100001',
+      });
+      mounted = handle;
+      await flush();
+
+      expect(handle.container.querySelector('.ant-pagination')).toBeTruthy();
+      const propComplaints = messages.filter(
+        (message) =>
+          message.includes('Invalid prop') ||
+          message.includes('type check failed'),
+      );
+      expect(propComplaints).toEqual([]);
+    } finally {
+      warnSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
+  });
+});
+
+/**
+ * 权限码**迟到 / 运行期变化**时的行为对照。
+ *
+ * 上游 `packages/effects/access/src/directive.ts` 的 `v-access` 只注册了 `mounted`、
+ * **没有 `updated`**，且无权限时执行 `el.remove()`（不可逆）——本仓不改上游，只如实登记，
+ * 并在本项目自己的关键区块上改用 `computed + v-if` 防御。
+ *
+ * 这组用例同时钉住两件事：**上游缺陷确实存在**（否则我们的防御是多余的），
+ * 且**我们的防御真的解决了它**（否则防御是装饰）。
+ */
+describe('权限码迟到/变化：v-access 不会重算（上游缺陷登记）vs computed + v-if 会重算（本项目防御）', () => {
+  /** 忠实复刻 `v-access:code="['iot:debug:get']"` 的运行时形态（`h()` 里手动挂指令）。 */
+  const LegacyAccessBlock = defineComponent({
+    name: 'LegacyAccessBlock',
+    setup() {
+      const directive = resolveDirective('access');
+      return () =>
+        withDirectives(h('div', { class: 'legacy-block' }, 'LEGACY-BLOCK'), [
+          [directive as never, ['iot:debug:get'], 'code'],
+        ]);
+    },
+  });
+
+  it('v-access：先无权限、后补权限 ⇒ 区块**永远回不来**（缺 `updated` + `el.remove()` 不可逆）', async () => {
+    setCodes([]);
+    const handle = mountWith(LegacyAccessBlock);
+    mounted = handle;
+    await flush(2);
+    expect(handle.container.innerHTML).not.toContain('LEGACY-BLOCK');
+
+    // 权限码迟到：例如异步拉到、或运行期变化
+    setCodes(['iot:debug:get']);
+    await flush(2);
+    expect(handle.container.innerHTML).not.toContain('LEGACY-BLOCK');
+  });
+
+  it('v-access：先有权限、后撤权限 ⇒ 区块**仍然可见**（同样因为没有 `updated`）', async () => {
+    setCodes(['iot:debug:get']);
+    const handle = mountWith(LegacyAccessBlock);
+    mounted = handle;
+    await flush(2);
+    expect(handle.container.innerHTML).toContain('LEGACY-BLOCK');
+
+    setCodes([]);
+    await flush(2);
+    // 已渲染的元素不会被撤下：权限被收回后界面仍在放行入口（比「消失」更危险的方向）
+    expect(handle.container.innerHTML).toContain('LEGACY-BLOCK');
+  });
+
+  it('本项目防御（computed + v-if）：权限码到位后历史区块**自动出现**', async () => {
+    setCodes(['iot:device:list']);
+    stubApi(() => Promise.resolve(page([])));
+    const handle = mountWith(DetailDebug, {
+      deviceId: '9300012',
+      productId: '9100001',
+    });
+    mounted = handle;
+    await flush();
+    expect(handle.container.innerHTML).not.toContain('下发与回执记录');
+
+    setCodes(['iot:device:list', 'iot:debug:get']);
+    await flush(2);
+    expect(handle.container.innerHTML).toContain('下发与回执记录');
+  });
+
+  it('本项目防御（computed + v-if）：权限被收回后历史区块**自动消失**', async () => {
+    setCodes(['iot:device:list', 'iot:debug:get']);
+    stubApi(() => Promise.resolve(page([])));
+    const handle = mountWith(DetailDebug, {
+      deviceId: '9300012',
+      productId: '9100001',
+    });
+    mounted = handle;
+    await flush();
+    expect(handle.container.innerHTML).toContain('下发与回执记录');
+
+    setCodes(['iot:device:list']);
+    await flush(2);
+    expect(handle.container.innerHTML).not.toContain('下发与回执记录');
   });
 });
 
@@ -428,7 +567,10 @@ describe('页签渲染错误边界（panel-error-boundary.vue）', () => {
     mounted = { app };
     await flush(2);
 
-    expect(reported.length).toBeGreaterThan(0);
+    // 🔴 必须是**恰好一次**：`toBeGreaterThan(0)` 是弱断言——重复上报（例如边界与全局
+    // errorHandler 各报一次，埋点会翻倍）同样满足，等于放走了「一次异常报两条」的缺陷。
+    // 验收判据是「上报通道没被掐断，且不重复」。
+    expect(reported).toHaveLength(1);
     expect((reported[0] as Error).message).toContain('模拟渲染期异常');
     // 同时仍然渲染了 Alert（两件事不能互相排斥）
     expect(container.innerHTML).toContain('在线调试页渲染失败');

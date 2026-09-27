@@ -2,17 +2,19 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { IotDeviceApi } from '#/api/iot';
 
-import { onMounted, watch } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 
 import { Page, useVbenDrawer } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
-import { Button, message } from 'ant-design-vue';
+import { Alert, Button, message } from 'ant-design-vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { useVbenVxeGrid, VbenTableAction } from '#/adapter/vxe-table';
 import { deleteDevice, getDevicePage } from '#/api/iot';
 import { $t } from '#/locales';
+import { toBackendNumber } from '#/utils/backend-number';
+import { extractErrorMessage } from '#/utils/error';
 
 import EmptyGuide from '../onboarding/modules/empty-guide.vue';
 import OnboardingGuide from '../onboarding/modules/guide.vue';
@@ -56,6 +58,17 @@ const [GuideDrawer, GuideDrawerApi] = useVbenDrawer();
  */
 const [LedgerDrawer, LedgerDrawerApi] = useVbenDrawer();
 
+/**
+ * 列表**加载失败**的原因（非空即代表「这次没取到数据」）。
+ *
+ * 🔴 为什么必须有它：vxe 的 `#empty` 插槽在「**加载失败**」与「**确实没有数据**」两种情况下
+ * 长得一模一样 ⇒ 只挂一个 `EmptyGuide` 就是把失败画成「还没有设备，去创建吧」。
+ * 失败虽然会由全局请求拦截器弹一次 toast，但 toast 是**转瞬即逝**的：用户错过它之后，
+ * 页面上永久留着「没有数据」这个**错误结论**（这正是「假空态」）。
+ * 有了这个 ref，空态插槽才有依据区分二者：失败态原样展示后端 `message`。
+ */
+const listError = ref('');
+
 const [Grid, gridApi] = useVbenVxeGrid({
   gridOptions: {
     columns: useColumns(),
@@ -64,11 +77,27 @@ const [Grid, gridApi] = useVbenVxeGrid({
     pagerConfig: { enabled: true },
     proxyConfig: {
       ajax: {
-        query: async ({ page }) =>
-          await getDevicePage({
-            page: page.currentPage,
-            pageSize: page.pageSize,
-          }),
+        query: async ({ page }) => {
+          try {
+            const result = await getDevicePage({
+              page: page.currentPage,
+              pageSize: page.pageSize,
+            });
+            listError.value = '';
+            // 后端 `PageResult.total` 是 `long` ⇒ 全局序列化成**字符串**（`"17"`），
+            // 而 vxe 的 pager 拿到 total 后要做算术语义（页数 = ceil(total/pageSize)）⇒
+            // 在**进入表格前**转成 number，别把契约违例一路喂到分页组件里。
+            return { ...result, total: toBackendNumber(result.total) };
+          } catch (error) {
+            // 记下失败原因（原样展示后端 message），再把异常**继续抛出**：
+            // 不改动原有失败语义（全局拦截器照旧弹提示、vxe 照旧走失败分支）。
+            listError.value = extractErrorMessage(
+              error,
+              $t('page.iot.device.listLoadFailed'),
+            );
+            throw error;
+          }
+        },
       },
     },
     rowConfig: { keyField: 'id' },
@@ -159,6 +188,20 @@ function openLedger() {
     >
       <TenantLedger />
     </LedgerDrawer>
+    <!--
+      🔴 失败态**必须挂在表格之外**（不能只放 `#empty` 槽里）：
+      真实 vxe 只在**表体没有行**时才渲染 `#empty` 槽 ⇒ 若把失败提示只放槽里，
+      「已有数据后刷新失败」时旧行仍在、槽不渲染 ⇒ 失败提示**看不见**（只剩一次转瞬即逝的 toast），
+      页面会继续展示**过期数据**而用户毫不知情。放在表格上方则任何一次失败都可见。
+    -->
+    <Alert
+      v-if="listError"
+      class="mb-2"
+      :description="listError"
+      :message="$t('page.iot.device.listLoadFailed')"
+      show-icon
+      type="error"
+    />
     <Grid>
       <template #toolbar-tools>
         <!-- 接入向导入口：不带权限码（方案 §6.1：所有角色可见，先知道下一步做什么）； -->
@@ -185,8 +228,10 @@ function openLedger() {
       </template>
 
       <!-- 空态引导：说明「为什么是空的 + 下一步点哪里」，而不是一张空白表格 -->
+      <!-- 🔴 但**失败不能画成空态**：加载失败时由上方 Alert 承担失败态，这里不得再声称「没有数据」 -->
       <template #empty>
         <EmptyGuide
+          v-if="!listError"
           :reason="$t('page.iot.device.emptyReason')"
           @open-guide="openGuide"
         />

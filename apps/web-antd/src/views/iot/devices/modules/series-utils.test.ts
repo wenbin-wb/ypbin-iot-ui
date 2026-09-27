@@ -199,8 +199,11 @@ describe('buildPointOptions', () => {
     );
   });
 
-  it('多点位上限是个正数常量（多点位 = 前端扇出请求，不能无上限）', () => {
-    expect(IOT_SERIES_MAX_SELECTED_POINTS).toBeGreaterThan(0);
+  it('多点位上限钉死在 5（多点位 = 前端扇出请求：改这个数字必须是有意识的决定）', () => {
+    // 🔴 `toBeGreaterThan(0)` 是弱断言：上限被改成 1（多点位功能实际失效）或 500（扇出失控）
+    // 它都照样通过。这里是**产品边界**，钉成精确值 ⇒ 任何改动都必须连同这条用例一起改，
+    // 「悄悄调大上限」不会再静默通过。
+    expect(IOT_SERIES_MAX_SELECTED_POINTS).toBe(5);
   });
 });
 

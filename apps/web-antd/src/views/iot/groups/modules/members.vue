@@ -3,6 +3,7 @@ import type { IotGroupApi } from '#/api/iot';
 
 import { computed, ref } from 'vue';
 
+import { useAccess } from '@vben/access';
 import { useVbenDrawer } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
@@ -42,6 +43,25 @@ import { extractErrorMessage } from '#/utils/error';
  */
 
 const router = useRouter();
+
+/**
+ * 写操作门禁用 **computed + `v-if`**，不用 `v-access` 指令。
+ *
+ * **机制事实（已核实上游源码）**：`packages/effects/access/src/directive.ts` 的 `v-access`
+ * **只注册了 `mounted`、没有 `updated`**，且无权限时执行 `el.remove()`（不可逆）
+ * ⇒ 它在挂载那一刻把权限判定定死：权限码此后变化不会重算。
+ *
+ * ⚠️ **风险定性如实**（独立复核指出，采纳）：本应用的权限码在**路由守卫里、页面挂载之前**
+ * 就写入 store（`router/guard.ts` 先 `fetchUserInfo()` → `generateAccess()` 才放行导航），
+ * 故「权限码迟到」窗口在正常流程中**不可达**。因此这是**防御性加固**（把可见性从
+ * 「依赖挂载时机」换成显式响应式判定），而**不是**在修一个已复现的线上缺陷。
+ * 范围口径：只对**区块级**功能区（如本页的「加入成员」工具栏）使用；行内单个按钮沿用指令亦可，
+ * 本页为保持同一权限码的口径一致也一并改成了 computed。
+ */
+const { hasAccessByCodes } = useAccess();
+
+/** 加入/移出成员都需要 `iot:group:update`（与后端 `@SaCheckPermission` 一一对应）。 */
+const canUpdateGroup = computed(() => hasAccessByCodes(['iot:group:update']));
 
 const groupId = ref('');
 const groupName = ref('');
@@ -159,7 +179,7 @@ defineExpose({ drawerApi });
 <template>
   <Drawer class="w-[900px]">
     <div class="flex flex-col gap-3">
-      <div v-access:code="['iot:group:update']" class="flex items-center gap-2">
+      <div v-if="canUpdateGroup" class="flex items-center gap-2">
         <Select
           v-model:value="selectedDeviceId"
           :options="selectableDevices"
@@ -201,7 +221,7 @@ defineExpose({ drawerApi });
                 @confirm="onRemove(record.id)"
               >
                 <Button
-                  v-access:code="['iot:group:update']"
+                  v-if="canUpdateGroup"
                   danger
                   :loading="removingId === record.id"
                   size="small"
