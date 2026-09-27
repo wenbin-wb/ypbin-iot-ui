@@ -30,7 +30,7 @@
  * 自检（教训八：0 违规可能是「没跑到」）：必须真的扫到语言包文件、且编译条数达下限，
  * 否则以退出码 1 报「门禁空跑」，不允许「一个键都没编译却报绿」。
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -113,7 +113,38 @@ export function collectNonStringLeaves(node, prefix = '') {
 }
 
 /**
- * 读取一组目录（**按给定顺序合并，后者覆盖前者**）下某语言的全部语言包。
+ * **深合并**两个语言包对象（对齐 vue-i18n `mergeLocaleMessage` 的语义）。
+ *
+ * 为什么必须深合并（独立复核指出的低危残留）：生产的 `mergeLocaleMessage` 是**递归深合并**，
+ * 而第一版门禁用的是命名空间级**浅合并**（`{...shared[ns], ...app[ns]}`）。
+ * 今天两者结果相同（基座的 5 个命名空间 `authentication/common/preferences/profile/ui`
+ * 与任何应用的文件名**零重叠**，复核独立比对确认 0 条盲区键）；但只要将来基座新增一个与某应用
+ * **同名**的 json（例如给基座也加 `page.json`），浅合并就会让**该命名空间下同名子对象整块被替换**，
+ * 被替换掉的键**编译不到** ⇒ 又变成「门禁绿、线上抛」。深合并从根上消掉这条路径。
+ *
+ * 规则与 vue-i18n 一致：两边都是普通对象则递归合并，否则以 `source` 为准。
+ */
+export function deepMergeMessages(target, source) {
+  for (const [key, value] of Object.entries(source)) {
+    const current = target[key];
+    if (
+      current &&
+      value &&
+      typeof current === 'object' &&
+      typeof value === 'object' &&
+      !Array.isArray(current) &&
+      !Array.isArray(value)
+    ) {
+      deepMergeMessages(current, value);
+    } else {
+      target[key] = value;
+    }
+  }
+  return target;
+}
+
+/**
+ * 读取一组目录（**按给定顺序合并，后者覆盖前者，深合并**）下某语言的全部语言包。
  * 命名空间 = 文件名（不含 .json）。
  */
 export function loadDirsMessages(lang, dirs) {
@@ -124,21 +155,27 @@ export function loadDirsMessages(lang, dirs) {
     const dir = join(ROOT, base, lang);
     let entries;
     try {
-      entries = readdirSync(dir);
+      // `withFileTypes` 让「是不是普通文件」与目录项**来自同一次系统调用**。
+      // 刻意不写成「先 `statSync` 判类型、再 `readFileSync` 读内容」：那是 TOCTOU
+      // （检查与使用之间文件可能被换掉），CodeQL 会报 `js/file-system-race`（本 PR 实测被抓到）。
+      entries = readdirSync(dir, { withFileTypes: true });
     } catch {
       continue;
     }
     usedDirs.push(base);
-    for (const file of entries) {
-      if (!file.endsWith('.json')) continue;
-      const full = join(dir, file);
-      if (!statSync(full).isFile()) continue;
-      const namespace = file.replace(/\.json$/, '');
+    for (const entry of entries) {
+      if (!entry.name.endsWith('.json')) continue;
+      // 只收普通文件（以及符号链接，保持与旧实现 `statSync().isFile()` 跟随链接一致）
+      if (!entry.isFile() && !entry.isSymbolicLink()) continue;
+      const full = join(dir, entry.name);
+      const namespace = entry.name.replace(/\.json$/, '');
       files.push(relative(ROOT, full));
-      messages[namespace] = {
-        ...(messages[namespace] ?? {}),
-        ...JSON.parse(readFileSync(full, 'utf8')),
-      };
+      // **深合并**（不是 `{...a, ...b}` 浅合并）：与生产 `mergeLocaleMessage` 语义一致，
+      // 否则同名命名空间下的同名子对象会被整块替换、被替换掉的键编译不到（见 deepMergeMessages）。
+      messages[namespace] = deepMergeMessages(
+        messages[namespace] ?? {},
+        JSON.parse(readFileSync(full, 'utf8')),
+      );
     }
   }
   return { files, messages, usedDirs };

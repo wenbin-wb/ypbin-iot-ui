@@ -44,7 +44,13 @@ export declare function collectNonStringLeaves(
   prefix?: string,
 ): string[];
 
-/** 按给定顺序读取一组目录的语言包（**后者覆盖前者**）。 */
+/** **深合并**两个语言包对象（对齐 vue-i18n `mergeLocaleMessage` 语义）。 */
+export declare function deepMergeMessages(
+  target: Record<string, unknown>,
+  source: Record<string, unknown>,
+): Record<string, unknown>;
+
+/** 按给定顺序读取一组目录的语言包（**后者覆盖前者，深合并**）。 */
 export declare function loadDirsMessages(
   lang: string,
   dirs: string[],
