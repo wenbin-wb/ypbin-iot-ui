@@ -315,7 +315,9 @@
         "created": "首次接入",
         "revived": "恢复接入",
         "updated": "仅更新开关"
-      }
+      },
+      "listLoadFailed": "租户接入台账加载失败",
+      "emptyHint": "还没有租户接入记录：租户首次接入后会在这里出现。"
     },
     "point": {
       "title": "点位映射",

@@ -40,6 +40,7 @@ const { captured, gridStub, mockApi } = vi.hoisted(() => ({
     getGroupList: vi.fn(),
     getMaintenanceWindowList: vi.fn(),
     getProductPage: vi.fn(),
+    getTenantLedgerList: vi.fn(),
     getDeviceNameMap: vi.fn(),
   },
 }));
@@ -55,7 +56,10 @@ vi.mock('#/api/iot', () => ({
   getMaintenanceWindowList: (...args: unknown[]) =>
     mockApi.getMaintenanceWindowList(...args),
   getProductPage: (...args: unknown[]) => mockApi.getProductPage(...args),
+  getTenantLedgerList: (...args: unknown[]) =>
+    mockApi.getTenantLedgerList(...args),
   publishProduct: vi.fn(),
+  updateTenantLedgerAssignable: vi.fn(),
 }));
 
 /** 只留 `Page` 与 `useVbenDrawer`；抽屉渲染成空壳 ⇒ 抽屉里的内容组件不会被挂载。 */
@@ -99,6 +103,7 @@ vi.mock('vue-router', () => ({
 const productsModule = await import('../products/index.vue');
 const maintenanceModule = await import('../maintenance/index.vue');
 const groupsModule = await import('../groups/index.vue');
+const ledgerModule = await import('../tenant-ledger/modules/ledger.vue');
 
 /** 被测页面（同一套判据逐页跑；新增列表页时应加进这里）。 */
 interface PageCase {
@@ -144,6 +149,14 @@ const PAGES: PageCase[] = [
     fetchMock: () => mockApi.getGroupList,
     failedTitle: '设备分组列表加载失败',
     emptyFragment: '该租户还没有设备分组',
+    paged: false,
+  },
+  {
+    name: '租户接入台账',
+    component: ledgerModule.default,
+    fetchMock: () => mockApi.getTenantLedgerList,
+    failedTitle: '租户接入台账加载失败',
+    emptyFragment: '还没有租户接入记录',
     paged: false,
   },
 ];

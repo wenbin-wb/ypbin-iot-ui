@@ -315,7 +315,9 @@
         "created": "First-time onboarding",
         "revived": "Onboarding resumed",
         "updated": "Access switch updated"
-      }
+      },
+      "listLoadFailed": "Failed to load the tenant onboarding ledger",
+      "emptyHint": "No tenant onboarding records yet: a tenant appears here after its first onboarding."
     },
     "point": {
       "title": "Point mapping",

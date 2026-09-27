@@ -5,11 +5,14 @@ import type {
 } from '#/adapter/vxe-table';
 import type { IotLedgerApi } from '#/api/iot';
 
+import { ref } from 'vue';
+
 import { Alert, Button, message, Tag } from 'ant-design-vue';
 
 import { useVbenVxeGrid, VbenTableAction } from '#/adapter/vxe-table';
 import { getTenantLedgerList, updateTenantLedgerAssignable } from '#/api/iot';
 import { $t } from '#/locales';
+import { extractErrorMessage } from '#/utils/error';
 
 /**
  * 租户接入台账（F5）——**纯内容组件**：不含 `Page` 包裹、不自带固定高度/最大宽度，
@@ -103,6 +106,15 @@ function useColumns(): VxeTableGridColumns {
   ];
 }
 
+/**
+ * 列表**加载失败**的原因（非空即代表「这次没取到数据」）。
+ *
+ * 🔴 本页原先**连 `#empty` 槽都没有** ⇒ 加载失败时直接落到 vxe 的默认「暂无数据」，
+ * 那是**假空态**：台账是平台管理员判断「哪些租户接进来了」的唯一入口，
+ * 把查询失败说成「没有租户」会直接误导接入运营。
+ */
+const listError = ref('');
+
 const [Grid, gridApi] = useVbenVxeGrid({
   gridOptions: {
     columns: useColumns(),
@@ -110,7 +122,24 @@ const [Grid, gridApi] = useVbenVxeGrid({
     keepSource: true,
     // 接口返回全量 `List`，无分页参数 ⇒ 关闭分页器（与维护窗口、分组两页一致）
     pagerConfig: { enabled: false },
-    proxyConfig: { ajax: { query: async () => await getTenantLedgerList() } },
+    proxyConfig: {
+      ajax: {
+        query: async () => {
+          try {
+            const rows = await getTenantLedgerList();
+            listError.value = '';
+            return rows;
+          } catch (error) {
+            // 记下失败原因（原样展示后端 message），异常继续抛出 ⇒ 不改原有失败语义
+            listError.value = extractErrorMessage(
+              error,
+              $t('page.iot.ledger.listLoadFailed'),
+            );
+            throw error;
+          }
+        },
+      },
+    },
     // 行主键是 `tenantId`（列表里没有 `id` 字段），一个租户一行
     rowConfig: { keyField: 'tenantId' },
     toolbarConfig: { custom: true, export: false, refresh: true, zoom: true },
@@ -172,7 +201,25 @@ function onToggleAssignable(row: IotLedgerApi.LedgerResp, assignable: boolean) {
     />
 
     <div class="min-h-0 flex-1">
+      <!-- 失败态必须挂在表格之外：真实 vxe 只在表体无行时渲染 `#empty` 槽，
+           「已有数据后刷新失败」时槽不渲染 ⇒ 放槽里的失败提示会看不见。 -->
+      <Alert
+        v-if="listError"
+        class="mb-2"
+        :description="listError"
+        :message="$t('page.iot.ledger.listLoadFailed')"
+        show-icon
+        type="error"
+      />
       <Grid>
+        <!-- 空态：本页原先没有 `#empty` 槽（失败会落到 vxe 默认「暂无数据」= 假空态）；
+             这里只声明**真的没有数据**这一种情况，失败态由上方 Alert 单独承担 -->
+        <template #empty>
+          <span v-if="!listError" class="text-muted-foreground">
+            {{ $t('page.iot.ledger.emptyHint') }}
+          </span>
+        </template>
+
         <template #toolbar-tools>
           <!-- 本页没有 create 类页面级写操作，故用**读**权限码门禁刷新按钮；
                写操作（暂停/恢复接入）在行内，用 `iot:ledger:update`。 -->
