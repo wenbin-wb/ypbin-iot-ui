@@ -287,6 +287,18 @@ function readEnvelope(
   return undefined;
 }
 
+/**
+ * 后端计数 → 展示用数字。
+ *
+ * 后端 Long 全局序列化成字符串（实测 `PageResult.total` 是 `"17"`），
+ * 而 antdv `Pagination` 的 `total` 是 `number` ⇒ 必须显式转换；
+ * 拿不到/解析不出时回落 0（不把 NaN 传给分页）。
+ */
+function toCount(value: unknown): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 // ---------------- 文案 ----------------
 
 /** 状态码 → 文案（未知码**不吞**，按原始码展示）。 */
@@ -438,6 +450,11 @@ async function loadModel() {
  */
 async function loadHistory(options: { silent?: boolean } = {}) {
   if (!props.deviceId) {
+    // 没有设备 ⇒ 没有可查的记录。**必须**把 historyLoaded 标成已完成：
+    // 否则 `#emptyText` 的 `v-if="historyLoaded"` 不成立，列表区会**什么都没有**——
+    // 正是「空白」而不是「空态」，与失败态也分不开（三态可辨的硬要求）。
+    historyLoaded.value = true;
+    historyLoading.value = false;
     return;
   }
   if (!options.silent) {
@@ -450,7 +467,11 @@ async function loadHistory(options: { silent?: boolean } = {}) {
       statusCode: historyStatus.value === '' ? undefined : historyStatus.value,
     });
     history.value = result.items ?? [];
-    historyTotal.value = result.total ?? 0;
+    // 后端 Long 全局序列化成**字符串**（实测 `GET /iot/devices/{id}/commands` 回
+    // `"total":"17"`），而 `Pagination.total` 是 `number` ⇒ 这里必须显式转数，
+    // 否则 antdv 报 `Invalid prop: type check failed for prop "total"`，
+    // 脏数据时还会把分页算成 NaN。
+    historyTotal.value = toCount(result.total);
     historyError.value = undefined;
     pollError.value = undefined;
   } catch (error) {

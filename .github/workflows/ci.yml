@@ -37,6 +37,22 @@ jobs:
       - name: Typecheck（web-antd）
         run: pnpm -F @vben/web-antd run typecheck
 
+      # 🔴 IoT 前端的**组件级运行时**用例（只跑 IoT 目录）。
+      #
+      # 为什么必须加这一步：2026-09-27 线上「设备详情 → 在线调试」页签**内容区全白**
+      # （用户原话「是什么都没有」），根因是 i18n 文案里写了未逃逸的字面 `{` `}`
+      # （`page.iot.debug.valueHint` 的 `{"a":1}`）⇒ vue-i18n 在**渲染期**编译消息时抛
+      # `SyntaxError: Message compilation error` ⇒ 整个子树渲染成 `<!---->`。
+      # 当时 typecheck、构建、i18n 键存在性校验**全绿**——因为键确实存在，只是编译不过。
+      # 这条盲区只能用「真挂载（真实 i18n + 真实 antdv + 真实 v-access 指令）」的用例兜住。
+      #
+      # 作用域刻意只到 `apps/web-antd/src/views/iot`：根脚本 `pnpm test:unit` 在一台
+      # TZ=UTC 的主机上有**既存**的时区断言失败（`packages/@core/base/shared/.../date.test.ts` 的
+      # `getSystemTimezone()` 断言要求 `Area/Location` 形态，与本改动无关），整体接入会把 CI 染红
+      # ⇒ 那是另一条线，本 PR 不顺手改（已在 PR 说明里登记）。
+      - name: IoT 前端组件级用例（真实 vue-i18n，覆盖「整块空白」这类渲染期事故）
+        run: pnpm exec vitest run --dom apps/web-antd/src/views/iot
+
       - name: 单元测试（埋点 SDK）
         # 该 SDK 有真实逻辑（批量、队列、URL 截断、令牌携带）且已有单测，
         # 但包内原本没有任何 scripts，`pnpm -F @vben/tracking test` 是空转（无输出却成功）；

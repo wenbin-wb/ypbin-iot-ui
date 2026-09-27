@@ -40,6 +40,7 @@ import { extractErrorMessage } from '#/utils/error';
 import Availability from './availability.vue';
 import DetailDebug from './detail-debug.vue';
 import DetailPoints from './detail-points.vue';
+import PanelErrorBoundary from './panel-error-boundary.vue';
 import Series from './series.vue';
 
 /**
@@ -722,10 +723,16 @@ const [Drawer, drawerApi] = useVbenDrawer<null | IotDeviceApi.DeviceResp>({
           key="debug"
           :tab="$t('page.iot.debug.title')"
         >
-          <DetailDebug
-            :device-id="deviceId"
-            :product-id="device?.productId"
-          />
+          <!--
+            渲染错误边界：该页签曾因 i18n 文案里的字面 `{` `}`（vue-i18n 消息编译期 SyntaxError）
+            整块空白。边界把 setup/render 异常截住并用 Alert 原样展示，绝不画成空白。
+          -->
+          <PanelErrorBoundary>
+            <DetailDebug
+              :device-id="deviceId"
+              :product-id="device?.productId"
+            />
+          </PanelErrorBoundary>
         </Tabs.TabPane>
       </Tabs>
     </Spin>
