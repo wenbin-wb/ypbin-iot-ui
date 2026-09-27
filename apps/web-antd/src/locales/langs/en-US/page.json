@@ -363,7 +363,7 @@
       "timeoutHint": "Blank uses the platform default timeout (backend ypbin.emqx.default-command-timeout-ms, 30000ms by default); maximum 3600000ms",
       "propertyPlaceholder": "Pick a writable property (accessMode W or RW)",
       "valuePlaceholder": "e.g. 25.5 / true / \"text\"",
-      "valueHint": "The value is parsed as JSON: 25.5 -> number, true -> boolean, \"text\" -> string, {\"a\":1} -> object; if parsing fails it is sent as a string",
+      "valueHint": "The value is parsed as JSON: 25.5 -> number, true -> boolean, \"text\" -> string, {'{'}\"a\":1{'}'} -> object; if parsing fails it is sent as a string",
       "addRow": "Add property",
       "removeRow": "Remove",
       "getPropertiesPlaceholder": "Leave empty = read all readable properties",
@@ -373,9 +373,9 @@
       "fanoutTooMany": "At most {0} commands per batch, {1} requested; please send in smaller batches",
       "servicePlaceholder": "Pick a thing-model command",
       "params": "params (JSON object)",
-      "paramsPlaceholder": "{\"arg\": 1}",
+      "paramsPlaceholder": "{'{'}\"arg\": 1{'}'}",
       "paramsHint": "Must be a JSON object (not an array or a scalar); fill the arguments defined by the thing model",
-      "paramsInvalid": "params must be a valid JSON object, e.g. {\"arg\": 1}",
+      "paramsInvalid": "params must be a valid JSON object, e.g. {'{'}\"arg\": 1{'}'}",
       "send": "Send",
       "sending": "Sending…",
       "noDevice": "No device selected, cannot send",
@@ -441,6 +441,7 @@
       "resendOk": "Resent with the same requestId: {0}",
       "resendFailed": "Resend failed",
       "resendNotAllowed": "Only failed/timed-out commands can be resent",
+      "renderFailed": "The online-debug panel failed to render (caught, not swallowed): full error below",
       "total": "{0} in total"
     }
   },

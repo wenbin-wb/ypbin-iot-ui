@@ -109,11 +109,19 @@ export namespace IotCommandApi {
     pageSize?: number;
   }
 
+  /**
+   * 分页信封（后端 `PageResult`）。
+   *
+   * ⚠️ **计数与页码是字符串**：后端把 Long 全局序列化成字符串，实测
+   * `GET /iot/devices/{id}/commands` 回 `{"total":"17","page":"1","pageSize":"10","pages":"2"}`
+   * ⇒ 这里按**真实返回**声明为 `number | string`，消费方负责显式转换
+   * （不许用 `as number` 把分歧藏起来）。`pages` 后端也回，但本页不使用。
+   */
   export interface PageResult<T> {
     items: T[];
-    total: number;
-    page: number;
-    pageSize: number;
+    total: number | string;
+    page: number | string;
+    pageSize: number | string;
   }
 
   /** 回执体（`replyPayload` 反序列化后的形态；解析失败时页面回退展示原始文本）。 */

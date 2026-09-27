@@ -363,7 +363,7 @@
       "timeoutHint": "留空使用平台默认超时(后端 ypbin.emqx.default-command-timeout-ms，默认 30000ms)；上限 3600000ms",
       "propertyPlaceholder": "选择可写点位(accessMode 为 W 或 RW)",
       "valuePlaceholder": "如 25.5 / true / \"text\"",
-      "valueHint": "值按 JSON 解析：25.5 → 数字、true → 布尔、\"text\" → 字符串、{\"a\":1} → 对象；解析失败按字符串下发",
+      "valueHint": "值按 JSON 解析：25.5 → 数字、true → 布尔、\"text\" → 字符串、{'{'}\"a\":1{'}'} → 对象；解析失败按字符串下发",
       "addRow": "添加点位",
       "removeRow": "删除",
       "getPropertiesPlaceholder": "不选 = 读取全部可读属性",
@@ -373,9 +373,9 @@
       "fanoutTooMany": "一次最多下发 {0} 条指令，当前需要 {1} 条，请分批下发",
       "servicePlaceholder": "选择物模型命令",
       "params": "params(JSON 对象)",
-      "paramsPlaceholder": "{\"arg\": 1}",
+      "paramsPlaceholder": "{'{'}\"arg\": 1{'}'}",
       "paramsHint": "必须是 JSON 对象(不能是数组或标量)；单个指令入参按物模型定义填写",
-      "paramsInvalid": "params 必须是合法的 JSON 对象，例如 {\"arg\": 1}",
+      "paramsInvalid": "params 必须是合法的 JSON 对象，例如 {'{'}\"arg\": 1{'}'}",
       "send": "下发",
       "sending": "下发中…",
       "noDevice": "未指定设备，无法下发",
@@ -441,6 +441,7 @@
       "resendOk": "已按同一 requestId 重发：{0}",
       "resendFailed": "重发失败",
       "resendNotAllowed": "只有失败/超时的指令可以重发",
+      "renderFailed": "在线调试页渲染失败（已捕获，未静默吞掉）：下面是完整错误",
       "total": "共 {0} 条"
     }
   },
