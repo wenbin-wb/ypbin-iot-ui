@@ -1,4 +1,5 @@
 export * from './availability';
+export * from './command';
 export * from './device';
 export * from './event';
 export * from './group';
