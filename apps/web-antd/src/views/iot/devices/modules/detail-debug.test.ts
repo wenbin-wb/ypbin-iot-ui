@@ -92,6 +92,29 @@ function bizFailure(code: number, message: string) {
   });
 }
 
+/**
+ * 递归收集**字符串叶子**键。
+ *
+ * 🔴 只迭代一层是**空转**：`page.iot` 下 14 个键里 13 个是命名空间对象（如 `debug`），
+ * vue-i18n 对对象只会打一条 `[intlify] Not found` 而**不编译**，等于本轮门禁没跑
+ * （教训八：0 违规可能是没跑到）。真实叶子键 400+ 个，必须递归取。
+ */
+function collectLeafKeys(node: unknown, prefix = ''): string[] {
+  if (typeof node === 'string') {
+    return prefix === '' ? [] : [prefix];
+  }
+  if (node === null || typeof node !== 'object') {
+    return [];
+  }
+  const keys: string[] = [];
+  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+    keys.push(
+      ...collectLeafKeys(value, prefix === '' ? key : `${prefix}.${key}`),
+    );
+  }
+  return keys;
+}
+
 /** 后端分页响应（`PageResult`，`total/page/pageSize` 都是字符串——后端 Long 序列化口径）。 */
 function page(items: unknown[], total = items.length) {
   return { items, page: '1', pageSize: '10', pages: '1', total: String(total) };
@@ -216,11 +239,14 @@ describe('在线调试页签：i18n 文案必须能编译（本次线上空白�
         const t = i18n.global.t as (key: string) => string;
 
         const failures: string[] = [];
-        for (const key of Object.keys(pageDict.iot)) {
+        const leafKeys = collectLeafKeys(pageDict.iot, 'page.iot');
+        // 自检：叶子键数量必须像话，否则说明遍历又退化成空转（教训八）
+        expect(leafKeys.length).toBeGreaterThan(400);
+        for (const key of leafKeys) {
           try {
-            t(`page.iot.${key}`);
+            t(key);
           } catch (error) {
-            failures.push(`page.iot.${key}: ${(error as Error).message.split('\n')[0]}`);
+            failures.push(`${key}: ${(error as Error).message.split('\n')[0]}`);
           }
         }
         expect(failures).toEqual([]);
@@ -383,6 +409,29 @@ describe('页签渲染错误边界（panel-error-boundary.vue）', () => {
     const html = handle.container.innerHTML;
     expect(html).toContain('在线调试页渲染失败');
     expect(html).toContain('模拟渲染期异常');
+  });
+
+  it('边界不得掐断全局上报通道：`app.config.errorHandler`（埋点）仍必须收到该异常', async () => {
+    // 2026-09-27 这次空白事故就是靠 app.errorHandler → 埋点 sys_track_event 定位的；
+    // 若在 onErrorCaptured 里 `return false`，Vue 的 handleError 会直接 return，
+    // 全局 errorHandler 不再被调用 ⇒ 白屏变成「无声白屏」。
+    const reported: unknown[] = [];
+    const container = document.createElement('div');
+    document.body.append(container);
+    const app = createApp({
+      render: () => h(PanelErrorBoundary, null, { default: () => h(Exploding) }),
+    });
+    app.config.errorHandler = (error) => {
+      reported.push(error);
+    };
+    app.mount(container);
+    mounted = { app };
+    await flush(2);
+
+    expect(reported.length).toBeGreaterThan(0);
+    expect((reported[0] as Error).message).toContain('模拟渲染期异常');
+    // 同时仍然渲染了 Alert（两件事不能互相排斥）
+    expect(container.innerHTML).toContain('在线调试页渲染失败');
   });
 
   it('无错误时只渲染插槽内容（不吞掉正常渲染）', async () => {
