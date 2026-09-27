@@ -51,6 +51,18 @@ jobs:
       - name: 构建（web-antd）
         run: pnpm -F @vben/web-antd run build
 
+      # 上传**真构建产物**：`ypbin-iot` 的部署纪律是「下载 CI artifact → 覆盖 iot-ui-dist →
+      # 逐字节比对 md5」（见 `ypbin-iot/docs/DEPLOY-BACKEND.md` §2），而此前本工作流只有构建、
+      # **没有任何 upload 步骤** ⇒ 那条纪律不可执行，部署只能退化为「本机再构建一次」，
+      # 产物与 CI 是否一致无法证明。这里只补上传，**不新增任何失败门禁**（不影响既有的绿/红判定）。
+      # `if-no-files-found: error`：宁可报红也不要一个空 artifact（否则"产物一致"会变成假绿）。
+      - name: 上传构建产物（部署用）
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-antd-dist
+          path: apps/web-antd/dist
+          if-no-files-found: error
+
   tracking-events-drift:
     name: 校验埋点事件码未漂移
     runs-on: ubuntu-latest

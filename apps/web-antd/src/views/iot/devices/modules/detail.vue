@@ -8,6 +8,7 @@ import type {
 
 import { computed, ref } from 'vue';
 
+import { useAccess } from '@vben/access';
 import { useVbenDrawer } from '@vben/common-ui';
 
 import {
@@ -37,11 +38,12 @@ import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
 
 import Availability from './availability.vue';
+import DetailDebug from './detail-debug.vue';
 import DetailPoints from './detail-points.vue';
 import Series from './series.vue';
 
 /**
- * 设备详情（F1）：4 个可落地区块 = 概览 / 属性与点位 / 历史曲线 / 事件与断档（+ 影子状态）。
+ * 设备详情（F1）：5 个可落地区块 = 概览 / 属性与点位 / 历史曲线 / 事件与断档 / 在线调试（+ 影子状态）。
  *
  * 为什么是抽屉而不是新路由页：路由由后端 `sys_menu.component` 决定（本仓不另立一套路由），
  * 加一个详情页就要加一个「点不开的菜单项」；抽屉从设备台账行点进去即可，且不改菜单与权限。
@@ -50,6 +52,7 @@ import Series from './series.vue';
  * `GET /devices/{id}/availability`、影子 = `GET /devices/{id}/shadow`、
  * 点位与物模型属性 = `/devices/{id}/points` + `/products/{id}/services`。
  * 「历史曲线」与「可用率」两块**直接复用台账已有的抽屉组件**，不重画一套图表逻辑。
+ * 「在线调试」（段 C）复用同一个 `DetailDebug` 组件，只走既有的 commands 三个端点。
  */
 const deviceId = ref('');
 
@@ -90,6 +93,16 @@ const RECENT_EVENT_SIZE = 3;
 const productName = ref('');
 
 const loading = ref(false);
+
+/**
+ * 「在线调试」页签的门禁：需要 `iot:debug:get`（查询下发/回执记录）。
+ *
+ * 页签本身用 `v-if` 隐藏（`v-access` 只能摘掉元素，摘不掉 Tabs 的页签头 ⇒ 会留下一个点得动但空白的页签）；
+ * 页签**内部**的下发按钮与重发按钮另用 `v-access:code="['iot:debug:send']"` 把门（两者权限码不同）。
+ */
+const { hasAccessByCodes } = useAccess();
+
+const canViewDebug = computed(() => hasAccessByCodes(['iot:debug:get']));
 
 /** 用 `Series`/`Availability` 各自的抽屉组件：曲线与可用率口径只有一份实现。 */
 const [SeriesDrawer, SeriesDrawerApi] = useVbenDrawer({
@@ -701,6 +714,18 @@ const [Drawer, drawerApi] = useVbenDrawer<null | IotDeviceApi.DeviceResp>({
               {{ $t('page.iot.device.openAvailability') }}
             </Button>
           </div>
+        </Tabs.TabPane>
+
+        <!-- ===== 在线调试（段 C）：MQTT 下行/命令调试（下发 → 轮询看状态与回执） ===== -->
+        <Tabs.TabPane
+          v-if="canViewDebug"
+          key="debug"
+          :tab="$t('page.iot.debug.title')"
+        >
+          <DetailDebug
+            :device-id="deviceId"
+            :product-id="device?.productId"
+          />
         </Tabs.TabPane>
       </Tabs>
     </Spin>
