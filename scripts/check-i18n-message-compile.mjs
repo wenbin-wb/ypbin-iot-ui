@@ -113,6 +113,14 @@ export function collectNonStringLeaves(node, prefix = '') {
 }
 
 /**
+ * 会被**原型污染**利用的键名：语言包是 JSON 数据，这三个名字没有任何合法用途。
+ * `JSON.parse('{"__proto__":{...}}')` 会生成**自有**的 `__proto__` 键，随后
+ * `target['__proto__'] = value` 会走原型链访问器 ⇒ 可能改写 `Object.prototype`。
+ * CodeQL 的 `js/prototype-pollution-utility` 正是这条（本 PR 实测被报 #12 / medium）。
+ */
+const UNSAFE_MERGE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/**
  * **深合并**两个语言包对象（对齐 vue-i18n `mergeLocaleMessage` 的语义）。
  *
  * 为什么必须深合并（独立复核指出的低危残留）：生产的 `mergeLocaleMessage` 是**递归深合并**，
@@ -121,12 +129,20 @@ export function collectNonStringLeaves(node, prefix = '') {
  * 与任何应用的文件名**零重叠**，复核独立比对确认 0 条盲区键）；但只要将来基座新增一个与某应用
  * **同名**的 json（例如给基座也加 `page.json`），浅合并就会让**该命名空间下同名子对象整块被替换**，
  * 被替换掉的键**编译不到** ⇒ 又变成「门禁绿、线上抛」。深合并从根上消掉这条路径。
+ * 复核用真实 vue-i18n 做了 6 类情形（同名命名空间/同名叶子/三层嵌套/双向类型冲突/数组）对照，
+ * 不一致用例数 = 0。
  *
- * 规则与 vue-i18n 一致：两边都是普通对象则递归合并，否则以 `source` 为准。
+ * 规则与 vue-i18n 一致：两边都是普通对象则递归合并，否则以 `source` 为准；数组**替换**而非拼接。
+ *
+ * 安全：跳过 `UNSAFE_MERGE_KEYS`，且读取 `target` 上已有值时只认**自有属性**
+ * （`Object.hasOwn`）——两者共同消除原型污染路径（今天语言包里这三个键 0 命中，
+ * 属「现在不可达、但写法本身是漏洞模式」）。
  */
 export function deepMergeMessages(target, source) {
   for (const [key, value] of Object.entries(source)) {
-    const current = target[key];
+    if (UNSAFE_MERGE_KEYS.has(key)) continue;
+    // 只认自有属性：`{}` 的 `__proto__` 是原型上的访问器而非自有键 ⇒ 不会被当成可递归的对象
+    const current = Object.hasOwn(target, key) ? target[key] : undefined;
     if (
       current &&
       value &&
@@ -165,16 +181,45 @@ export function loadDirsMessages(lang, dirs) {
     usedDirs.push(base);
     for (const entry of entries) {
       if (!entry.name.endsWith('.json')) continue;
-      // 只收普通文件（以及符号链接，保持与旧实现 `statSync().isFile()` 跟随链接一致）
+      // 只收普通文件与符号链接。**注意语义**：`isSymbolicLink()` 不跟随链接，
+      // 所以「指向普通文件的链接」会被收下（= 旧实现 `statSync().isFile()` 的效果），
+      // 而「指向目录的链接」也会被收下 —— 因此下面的读取必须有 try/catch，
+      // 否则 readFileSync 会以 EISDIR 把整个门禁崩掉（独立复核实测的语义回退，已修）。
       if (!entry.isFile() && !entry.isSymbolicLink()) continue;
       const full = join(dir, entry.name);
       const namespace = entry.name.replace(/\.json$/, '');
+
+      let raw;
+      try {
+        raw = readFileSync(full, 'utf8');
+      } catch (error) {
+        // 断链 / 指向目录的符号链接 / 权限不可读：**告警并跳过**（与旧实现「非普通文件即跳过」等价），
+        // 不让门禁自身崩掉。刻意用 try/catch 而不是再补一次 `statSync`——那会把
+        // `js/file-system-race`（TOCTOU）告警带回来。
+        console.warn(
+          `[i18n-compile] 跳过不可读的语言包：${relative(ROOT, full)}` +
+            `（${error?.code ?? error?.message}）`,
+        );
+        continue;
+      }
+
+      let parsed;
+      try {
+        parsed = JSON.parse(raw);
+      } catch (error) {
+        // JSON 坏了是**内容错误**，不能跳过：跳过等于整个语言包被门禁静默忽略
+        //（那正是「0 违规可能是没跑到」，教训八）。
+        throw new Error(
+          `语言包不是合法 JSON：${relative(ROOT, full)}：${error.message}`,
+        );
+      }
+
       files.push(relative(ROOT, full));
       // **深合并**（不是 `{...a, ...b}` 浅合并）：与生产 `mergeLocaleMessage` 语义一致，
       // 否则同名命名空间下的同名子对象会被整块替换、被替换掉的键编译不到（见 deepMergeMessages）。
       messages[namespace] = deepMergeMessages(
         messages[namespace] ?? {},
-        JSON.parse(readFileSync(full, 'utf8')),
+        parsed,
       );
     }
   }
