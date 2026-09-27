@@ -1,14 +1,27 @@
 import { requestClient } from '#/api/request';
 
 export namespace SystemCommonApi {
+  /** **请求**侧分页参数（由本端构造并发送，故是 `number`）。 */
   export interface PageQuery {
     page: number;
     pageSize: number;
   }
 
-  export interface PageResult<T> extends PageQuery {
+  /**
+   * **响应**侧分页信封（后端 `PageResult`）。
+   *
+   * ⚠️ 这里刻意**不再** `extends PageQuery`：请求参数与响应字段同名不同实（一个是我们发出的
+   * `number`，一个是后端回的字符串），用继承把两者捏在一起正是「类型说谎」的来源。
+   *
+   * 后端 `total/page/pageSize` 都是 `long`，全局 Long→字符串序列化 ⇒ 真实返回
+   * `{"total":"17","page":"1","pageSize":"10"}`。消费方必须显式转数
+   * （`#/utils/backend-number` 的 `toBackendNumber`），不许 `as number`。口径同 `api/iot/command.ts`。
+   */
+  export interface PageResult<T> {
     items: T[];
-    total: number;
+    total: number | string;
+    page: number | string;
+    pageSize: number | string;
   }
 
   export interface StatusReq {

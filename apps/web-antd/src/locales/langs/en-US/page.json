@@ -350,6 +350,11 @@
     "tag": {
       "title": "Device tags"
     },
+    "credential": {
+      "get": "View device credential",
+      "issue": "Issue or reset device credential",
+      "revoke": "Revoke device credential"
+    },
     "debug": {
       "title": "Online Debug",
       "get": "Query command records",

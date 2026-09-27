@@ -10,6 +10,7 @@ import { Button, message } from 'ant-design-vue';
 import { useVbenVxeGrid, VbenTableAction } from '#/adapter/vxe-table';
 import { deleteProduct, getProductPage, publishProduct } from '#/api/iot';
 import { $t } from '#/locales';
+import { toBackendNumber } from '#/utils/backend-number';
 
 import EmptyGuide from '../onboarding/modules/empty-guide.vue';
 import OnboardingGuide from '../onboarding/modules/guide.vue';
@@ -33,11 +34,15 @@ const [Grid, gridApi] = useVbenVxeGrid({
     pagerConfig: { enabled: true },
     proxyConfig: {
       ajax: {
-        query: async ({ page }) =>
-          await getProductPage({
+        query: async ({ page }) => {
+          const result = await getProductPage({
             page: page.currentPage,
             pageSize: page.pageSize,
-          }),
+          });
+          // 后端 `PageResult.total` 是 `long` ⇒ 全局序列化成**字符串**（`"17"`），
+          // 而 vxe 的 pager 需要 number（页数 = ceil(total/pageSize)）⇒ 进入表格前先转数。
+          return { ...result, total: toBackendNumber(result.total) };
+        },
       },
     },
     rowConfig: { keyField: 'id' },

@@ -13,6 +13,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useVbenVxeGrid, VbenTableAction } from '#/adapter/vxe-table';
 import { deleteDevice, getDevicePage } from '#/api/iot';
 import { $t } from '#/locales';
+import { toBackendNumber } from '#/utils/backend-number';
 
 import EmptyGuide from '../onboarding/modules/empty-guide.vue';
 import OnboardingGuide from '../onboarding/modules/guide.vue';
@@ -64,11 +65,16 @@ const [Grid, gridApi] = useVbenVxeGrid({
     pagerConfig: { enabled: true },
     proxyConfig: {
       ajax: {
-        query: async ({ page }) =>
-          await getDevicePage({
+        query: async ({ page }) => {
+          const result = await getDevicePage({
             page: page.currentPage,
             pageSize: page.pageSize,
-          }),
+          });
+          // 后端 `PageResult.total` 是 `long` ⇒ 全局序列化成**字符串**（`"17"`），
+          // 而 vxe 的 pager 拿到 total 后要做算术语义（页数 = ceil(total/pageSize)）⇒
+          // 在**进入表格前**转成 number，别把契约违例一路喂到分页组件里。
+          return { ...result, total: toBackendNumber(result.total) };
+        },
       },
     },
     rowConfig: { keyField: 'id' },

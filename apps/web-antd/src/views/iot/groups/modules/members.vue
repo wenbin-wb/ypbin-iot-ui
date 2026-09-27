@@ -3,6 +3,7 @@ import type { IotGroupApi } from '#/api/iot';
 
 import { computed, ref } from 'vue';
 
+import { useAccess } from '@vben/access';
 import { useVbenDrawer } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
@@ -42,6 +43,20 @@ import { extractErrorMessage } from '#/utils/error';
  */
 
 const router = useRouter();
+
+/**
+ * 写操作门禁用 **computed + `v-if`**，不用 `v-access` 指令。
+ *
+ * 原因（已核实上游实现）：`packages/effects/access/src/directive.ts` 的 `v-access` **只注册了
+ * `mounted`、没有 `updated`**，且在无权限时执行 `el.remove()`（元素被摘掉，不可逆）。
+ * ⇒ 权限码若在挂载**之后**才到位（或运行期变化），本区块**永远不会**再出现
+ * （表现为「功能静默消失」，比白屏更难查）。`computed` 读的是 pinia 里的 `accessCodes`，
+ * 天然随权限码变化重算，语义与指令一致但**没有这个时序窗口**。
+ */
+const { hasAccessByCodes } = useAccess();
+
+/** 加入/移出成员都需要 `iot:group:update`（与后端 `@SaCheckPermission` 一一对应）。 */
+const canUpdateGroup = computed(() => hasAccessByCodes(['iot:group:update']));
 
 const groupId = ref('');
 const groupName = ref('');
@@ -159,7 +174,7 @@ defineExpose({ drawerApi });
 <template>
   <Drawer class="w-[900px]">
     <div class="flex flex-col gap-3">
-      <div v-access:code="['iot:group:update']" class="flex items-center gap-2">
+      <div v-if="canUpdateGroup" class="flex items-center gap-2">
         <Select
           v-model:value="selectedDeviceId"
           :options="selectableDevices"
@@ -201,7 +216,7 @@ defineExpose({ drawerApi });
                 @confirm="onRemove(record.id)"
               >
                 <Button
-                  v-access:code="['iot:group:update']"
+                  v-if="canUpdateGroup"
                   danger
                   :loading="removingId === record.id"
                   size="small"

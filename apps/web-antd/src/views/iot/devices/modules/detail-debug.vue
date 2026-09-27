@@ -3,6 +3,8 @@ import type { IotCommandApi, IotThingModelApi } from '#/api/iot';
 
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
+import { useAccess } from '@vben/access';
+
 import {
   Alert,
   Button,
@@ -34,6 +36,7 @@ import {
   sendDeviceCommand,
 } from '#/api/iot';
 import { $t } from '#/locales';
+import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
 
 /**
@@ -192,6 +195,29 @@ function propertyLabel(property: IotThingModelApi.PropertyResp): string {
   return `${property.identifier}（${property.propertyName}｜${property.dataType}｜${property.accessMode}）`;
 }
 
+// ---------------- 权限门禁 ----------------
+
+/**
+ * 本区块的权限门禁用 **computed + `v-if`**，不用 `v-access` 指令。
+ *
+ * 原因（已核实上游实现）：`packages/effects/access/src/directive.ts` 里 `v-access`
+ * **只注册了 `mounted`、没有 `updated`**，且无权限时直接 `el.remove()`（摘掉即不可逆）。
+ * ⇒ 权限码若在挂载**之后**才到位（或运行期变化），被摘掉的区块**永远回不来**；
+ * 反向（先有后撤）则元素留在页面上继续放行入口。用户看到的是「功能静默消失/静默残留」——
+ * 没有报错、没有空白。`computed` 读 pinia 的 `accessCodes`，随权限码变化自动重算，
+ * 可见性语义与指令一致但无此时序窗口。上游行为已由用例钉住（见 detail-debug.test.ts）。
+ *
+ * 注意两者权限码**不同**：看历史要 `iot:debug:get`，下发/重发要 `iot:debug:send`
+ * （与后端 `@SaCheckPermission` 一一对应），不能合并成一个。
+ */
+const { hasAccessByCodes } = useAccess();
+
+/** 查看下发/回执记录（`GET /iot/devices/{id}/commands`）。 */
+const canViewHistory = computed(() => hasAccessByCodes(['iot:debug:get']));
+
+/** 下发与重发（`POST /iot/devices/{id}/commands[...]`）。 */
+const canSendCommand = computed(() => hasAccessByCodes(['iot:debug:send']));
+
 // ---------------- 历史列表 ----------------
 
 const history = ref<IotCommandApi.CommandInstanceResp[]>([]);
@@ -288,16 +314,15 @@ function readEnvelope(
 }
 
 /**
- * 后端计数 → 展示用数字。
+ * 后端计数 → 展示用数字：统一走 `#/utils/backend-number` 的 `toBackendNumber`。
  *
- * 后端 Long 全局序列化成字符串（实测 `PageResult.total` 是 `"17"`），
- * 而 antdv `Pagination` 的 `total` 是 `number` ⇒ 必须显式转换；
- * 拿不到/解析不出时回落 0（不把 NaN 传给分页）。
+ * 后端 Long 全局序列化成字符串（实测 `PageResult.total` 是 `"17"`），而 antdv `Pagination.total`
+ * 要求 `number`（实测喂字符串会触发 `[Vue warn] Invalid prop: type check failed for prop "total"`）
+ * ⇒ 必须在进组件前显式转数。
+ *
+ * 此前这里是本文件私有的 `toCount`，`detail.vue`/`guide.vue` 各自又写了一遍；这个口径
+ * 只有**一处实现**才不会再各自漂移。
  */
-function toCount(value: unknown): number {
-  const parsed = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
 
 // ---------------- 文案 ----------------
 
@@ -471,7 +496,7 @@ async function loadHistory(options: { silent?: boolean } = {}) {
     // `"total":"17"`），而 `Pagination.total` 是 `number` ⇒ 这里必须显式转数，
     // 否则 antdv 报 `Invalid prop: type check failed for prop "total"`，
     // 脏数据时还会把分页算成 NaN。
-    historyTotal.value = toCount(result.total);
+    historyTotal.value = toBackendNumber(result.total);
     historyError.value = undefined;
     pollError.value = undefined;
   } catch (error) {
@@ -980,7 +1005,7 @@ const batchSummary = computed(() => {
 
       <div class="mt-3 flex flex-wrap items-center gap-2">
         <Button
-          v-access:code="['iot:debug:send']"
+          v-if="canSendCommand"
           :loading="sending"
           type="primary"
           @click="onSend"
@@ -1069,7 +1094,7 @@ const batchSummary = computed(() => {
     </div>
 
     <!-- ===== 历史列表（需 iot:debug:get；无权限的用户看不到这一块） ===== -->
-    <div v-access:code="['iot:debug:get']" class="mt-4">
+    <div v-if="canViewHistory" class="mt-4">
       <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div class="font-semibold">
           {{ $t('page.iot.debug.historyTitle') }}
@@ -1173,7 +1198,7 @@ const batchSummary = computed(() => {
                 "
                 @confirm="onResend(record)"
               >
-                <Button v-access:code="['iot:debug:send']" size="small" type="link">
+                <Button v-if="canSendCommand" size="small" type="link">
                   {{ $t('page.iot.debug.resend') }}
                 </Button>
               </Popconfirm>

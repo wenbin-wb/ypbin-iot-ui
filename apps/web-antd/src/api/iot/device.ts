@@ -48,11 +48,20 @@ export namespace IotDeviceApi {
     ts?: null | number | string;
   }
 
+  /**
+   * 分页信封（后端 `PageResult`）。
+   *
+   * ⚠️ **计数与页码是字符串**：后端把 Long 全局序列化成字符串（`PageResult.total/page/pageSize`
+   * 在服务端都是 `long`；实测响应形如 `{"total":"17","page":"1","pageSize":"10"}`）
+   * ⇒ 这里按**真实返回**声明为 `number | string`，消费方负责显式转数
+   * （用 `#/utils/backend-number` 的 `toBackendNumber`，**不许** `as number` 把分歧藏起来）。
+   * 口径与 `api/iot/command.ts` 完全一致。
+   */
   export interface PageResult<T> {
     items: T[];
-    total: number;
-    page: number;
-    pageSize: number;
+    total: number | string;
+    page: number | string;
+    pageSize: number | string;
   }
 }
 

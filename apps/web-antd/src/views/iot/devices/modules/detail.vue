@@ -35,6 +35,7 @@ import {
   getProductDetail,
 } from '#/api/iot';
 import { $t } from '#/locales';
+import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
 
 import Availability from './availability.vue';
@@ -233,7 +234,8 @@ async function reloadEvents() {
       pageSize: EVENT_PAGE_SIZE,
     });
     events.value = result.items ?? [];
-    eventsTotal.value = result.total ?? 0;
+    // 后端 `total` 是 `long` ⇒ 全局序列化成**字符串**（`"17"`）；此处是计数与比较语义 ⇒ 必须显式转数
+    eventsTotal.value = toBackendNumber(result.total);
     eventsError.value = '';
   } catch (error) {
     events.value = [];

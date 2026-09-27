@@ -16,6 +16,7 @@ import {
   publishProduct,
 } from '#/api/iot';
 import { $t } from '#/locales';
+import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
 
 import { useOnboardingTemplates } from './templates';
@@ -123,8 +124,10 @@ async function reloadCounts() {
       getDevicePage({ page: 1, pageSize: 1 }),
     ]);
     counts.value = {
-      devices: devices?.total ?? 0,
-      products: products?.total ?? 0,
+      // 后端 `total` 是 `long` ⇒ 全局序列化成字符串（`"0"` 是**真值**！）
+      // 这里 `counts` 参与 `> 0` 判断，留着字符串会让「一个都没有」被当成有数据 ⇒ 必须显式转数
+      devices: toBackendNumber(devices?.total),
+      products: toBackendNumber(products?.total),
     };
     countsFailed.value = false;
   } catch (caught) {
