@@ -352,6 +352,7 @@
     },
     "debug": {
       "title": "Online Debug",
+      "get": "Query command records",
       "sendTitle": "Send command",
       "kind": "Action",
       "kindPropertySet": "Set property",

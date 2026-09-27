@@ -352,6 +352,7 @@
     },
     "debug": {
       "title": "在线调试",
+      "get": "查询指令记录",
       "sendTitle": "下发指令",
       "kind": "动作",
       "kindPropertySet": "属性设置",
