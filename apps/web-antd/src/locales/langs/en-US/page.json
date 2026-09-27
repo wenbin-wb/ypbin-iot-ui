@@ -395,7 +395,7 @@
       "historyHint": "Newest first; commands without a reply are refreshed automatically by polling (every 2s)",
       "historyEmpty": "No command records",
       "historyLoadFailed": "Failed to load command records",
-      "pollFailed": "Polling refresh failed (the list shows the last successful result, not the current state)",
+      "pollFailed": "Automatic refresh failed and polling has stopped (the list shows the last successful result, not the current state); click Refresh to retry",
       "statusFilter": "Status",
       "allStatus": "All statuses",
       "columnTime": "Created at",

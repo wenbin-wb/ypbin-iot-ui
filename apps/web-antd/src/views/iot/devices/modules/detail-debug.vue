@@ -211,8 +211,8 @@ const historyLoaded = ref(false);
 /** 查询失败详情——只要它非空，就**不显示空态**。 */
 const historyError = ref<ErrorDetail | undefined>(undefined);
 
-/** 轮询失败提示（轮询失败**不清空**列表，只提示「这是上一次成功的结果」）。 */
-const pollError = ref('');
+/** 轮询失败详情（**不清空**列表；只提示「这是上一次成功的结果」，并停掉轮询）。 */
+const pollError = ref<ErrorDetail | undefined>(undefined);
 
 let pollTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -432,7 +432,9 @@ async function loadModel() {
  * 拉取历史列表。
  *
  * `silent = true` 用于轮询：失败时**不清空**已展示记录（否则一次网络抖动会把列表擦成空态，
- * 看起来像「没有指令记录」），只把原因写进 `pollError`。
+ * 看起来像「没有指令记录」），只把原因写进 `pollError`，并**停掉轮询**——
+ * 全局请求拦截器每次失败都会弹一次 `message.error`，2 秒一次地弹会让故障期的页面没法用；
+ * 停掉后由用户点「刷新」重试（成功即自动恢复轮询）。
  */
 async function loadHistory(options: { silent?: boolean } = {}) {
   if (!props.deviceId) {
@@ -450,14 +452,16 @@ async function loadHistory(options: { silent?: boolean } = {}) {
     history.value = result.items ?? [];
     historyTotal.value = result.total ?? 0;
     historyError.value = undefined;
-    pollError.value = '';
+    pollError.value = undefined;
   } catch (error) {
     const detail = describeError(
       error,
       $t('page.iot.debug.historyLoadFailed'),
     );
     if (options.silent) {
-      pollError.value = detail.message;
+      // 轮询失败：列表原样保留，原始 code/信封一并留下（与 historyError 同口径）
+      pollError.value = detail;
+      stopPolling();
     } else {
       // 失败态与空态**必须分开**：这里清空的是列表数据，但错误详情非空 ⇒ 页面走 Alert 分支
       history.value = [];
@@ -473,12 +477,17 @@ async function loadHistory(options: { silent?: boolean } = {}) {
   }
 }
 
-/** 只要当页还有非终态实例就轮询；全部终态立刻停（**不引入 ws**）。 */
+/**
+ * 只要当页还有非终态实例就轮询；全部终态立刻停（**不引入 ws**）。
+ *
+ * `pollError` 非空表示上一次自动刷新失败 ⇒ **不重新拉起**定时器（否则会立刻又失败、又弹提示），
+ * 由用户点「刷新」触发一次非静默加载，成功后 `pollError` 被清空，轮询自然恢复。
+ */
 function syncPolling() {
   const hasPending = history.value.some(
     (item) => !isTerminalStatus(item.statusCode),
   );
-  if (hasPending && pollTimer === undefined) {
+  if (hasPending && pollTimer === undefined && pollError.value === undefined) {
     pollTimer = setInterval(() => {
       void loadHistory({ silent: true });
     }, POLL_INTERVAL_MS);
@@ -500,7 +509,7 @@ async function load() {
   historyPage.value = 1;
   historyLoaded.value = false;
   historyError.value = undefined;
-  pollError.value = '';
+  pollError.value = undefined;
   history.value = [];
   historyTotal.value = 0;
   batchRequestIds.value = new Set();
@@ -1087,15 +1096,25 @@ const batchSummary = computed(() => {
       </Alert>
 
       <template v-else>
-        <!-- 轮询失败：列表保留上一次成功结果，并如实说明 -->
+        <!-- 轮询失败：列表保留上一次成功结果，并如实说明「已停止自动刷新」 -->
         <Alert
           v-if="pollError"
-          :description="pollError"
           :message="$t('page.iot.debug.pollFailed')"
           class="mb-2"
           show-icon
           type="warning"
-        />
+        >
+          <template #description>
+            <div>{{ pollError.message }}</div>
+            <div>
+              {{ $t('page.iot.debug.rawEnvelope') }}:
+              <span class="font-mono">{{ pollError.code || '-' }}</span>
+            </div>
+            <pre class="mt-1 text-xs break-all whitespace-pre-wrap">{{
+              pollError.raw
+            }}</pre>
+          </template>
+        </Alert>
 
         <Table
           :columns="historyColumns"
