@@ -395,7 +395,7 @@
       "historyHint": "按创建时刻倒序；未收到回执的指令会自动轮询刷新(每 2 秒)",
       "historyEmpty": "暂无指令记录",
       "historyLoadFailed": "指令记录查询失败",
-      "pollFailed": "轮询刷新失败(列表为上一次成功结果，不代表当前状态)",
+      "pollFailed": "轮询自动刷新失败，已停止自动刷新（列表为上一次成功结果，不代表当前状态）；点「刷新」可重试",
       "statusFilter": "状态",
       "allStatus": "全部状态",
       "columnTime": "创建时刻",
