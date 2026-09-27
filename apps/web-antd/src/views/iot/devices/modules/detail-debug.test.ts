@@ -418,12 +418,12 @@ describe('detail-debug.vue 运行时（真实 i18n + 真实 antdv + 真实权限
     const warnSpy = vi
       .spyOn(console, 'warn')
       .mockImplementation((...args: unknown[]) => {
-        messages.push(args.map((a) => String(a)).join(' '));
+        messages.push(args.map(String).join(' '));
       });
     const errorSpy = vi
       .spyOn(console, 'error')
       .mockImplementation((...args: unknown[]) => {
-        messages.push(args.map((a) => String(a)).join(' '));
+        messages.push(args.map(String).join(' '));
       });
     try {
       stubApi(() => Promise.resolve(page([REAL_SUCCEEDED_ROW], 17)));

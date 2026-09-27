@@ -148,7 +148,10 @@ describe('设备台账列表：失败态不许画成空态', () => {
 
     const handle = await mountPage();
     mounted = handle;
-    await expect(runQuery()).rejects.toThrow();
+    // 断言具体 message（而不是裸 toThrow()）：既能咬人，也让失败信息可读
+    await expect(runQuery()).rejects.toThrow(
+      'Request failed with status code 500',
+    );
     await nextTick();
 
     const html = handle.container.innerHTML;
@@ -178,7 +181,7 @@ describe('设备台账列表：失败态不许画成空态', () => {
     mockGetDevicePage.mockRejectedValueOnce(bizFailure(50_000, '偶发失败'));
     const handle = await mountPage();
     mounted = handle;
-    await expect(runQuery()).rejects.toThrow();
+    await expect(runQuery()).rejects.toThrow('偶发失败');
     await nextTick();
     expect(handle.container.innerHTML).toContain('偶发失败');
 
