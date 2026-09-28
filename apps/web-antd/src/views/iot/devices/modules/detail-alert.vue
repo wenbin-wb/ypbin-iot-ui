@@ -107,10 +107,10 @@ async function loadActive() {
     });
     activeRows.value = result.items ?? [];
     activeError.value = '';
-  } catch (caught) {
+  } catch (error) {
     activeRows.value = [];
     activeError.value = extractErrorMessage(
-      caught,
+      error,
       $t('page.iot.alert.loadFailed'),
     );
   } finally {
@@ -134,11 +134,11 @@ async function loadHistory() {
     historyRows.value = result.items ?? [];
     historyTotal.value = toBackendNumber(result.total);
     historyError.value = '';
-  } catch (caught) {
+  } catch (error) {
     historyRows.value = [];
     historyTotal.value = 0;
     historyError.value = extractErrorMessage(
-      caught,
+      error,
       $t('page.iot.alert.loadFailed'),
     );
   } finally {
@@ -228,14 +228,25 @@ watch(
           </Tag>
         </template>
       </Table.Column>
-      <Table.Column :title="$t('page.iot.alert.property')" data-index="propertyId">
+      <Table.Column
+        :title="$t('page.iot.alert.property')"
+        data-index="propertyId"
+      >
         <template #default="{ record }">
-          <span v-if="record.outage">{{ $t('page.iot.alert.kind.offline') }}</span>
+          <span v-if="record.outage">{{
+            $t('page.iot.alert.kind.offline')
+          }}</span>
           <span v-else>{{ record.propertyId ?? '-' }}</span>
         </template>
       </Table.Column>
-      <Table.Column :title="$t('page.iot.alert.triggerValue')" data-index="triggerValue" />
-      <Table.Column :title="$t('page.iot.alert.threshold')" data-index="thresholdSnapshot" />
+      <Table.Column
+        :title="$t('page.iot.alert.triggerValue')"
+        data-index="triggerValue"
+      />
+      <Table.Column
+        :title="$t('page.iot.alert.threshold')"
+        data-index="thresholdSnapshot"
+      />
       <Table.Column :title="$t('page.iot.alert.stateField')" data-index="state">
         <template #default="{ record }">
           <Tag :color="stateColor(record.state)">
@@ -243,7 +254,10 @@ watch(
           </Tag>
         </template>
       </Table.Column>
-      <Table.Column :title="$t('page.iot.alert.duration')" data-index="durationSeconds">
+      <Table.Column
+        :title="$t('page.iot.alert.duration')"
+        data-index="durationSeconds"
+      >
         <template #default="{ record }">
           {{ humanSeconds(record.durationSeconds) }}
         </template>
@@ -334,17 +348,32 @@ watch(
         }
       "
     >
-      <Table.Column :title="$t('page.iot.alert.severityField')" data-index="severity">
+      <Table.Column
+        :title="$t('page.iot.alert.severityField')"
+        data-index="severity"
+      >
         <template #default="{ record }">
           <Tag :color="severityColor(record.severity)">
             {{ $t(severityLabelKey(record.severity)) }}
           </Tag>
         </template>
       </Table.Column>
-      <Table.Column :title="$t('page.iot.alert.property')" data-index="propertyId" />
-      <Table.Column :title="$t('page.iot.alert.startTs')" data-index="startTs" />
-      <Table.Column :title="$t('page.iot.alert.resolvedTs')" data-index="resolvedTs" />
-      <Table.Column :title="$t('page.iot.alert.reasonField')" data-index="reason">
+      <Table.Column
+        :title="$t('page.iot.alert.property')"
+        data-index="propertyId"
+      />
+      <Table.Column
+        :title="$t('page.iot.alert.startTs')"
+        data-index="startTs"
+      />
+      <Table.Column
+        :title="$t('page.iot.alert.resolvedTs')"
+        data-index="resolvedTs"
+      />
+      <Table.Column
+        :title="$t('page.iot.alert.reasonField')"
+        data-index="reason"
+      >
         <template #default="{ record }">
           {{ record.reason ? $t(reasonLabelKey(record.reason)) : '-' }}
         </template>

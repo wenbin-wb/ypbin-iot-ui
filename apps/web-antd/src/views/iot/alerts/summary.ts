@@ -28,8 +28,8 @@ export interface RuleSummaryInput {
   threshold?: number | string;
   valueType?: string;
   triggerMode?: string;
-  triggerThreshold?: number | string | null;
-  repeatIntervalSec?: number | string | null;
+  triggerThreshold?: null | number | string;
+  repeatIntervalSec?: null | number | string;
   severity?: string;
   channels?: string;
   notifyTargets?: string;
@@ -93,7 +93,7 @@ export function operatorSymbol(operator?: string): string {
 }
 
 /** 重复通知间隔 → 数值（秒转分钟；不足一分钟按秒显示，避免「0.5 分钟」这种反直觉表达）。 */
-export function repeatIntervalText(seconds?: number | string | null): string {
+export function repeatIntervalText(seconds?: null | number | string): string {
   const value = Number(seconds ?? 0);
   if (!Number.isFinite(value) || value <= 0) {
     return '0';
@@ -107,7 +107,7 @@ export function repeatIntervalText(seconds?: number | string | null): string {
 
 /** 重复通知间隔的单位键（与 {@link repeatIntervalText} 配对）。 */
 export function repeatIntervalUnitKey(
-  seconds?: number | string | null,
+  seconds?: null | number | string,
 ): string {
   const value = Number(seconds ?? 0);
   return value > 0 && value < 60
@@ -193,6 +193,16 @@ export function buildRuleSummary(input: RuleSummaryInput): RuleSummary {
       { key: 'page.iot.alert.warn.thresholdNotNumber' },
     ]);
   }
+  // 布尔点位：阈值只能是 1/0；清空或写别的数字都要在保存前挡住（后端也会拒，但不该等到提交）
+  if (
+    pointLike &&
+    input.valueType === 'BOOLEAN' &&
+    !['0', '1'].includes(String(input.threshold ?? '').trim())
+  ) {
+    return incomplete('page.iot.alert.boolean.invalid', [
+      { key: 'page.iot.alert.boolean.invalid' },
+    ]);
+  }
   if (channelCodes(input.channels).length === 0) {
     return incomplete('page.iot.alert.summary.needChannel', [
       { key: 'page.iot.alert.warn.needChannel' },
@@ -221,8 +231,10 @@ export function buildRuleSummary(input: RuleSummaryInput): RuleSummary {
 
   if (!pointLike) {
     // 断档类：判定复用既有 outage_event + OutageScanner（**不新造判定**）
-    expectations.push('page.iot.alert.expect.offlineReuseOutage');
-    expectations.push('page.iot.alert.expect.offlineNoThreshold');
+    expectations.push(
+      'page.iot.alert.expect.offlineReuseOutage',
+      'page.iot.alert.expect.offlineNoThreshold',
+    );
     if (input.scopeType === 'PRODUCT') {
       return {
         ready: true,
@@ -251,9 +263,19 @@ export function buildRuleSummary(input: RuleSummaryInput): RuleSummary {
   }
 
   const symbol = operatorSymbol(input.operator);
-  const target = thresholdText(input.threshold, input.unit);
-  expectations.push('page.iot.alert.expect.restoreByCondition');
-  expectations.push('page.iot.alert.expect.ackStopsRepeat');
+  // 布尔点位用「开启/关闭」而不是 `= 1`：`= 1` 在页面上不是人话（独立复核 2026-10-03 指出）
+  const target =
+    input.valueType === 'BOOLEAN'
+      ? argKey(
+          String(input.threshold ?? '').trim() === '1'
+            ? 'page.iot.alert.boolean.true'
+            : 'page.iot.alert.boolean.false',
+        )
+      : thresholdText(input.threshold, input.unit);
+  expectations.push(
+    'page.iot.alert.expect.restoreByCondition',
+    'page.iot.alert.expect.ackStopsRepeat',
+  );
   if (mode === 'DURATION') {
     expectations.push('page.iot.alert.expect.durationNeedsSeries');
     return {

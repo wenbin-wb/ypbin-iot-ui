@@ -54,7 +54,11 @@ describe('人话预览 buildRuleSummary', () => {
   });
 
   it('点位低于下限：符号是 <（不能把方向说反）', () => {
-    const summary = buildRuleSummary({ ...base, operator: 'LT', threshold: '10' });
+    const summary = buildRuleSummary({
+      ...base,
+      operator: 'LT',
+      threshold: '10',
+    });
     expect(summary.sentenceArgs[2]).toBe('<');
     expect(summary.sentenceArgs[3]).toBe('10 ℃');
   });
@@ -164,6 +168,37 @@ describe('人话预览 buildRuleSummary', () => {
     );
   });
 
+  it('布尔点位：目标说人话（开启/关闭），且阈值清空/非法时保存前就挡住', () => {
+    const on = buildRuleSummary({
+      ...base,
+      valueType: 'BOOLEAN',
+      operator: 'EQ',
+      threshold: '1',
+      unit: undefined,
+    });
+    expect(on.ready).toBe(true);
+    // 目标参数是**另一个 i18n 键**（渲染时翻译成「开启」），而不是 `1`
+    expect(on.sentenceArgs[3]).toEqual(argKey('page.iot.alert.boolean.true'));
+
+    const off = buildRuleSummary({
+      ...base,
+      valueType: 'BOOLEAN',
+      operator: 'EQ',
+      threshold: '0',
+      unit: undefined,
+    });
+    expect(off.sentenceArgs[3]).toEqual(argKey('page.iot.alert.boolean.false'));
+
+    const empty = buildRuleSummary({
+      ...base,
+      valueType: 'BOOLEAN',
+      operator: 'EQ',
+      threshold: '',
+    });
+    expect(empty.ready).toBe(false);
+    expect(empty.sentenceKey).toBe('page.iot.alert.boolean.invalid');
+  });
+
   it('空句子绝不允许：任何输入下 sentenceKey 都非空（提示不能是空白）', () => {
     const cases = [
       base,
@@ -214,18 +249,18 @@ describe('人话预览的辅助函数', () => {
   it('渠道码解析与键参数翻译', () => {
     expect(channelCodes('INBOX, EMAIL')).toEqual(['INBOX', 'EMAIL']);
     expect(channelCodes('')).toEqual([]);
-    expect(resolveArgs(['80', argKey('page.iot.alert.unit.minute')], (key) => `[${key}]`)).toEqual([
-      '80',
-      '[page.iot.alert.unit.minute]',
-    ]);
+    expect(
+      resolveArgs(
+        ['80', argKey('page.iot.alert.unit.minute')],
+        (key) => `[${key}]`,
+      ),
+    ).toEqual(['80', '[page.iot.alert.unit.minute]']);
   });
 
   it('断档类判定：无点位条件即为断档类', () => {
-    expect(
-      isOfflineRule({ id: '1', points: [] } as never),
-    ).toBe(true);
-    expect(
-      isOfflineRule({ id: '1', points: [{ id: '2' }] } as never),
-    ).toBe(false);
+    expect(isOfflineRule({ id: '1', points: [] } as never)).toBe(true);
+    expect(isOfflineRule({ id: '1', points: [{ id: '2' }] } as never)).toBe(
+      false,
+    );
   });
 });

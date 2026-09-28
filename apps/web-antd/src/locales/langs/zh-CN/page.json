@@ -5,7 +5,6 @@
       "renderFailed": "告警页渲染失败",
       "enabled": "启用",
       "allDevices": "全部设备",
-      "fromDeviceEntry": "已按设备 {0} 过滤（从设备台账进入）；清空设备筛选即可看全部告警",
       "title": "告警中心",
       "tabList": "告警列表",
       "tabRules": "告警规则",
@@ -174,11 +173,11 @@
       "expandHint": "展开查看",
       "activeCountLoadFailed": "活动告警数查询失败",
       "rule": {
-      "batchDisable": "批量停用",
-      "batchEnable": "批量启用",
-      "deviceLoadFailed": "设备/产品列表加载失败",
-      "pickProduct": "选择产品",
-      "save": "保存规则",
+        "batchDisable": "批量停用",
+        "batchEnable": "批量启用",
+        "deviceLoadFailed": "设备/产品列表加载失败",
+        "pickProduct": "选择产品",
+        "save": "保存规则",
         "createTitle": "新建告警规则",
         "editTitle": "编辑告警规则",
         "pickPreset": "① 选一个模板（不用懂术语）",
@@ -194,7 +193,13 @@
         "listLoadFailed": "规则列表加载失败",
         "emptyReason": "还没有告警规则，点右上角「新建告警规则」用模板创建（选设备 + 点位 + 一个数字即可）。",
         "enableDone": "已启用 {0} 条规则",
-        "disableDone": "已停用 {0} 条规则（其活动告警已同步收口为「已恢复」）"
+        "disableDone": "已停用 {0} 条规则（其活动告警已同步收口为「已恢复」）",
+        "operatorHint": "清空表示「不做阈值判断」（变成离线告警）"
+      },
+      "boolean": {
+        "true": "开启",
+        "false": "关闭",
+        "invalid": "布尔点位的阈值只能是 1（真）或 0（假）"
       }
     },
     "title": "IoT 平台",

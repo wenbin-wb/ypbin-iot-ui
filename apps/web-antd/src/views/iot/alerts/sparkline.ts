@@ -21,7 +21,7 @@ export interface SparklineResult {
   /** SVG `d` 属性（`M x,y L x,y …`）；点数不足时为空串（页面据此显示「数据不足」）。 */
   path: string;
   /** 阈值线的 y 坐标（不在值域内或没有阈值时为 null）。 */
-  thresholdY: number | null;
+  thresholdY: null | number;
   /** 纵轴范围（用于在图旁标最小/最大值）。 */
   min: number;
   max: number;
@@ -56,7 +56,11 @@ export function buildSparkline(input: SparklineInput): SparklineResult {
   for (const point of input.points ?? []) {
     const value = Number(point.value);
     const ts = Number(point.ts);
-    if (!isGood(point.quality) || !Number.isFinite(value) || !Number.isFinite(ts)) {
+    if (
+      !isGood(point.quality) ||
+      !Number.isFinite(value) ||
+      !Number.isFinite(ts)
+    ) {
       skipped += 1;
       continue;
     }
@@ -72,8 +76,20 @@ export function buildSparkline(input: SparklineInput): SparklineResult {
       skipped,
     };
   }
-  let min = usable[0]!.value;
-  let max = usable[0]!.value;
+  const first = usable[0];
+  const last = usable[usable.length - 1];
+  if (!first || !last) {
+    return {
+      path: '',
+      thresholdY: null,
+      min: 0,
+      max: 0,
+      plotted: usable.length,
+      skipped,
+    };
+  }
+  let min = first.value;
+  let max = first.value;
   for (const item of usable) {
     min = Math.min(min, item.value);
     max = Math.max(max, item.value);
@@ -87,16 +103,17 @@ export function buildSparkline(input: SparklineInput): SparklineResult {
   const pad = 4;
   const plotHeight = Math.max(1, height - pad * 2);
   const yOf = (value: number) =>
-    span === 0
-      ? height / 2
-      : pad + ((upper - value) / span) * plotHeight;
-  const firstTs = usable[0]!.ts;
-  const lastTs = usable[usable.length - 1]!.ts;
+    span === 0 ? height / 2 : pad + ((upper - value) / span) * plotHeight;
+  const firstTs = first.ts;
+  const lastTs = last.ts;
   const tsSpan = lastTs - firstTs;
   const xOf = (ts: number) =>
     tsSpan === 0 ? 0 : ((ts - firstTs) / tsSpan) * width;
   const path = usable
-    .map((item, index) => `${index === 0 ? 'M' : 'L'}${xOf(item.ts).toFixed(1)},${yOf(item.value).toFixed(1)}`)
+    .map(
+      (item, index) =>
+        `${index === 0 ? 'M' : 'L'}${xOf(item.ts).toFixed(1)},${yOf(item.value).toFixed(1)}`,
+    )
     .join(' ');
   return {
     path,
@@ -114,7 +131,7 @@ export function buildSparkline(input: SparklineInput): SparklineResult {
  * 抽不出来就返回 `null`（不画阈值线）——**不猜**：把「> 80」解析成 80 是安全的，
  * 把任意文本硬解析成数字则会让缩略图出现一条不存在的阈值线。
  */
-export function parseThresholdSnapshot(snapshot?: string): number | null {
+export function parseThresholdSnapshot(snapshot?: string): null | number {
   if (!snapshot) {
     return null;
   }

@@ -27,7 +27,7 @@ const props = defineProps<{
 }>();
 
 const loading = ref(false);
-const error = ref('');
+const loadError = ref('');
 const points = ref<Awaited<ReturnType<typeof getDeviceSeries>>>([]);
 
 /** 窗口：最近 2 小时（缩略图只看近期，不拉全量）。 */
@@ -46,7 +46,7 @@ async function load() {
     return;
   }
   loading.value = true;
-  error.value = '';
+  loadError.value = '';
   try {
     const to = Date.now();
     points.value = await getDeviceSeries(props.deviceId, {
@@ -55,11 +55,11 @@ async function load() {
       to,
       limit: 300,
     });
-  } catch (caught) {
+  } catch (error) {
     // 原样展示后端 message（时序库未启用等），绝不当成「没有数据」
     points.value = [];
-    error.value = extractErrorMessage(
-      caught,
+    loadError.value = extractErrorMessage(
+      error,
       $t('page.iot.alert.curve.loadFailed'),
     );
   } finally {
@@ -76,12 +76,7 @@ onMounted(load);
   </div>
   <div v-else class="max-w-[280px]">
     <Spin :spinning="loading" size="small">
-      <Alert
-        v-if="error"
-        :message="error"
-        show-icon
-        type="error"
-      />
+      <Alert v-if="loadError" :message="loadError" show-icon type="error" />
       <Empty
         v-else-if="sparkline.plotted < 2"
         :description="$t('page.iot.alert.curve.empty')"
@@ -90,7 +85,7 @@ onMounted(load);
       <svg
         v-else
         :height="48"
-        :viewBox="`0 0 220 48`"
+        viewBox="0 0 220 48"
         :width="220"
         class="rounded border border-solid border-gray-200"
       >

@@ -52,11 +52,11 @@ export function severityLabelKey(severity?: string): string {
     case 'CRITICAL': {
       return 'page.iot.alert.severity.critical';
     }
-    case 'WARNING': {
-      return 'page.iot.alert.severity.warning';
-    }
     case 'INFO': {
       return 'page.iot.alert.severity.info';
+    }
+    case 'WARNING': {
+      return 'page.iot.alert.severity.warning';
     }
     default: {
       return 'page.iot.alert.severity.unknown';
@@ -70,11 +70,11 @@ export function severityColor(severity?: string): string {
     case 'CRITICAL': {
       return 'error';
     }
-    case 'WARNING': {
-      return 'warning';
-    }
     case 'INFO': {
       return 'processing';
+    }
+    case 'WARNING': {
+      return 'warning';
     }
     default: {
       return 'default';
@@ -188,6 +188,10 @@ export function humanSeconds(seconds?: null | number | string): string {
 /** 告警列表列（含展开行：触发值/阈值/时间线/投递记录/曲线缩略在展开内容里）。 */
 export function useInstanceColumns(): VxeTableGridColumns {
   return [
+    // 勾选列必须**显式声明**：vxe 不会因为 `checkboxConfig` 自动生成勾选列
+    // （独立复核 2026-10-03 用 vxe-table + happy-dom 真实挂载 A/B 探针证实：
+    //  只有 checkboxConfig 时 checkbox 单元格数 = 0，加本列后 = 行数）
+    { type: 'checkbox', width: 46 },
     { type: 'expand', width: 46, slots: { content: 'expand' } },
     {
       field: 'severity',
@@ -282,6 +286,8 @@ export function useInstanceFormSchema() {
 /** 规则列表列。 */
 export function useRuleColumns(): VxeTableGridColumns {
   return [
+    // 同上：批量启用/停用依赖这一列，缺了它按钮会永久禁用（先例见 useInstanceColumns）
+    { type: 'checkbox', width: 46 },
     { field: 'ruleName', title: $t('page.iot.alert.ruleName'), minWidth: 160 },
     {
       field: 'scopeType',
@@ -346,9 +352,7 @@ export function conditionText(rule: IotAlertApi.RuleResp): string {
           LTE: '<=',
           NE: '!=',
         }[point.operator] ?? point.operator;
-      const extra = Number(point.deadband ?? 0)
-        ? ` (±${point.deadband})`
-        : '';
+      const extra = Number(point.deadband ?? 0) ? ` (±${point.deadband})` : '';
       return `${point.propertyId} ${symbol} ${point.threshold}${extra}`;
     })
     .join(' / ');
@@ -359,7 +363,9 @@ export function scopeTargetText(rule: IotAlertApi.RuleResp): string {
   switch (rule.scopeType) {
     case 'DEVICE':
     case 'POINT': {
-      return rule.deviceName ?? rule.deviceCode ?? String(rule.scopeDeviceId ?? '-');
+      return (
+        rule.deviceName ?? rule.deviceCode ?? String(rule.scopeDeviceId ?? '-')
+      );
     }
     case 'PRODUCT': {
       return rule.productName ?? String(rule.scopeProductId ?? '-');

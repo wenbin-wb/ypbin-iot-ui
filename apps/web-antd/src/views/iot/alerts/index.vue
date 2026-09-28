@@ -3,20 +3,27 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { IotAlertApi } from '#/api/iot';
 
 import { computed, onMounted, ref } from 'vue';
-
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 
 import { useAccess } from '@vben/access';
 import { Page, useVbenDrawer } from '@vben/common-ui';
 
-import { Alert, Button, Empty, message, Space, Tabs, Tag } from 'ant-design-vue';
+import {
+  Alert,
+  Button,
+  Empty,
+  message,
+  Space,
+  Tabs,
+  Tag,
+} from 'ant-design-vue';
 
 import { useVbenVxeGrid, VbenTableAction } from '#/adapter/vxe-table';
 import {
   ackAlerts,
   getAlertPage,
-  getAlertSummary,
   getAlertRulePage,
+  getAlertSummary,
   setAlertRulesEnabled,
   silenceAlerts,
 } from '#/api/iot';
@@ -30,9 +37,9 @@ import {
   humanSeconds,
   notifyStatusLabelKey,
   reasonLabelKey,
-  severityColor,
   scopeLabelKey,
   scopeTargetText,
+  severityColor,
   severityLabelKey,
   stateColor,
   stateLabelKey,
@@ -40,6 +47,7 @@ import {
   useInstanceFormSchema,
   useRuleColumns,
 } from './data';
+import { listSlotState, resolveDeviceFilter } from './list-state';
 import InstanceCurve from './modules/instance-curve.vue';
 import RuleForm from './modules/rule-form.vue';
 
@@ -60,11 +68,15 @@ const canViewRule = computed(() => hasAccessByCodes(['iot:alert:rule-list']));
 
 const canSaveRule = computed(() => hasAccessByCodes(['iot:alert:rule-save']));
 
-const [RuleDrawer, RuleDrawerApi] = useVbenDrawer({ connectedComponent: RuleForm });
+const [RuleDrawer, RuleDrawerApi] = useVbenDrawer({
+  connectedComponent: RuleForm,
+});
 
 const activeTab = ref('list');
 
 const route = useRoute();
+
+const router = useRouter();
 
 /**
  * 从设备台账行「告警」入口带过来的设备 ID（`/iot/alerts?deviceId=xxx`）。
@@ -86,10 +98,10 @@ async function reloadSummary() {
   try {
     summary.value = await getAlertSummary();
     summaryError.value = '';
-  } catch (caught) {
+  } catch (error) {
     summary.value = undefined;
     summaryError.value = extractErrorMessage(
-      caught,
+      error,
       $t('page.iot.alert.summaryLoadFailed'),
     );
   }
@@ -121,31 +133,42 @@ const [InstanceGrid, instanceGridApi] = useVbenVxeGrid({
               page: page.currentPage,
               pageSize: page.pageSize,
               ...formValues,
-              deviceId:
-                (formValues as IotAlertApi.InstanceQuery | undefined)?.deviceId ||
-                presetDeviceId.value ||
-                undefined,
+              // 合并规则见 `resolveDeviceFilter`（表单显式选择优先，其次才是 URL 带来的设备）
+              deviceId: resolveDeviceFilter(
+                (formValues as IotAlertApi.InstanceQuery | undefined)?.deviceId,
+                presetDeviceId.value || undefined,
+              ),
             });
             listError.value = '';
             // 后端 `total` 是 long ⇒ 全局序列化成**字符串**；vxe 分页要做算术 ⇒ 进表格前显式转数
             return { ...result, total: toBackendNumber(result.total) };
-          } catch (caught) {
+          } catch (error) {
             // 记下失败原因（原样展示后端 message），再把异常继续抛出（不改动既有失败语义）
             listError.value = extractErrorMessage(
-              caught,
+              error,
               $t('page.iot.alert.listLoadFailed'),
             );
-            throw caught;
+            throw error;
           }
         },
       },
     },
     rowConfig: { keyField: 'id' },
-    toolbarConfig: { custom: true, export: false, refresh: true, search: true, zoom: true },
+    toolbarConfig: {
+      custom: true,
+      export: false,
+      refresh: true,
+      search: true,
+      zoom: true,
+    },
   } as VxeTableGridOptions<IotAlertApi.InstanceResp>,
 });
 
-function onCheckboxChange({ records }: { records: IotAlertApi.InstanceResp[] }) {
+function onCheckboxChange({
+  records,
+}: {
+  records: IotAlertApi.InstanceResp[];
+}) {
   selectedIds.value = records.map((item) => item.id);
 }
 
@@ -157,9 +180,10 @@ async function onAck(ids: string[]) {
   try {
     const count = await ackAlerts(ids);
     message.success($t('page.iot.alert.ackDone', [count]));
+    selectedIds.value = [];
     await reloadAll();
     return true;
-  } catch (caught) {
+  } catch {
     // 失败提示由全局请求拦截器统一展示；这里只兜底避免未处理拒绝
     return false;
   }
@@ -169,6 +193,7 @@ async function onSilence(ids: string[], minutes = 60) {
   try {
     const count = await silenceAlerts(ids, minutes);
     message.success($t('page.iot.alert.silenceDone', [count, minutes]));
+    selectedIds.value = [];
     await reloadAll();
     return true;
   } catch {
@@ -196,12 +221,12 @@ const [RuleGrid, ruleGridApi] = useVbenVxeGrid({
             });
             ruleError.value = '';
             return { ...result, total: toBackendNumber(result.total) };
-          } catch (caught) {
+          } catch (error) {
             ruleError.value = extractErrorMessage(
-              caught,
+              error,
               $t('page.iot.alert.rule.listLoadFailed'),
             );
-            throw caught;
+            throw error;
           }
         },
       },
@@ -231,6 +256,7 @@ async function onToggleRule(ids: string[], enabled: boolean) {
         ? $t('page.iot.alert.rule.enableDone', [count])
         : $t('page.iot.alert.rule.disableDone', [count]),
     );
+    selectedRuleIds.value = [];
     await ruleGridApi.query();
     return true;
   } catch {
@@ -238,14 +264,30 @@ async function onToggleRule(ids: string[], enabled: boolean) {
   }
 }
 
+/** 关闭「按设备过滤」提示：清本地过滤 + **把 URL 上的 deviceId 也去掉**（否则刷新后过滤会回来）。 */
+function onClearDeviceFilter() {
+  presetDeviceId.value = '';
+  if (typeof route.query.deviceId === 'string') {
+    void router.replace({
+      path: route.path,
+      query: { ...route.query, deviceId: undefined },
+    });
+  }
+  instanceGridApi.query();
+}
+
 onMounted(reloadSummary);
 </script>
 
 <template>
   <Page auto-content-height>
-    <Tabs v-model:activeKey="activeTab" :animated="false">
+    <Tabs v-model:active-key="activeTab" :animated="false">
       <!-- ===== 告警列表 ===== -->
-      <Tabs.TabPane v-if="canViewAlert" key="list" :tab="$t('page.iot.alert.tabList')">
+      <Tabs.TabPane
+        v-if="canViewAlert"
+        key="list"
+        :tab="$t('page.iot.alert.tabList')"
+      >
         <!-- 可关闭：否则用户无法在界面上解除「从设备台账带过来的设备过滤」（只能离开页面重进） -->
         <Alert
           v-if="presetDeviceId"
@@ -254,12 +296,7 @@ onMounted(reloadSummary);
           :message="$t('page.iot.alert.fromDeviceEntry', [presetDeviceId])"
           show-icon
           type="info"
-          @close="
-            () => {
-              presetDeviceId = '';
-              instanceGridApi.query();
-            }
-          "
+          @close="onClearDeviceFilter"
         />
         <Alert
           v-if="summaryError"
@@ -272,16 +309,32 @@ onMounted(reloadSummary);
         <div v-else-if="summary" class="mb-2 text-sm">
           <Space>
             <Tag color="error">
-              {{ $t('page.iot.alert.summaryActive', [toBackendNumber(summary.activeCount)]) }}
+              {{
+                $t('page.iot.alert.summaryActive', [
+                  toBackendNumber(summary.activeCount),
+                ])
+              }}
             </Tag>
             <Tag color="warning">
-              {{ $t('page.iot.alert.summaryCritical', [toBackendNumber(summary.criticalCount)]) }}
+              {{
+                $t('page.iot.alert.summaryCritical', [
+                  toBackendNumber(summary.criticalCount),
+                ])
+              }}
             </Tag>
             <Tag color="processing">
-              {{ $t('page.iot.alert.summaryAcked', [toBackendNumber(summary.ackedCount)]) }}
+              {{
+                $t('page.iot.alert.summaryAcked', [
+                  toBackendNumber(summary.ackedCount),
+                ])
+              }}
             </Tag>
             <Tag color="success">
-              {{ $t('page.iot.alert.summaryResolved24h', [toBackendNumber(summary.resolvedLast24h)]) }}
+              {{
+                $t('page.iot.alert.summaryResolved24h', [
+                  toBackendNumber(summary.resolvedLast24h),
+                ])
+              }}
             </Tag>
           </Space>
         </div>
@@ -320,8 +373,9 @@ onMounted(reloadSummary);
 
           <!-- 空态引导：说明「为什么是空的 + 下一步点哪里」，而不是一张空白表格 -->
           <template #empty>
+            <!-- 判据抽成纯函数 listSlotState：失败**绝不**画成空态（有可运行用例守门） -->
             <Empty
-              v-if="!listError"
+              v-if="listSlotState(listError, 0) === 'empty'"
               :description="$t('page.iot.alert.emptyReason')"
             />
           </template>
@@ -331,7 +385,9 @@ onMounted(reloadSummary);
           </template>
 
           <template #rule="{ row }">
-            <span v-if="row.outage">{{ $t('page.iot.alert.kind.offline') }}</span>
+            <span v-if="row.outage">{{
+              $t('page.iot.alert.kind.offline')
+            }}</span>
             <span v-else>{{ row.ruleName ?? '-' }}</span>
           </template>
 
@@ -349,7 +405,9 @@ onMounted(reloadSummary);
                   <span class="text-muted-foreground">
                     {{ $t('page.iot.alert.threshold') }}:
                   </span>
-                  <span class="font-medium">{{ row.thresholdSnapshot ?? '-' }}</span>
+                  <span class="font-medium">{{
+                    row.thresholdSnapshot ?? '-'
+                  }}</span>
                 </div>
                 <div>
                   <span class="text-muted-foreground">
@@ -368,14 +426,16 @@ onMounted(reloadSummary);
                   {{ $t('page.iot.alert.firingTs') }}: {{ row.firingTs ?? '-' }}
                 </div>
                 <div>
-                  {{ $t('page.iot.alert.resolvedTs') }}: {{ row.resolvedTs ?? '-' }}
+                  {{ $t('page.iot.alert.resolvedTs') }}:
+                  {{ row.resolvedTs ?? '-' }}
                 </div>
                 <div v-if="row.reason">
                   {{ $t('page.iot.alert.reasonField') }}:
                   {{ $t(reasonLabelKey(row.reason)) }}
                 </div>
                 <div v-if="row.silenceUntil">
-                  {{ $t('page.iot.alert.silenceUntil') }}: {{ row.silenceUntil }}
+                  {{ $t('page.iot.alert.silenceUntil') }}:
+                  {{ row.silenceUntil }}
                 </div>
               </div>
               <div>
@@ -455,7 +515,11 @@ onMounted(reloadSummary);
       </Tabs.TabPane>
 
       <!-- ===== 告警规则 ===== -->
-      <Tabs.TabPane v-if="canViewRule" key="rules" :tab="$t('page.iot.alert.tabRules')">
+      <Tabs.TabPane
+        v-if="canViewRule"
+        key="rules"
+        :tab="$t('page.iot.alert.tabRules')"
+      >
         <Alert
           v-if="ruleError"
           class="mb-2"
@@ -493,7 +557,7 @@ onMounted(reloadSummary);
 
           <template #empty>
             <Empty
-              v-if="!ruleError"
+              v-if="listSlotState(ruleError, 0) === 'empty'"
               :description="$t('page.iot.alert.rule.emptyReason')"
             />
           </template>
@@ -530,7 +594,9 @@ onMounted(reloadSummary);
                   onClick: () => RuleDrawerApi.setData({ rule: row }).open(),
                 },
                 {
-                  text: row.enabled ? $t('common.disabled') : $t('common.enabled'),
+                  text: row.enabled
+                    ? $t('common.disabled')
+                    : $t('common.enabled'),
                   icon: 'lucide:power',
                   auth: 'iot:alert:rule-save',
                   onClick: () => onToggleRule([row.id], !row.enabled),

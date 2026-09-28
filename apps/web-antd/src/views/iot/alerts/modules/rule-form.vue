@@ -35,6 +35,8 @@ import { extractErrorMessage } from '#/utils/error';
 
 import { buildRuleSummary, resolveArgs } from '../summary';
 
+const emit = defineEmits<{ saved: [] }>();
+
 /**
  * 告警规则向导（**傻瓜式**的重点：一键模板 + 人话预览 + 处处合理默认）。
  *
@@ -164,10 +166,10 @@ async function loadPresets() {
   }
   try {
     presets.value = await getAlertPresets();
-  } catch (caught) {
+  } catch (error) {
     // 进不来预设就不让用户瞎填：原样展示后端 message（例如「告警能力未启用」）
     submitError.value = extractErrorMessage(
-      caught,
+      error,
       $t('page.iot.alert.rule.presetLoadFailed'),
     );
   }
@@ -187,9 +189,9 @@ async function loadDevices() {
       }));
     }
     submitError.value = '';
-  } catch (caught) {
+  } catch (error) {
     submitError.value = extractErrorMessage(
-      caught,
+      error,
       $t('page.iot.alert.rule.deviceLoadFailed'),
     );
   }
@@ -200,12 +202,25 @@ async function onDeviceChange(deviceId: string) {
   const hit = devices.value.find((item) => item.id === deviceId);
   form.value.productId = hit?.productId ?? '';
   form.value.propertyId = '';
+  await loadPropertiesForProduct();
+}
+
+/**
+ * 按**产品**加载可选点位（物模型属性）。
+ *
+ * 关键：产品级作用域（「整个产品」）没有设备下拉，但阈值条件仍需选点位 ⇒ 点位必须能**只靠产品**加载；
+ * 早期实现只在 `onDeviceChange` 里加载，导致「整个产品 + 阈值」永远卡在「请选择要监控的点位」
+ * （独立复核 2026-10-03 判为死路）。
+ */
+async function loadPropertiesForProduct() {
+  form.value.propertyId = '';
   propertyOptions.value = [];
-  if (!form.value.productId) {
+  const productId = form.value.productId;
+  if (!productId) {
     return;
   }
   try {
-    const services = await listServices(form.value.productId);
+    const services = await listServices(productId);
     const options: {
       dataType?: string;
       label: string;
@@ -213,7 +228,7 @@ async function onDeviceChange(deviceId: string) {
       value: string;
     }[] = [];
     for (const service of services) {
-      const properties = await listProperties(form.value.productId, service.id);
+      const properties = await listProperties(productId, service.id);
       for (const property of properties) {
         options.push({
           // dataType 决定比较域：布尔点位只能「等于/不等于」，按数值阈值提交会被后端拒绝
@@ -225,12 +240,39 @@ async function onDeviceChange(deviceId: string) {
       }
     }
     propertyOptions.value = options;
-  } catch (caught) {
+  } catch (error) {
     submitError.value = extractErrorMessage(
-      caught,
+      error,
       $t('page.iot.alert.rule.propertyLoadFailed'),
     );
   }
+}
+
+/** 作用域切换：切到产品级或点位/设备级时，按当前产品重新加载点位（避免留着上一个产品的点位）。 */
+function onScopeChange() {
+  if (!needsPoint.value) {
+    return;
+  }
+  void loadPropertiesForProduct();
+}
+
+/** 产品变更（产品级作用域）：换产品必须重载点位，否则会把 A 产品的点位与 B 产品一起提交。 */
+function onProductChange() {
+  if (needsPoint.value) {
+    void loadPropertiesForProduct();
+  }
+}
+
+/**
+ * 清空比较符 = 这条规则不再有阈值条件（即变成「设备离线/数据中断」类规则）。
+ * 清空时同步清掉点位与阈值，避免留下半截条件（后端会按「零点位条件」处理）。
+ */
+function onOperatorChange(value: any) {
+  if (value === undefined || value === null || value === '') {
+    form.value.propertyId = '';
+    form.value.threshold = '';
+  }
+  onScopeChange();
 }
 
 /** 选点位 ⇒ 顺带按物模型决定比较域（布尔点位自动切到 BOOLEAN，比较符收敛为等于/不等于）。 */
@@ -257,9 +299,12 @@ function applyPreset(code?: string) {
   form.value.valueType = 'NUMERIC';
   form.value.threshold = '';
   form.value.triggerMode = target.defaultTriggerMode;
-  form.value.triggerThreshold = Number(target.defaultTriggerThreshold ?? 3) || 3;
+  form.value.triggerThreshold =
+    Number(target.defaultTriggerThreshold ?? 3) || 3;
   form.value.pendingTtlSec = Number(target.defaultPendingTtlSec ?? 300);
-  form.value.repeatIntervalSec = Number(target.defaultRepeatIntervalSec ?? 1800);
+  form.value.repeatIntervalSec = Number(
+    target.defaultRepeatIntervalSec ?? 1800,
+  );
   form.value.severity = target.defaultSeverity;
   form.value.channels = (target.defaultNotifyChannels ?? 'INBOX,EMAIL')
     .split(',')
@@ -355,26 +400,22 @@ async function onSubmit() {
   submitting.value = true;
   try {
     const request = toRequest();
-    if (editingId.value) {
-      await updateAlertRule(editingId.value, request);
-    } else {
-      await createAlertRule(request);
-    }
+    await (editingId.value
+      ? updateAlertRule(editingId.value, request)
+      : createAlertRule(request));
     message.success($t('common.success'));
     drawerApi.close();
     emit('saved');
-  } catch (caught) {
+  } catch (error) {
     // 原样展示后端 message（例如「阈值必须是数字（当前填的是「八十」）」）
     submitError.value = extractErrorMessage(
-      caught,
+      error,
       $t('page.iot.alert.rule.saveFailed'),
     );
   } finally {
     submitting.value = false;
   }
 }
-
-const emit = defineEmits<{ saved: [] }>();
 
 onMounted(loadPresets);
 </script>
@@ -411,11 +452,17 @@ onMounted(loadPresets);
         </div>
         <div>
           <div class="mb-1 text-sm">{{ $t('page.iot.alert.scopeTitle') }}</div>
-          <RadioGroup v-model:value="form.scopeType">
+          <RadioGroup v-model:value="form.scopeType" @change="onScopeChange">
             <Radio value="POINT">{{ $t('page.iot.alert.scope.point') }}</Radio>
-            <Radio value="DEVICE">{{ $t('page.iot.alert.scope.device') }}</Radio>
-            <Radio value="PRODUCT">{{ $t('page.iot.alert.scope.product') }}</Radio>
-            <Radio value="TENANT">{{ $t('page.iot.alert.scope.tenant') }}</Radio>
+            <Radio value="DEVICE">
+              {{ $t('page.iot.alert.scope.device') }}
+            </Radio>
+            <Radio value="PRODUCT">
+              {{ $t('page.iot.alert.scope.product') }}
+            </Radio>
+            <Radio value="TENANT">
+              {{ $t('page.iot.alert.scope.tenant') }}
+            </Radio>
           </RadioGroup>
         </div>
       </div>
@@ -429,6 +476,7 @@ onMounted(loadPresets);
             :placeholder="$t('page.iot.alert.rule.pickProduct')"
             show-search
             style="width: 100%"
+            @change="onProductChange"
           >
             <SelectOption
               v-for="item in productOptions"
@@ -491,7 +539,13 @@ onMounted(loadPresets);
         </div>
         <div>
           <div class="mb-1 text-sm">{{ $t('page.iot.alert.operator') }}</div>
-          <Select v-model:value="form.operator" style="width: 100%">
+          <Select
+            v-model:value="form.operator"
+            allow-clear
+            style="width: 100%"
+            :placeholder="$t('page.iot.alert.rule.operatorHint')"
+            @change="onOperatorChange"
+          >
             <SelectOption value="GT">&gt;</SelectOption>
             <SelectOption value="GTE">&gt;=</SelectOption>
             <SelectOption value="LT">&lt;</SelectOption>
@@ -555,7 +609,9 @@ onMounted(loadPresets);
           />
         </div>
         <div>
-          <div class="mb-1 text-sm">{{ $t('page.iot.alert.severityField') }}</div>
+          <div class="mb-1 text-sm">
+            {{ $t('page.iot.alert.severityField') }}
+          </div>
           <Select v-model:value="form.severity" style="width: 100%">
             <SelectOption value="INFO">
               {{ $t('page.iot.alert.severity.info') }}
@@ -586,7 +642,9 @@ onMounted(loadPresets);
           </div>
         </div>
         <div>
-          <div class="mb-1 text-sm">{{ $t('page.iot.alert.notifyTargets') }}</div>
+          <div class="mb-1 text-sm">
+            {{ $t('page.iot.alert.notifyTargets') }}
+          </div>
           <Input
             v-model:value="form.notifyTargets"
             :placeholder="$t('page.iot.alert.notifyTargetsPlaceholder')"
@@ -631,12 +689,7 @@ onMounted(loadPresets);
         </template>
       </Alert>
 
-      <Alert
-        v-if="submitError"
-        :message="submitError"
-        show-icon
-        type="error"
-      />
+      <Alert v-if="submitError" :message="submitError" show-icon type="error" />
     </div>
 
     <template #footer>
