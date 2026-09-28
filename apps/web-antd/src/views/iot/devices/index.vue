@@ -7,11 +7,11 @@ import { onMounted, ref, watch } from 'vue';
 import { Page, useVbenDrawer } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
-import { Alert, Button, message } from 'ant-design-vue';
+import { Alert, Button, message, Tag } from 'ant-design-vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { useVbenVxeGrid, VbenTableAction } from '#/adapter/vxe-table';
-import { deleteDevice, getDevicePage } from '#/api/iot';
+import { deleteDevice, getActiveAlertCounts, getDevicePage } from '#/api/iot';
 import { $t } from '#/locales';
 import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
@@ -69,6 +69,17 @@ const [LedgerDrawer, LedgerDrawerApi] = useVbenDrawer();
  */
 const listError = ref('');
 
+/**
+ * 当前页设备的**活动告警数**（一次批量查询；`id → 数量`）。
+ *
+ * 它是**辅助信息**，因此它自己的失败不能把设备列表画成失败态（那是两件事）；
+ * 但也不能完全无声：失败时把原因记到 `alertCountError` 并只清空计数，
+ * 列表照常展示（页面上会少一列数字，而不是给出错误结论）。
+ */
+const alertCounts = ref<Record<string, number | string>>({});
+
+const alertCountError = ref('');
+
 const [Grid, gridApi] = useVbenVxeGrid({
   gridOptions: {
     columns: useColumns(),
@@ -84,6 +95,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
               pageSize: page.pageSize,
             });
             listError.value = '';
+            await loadAlertCounts(result.items ?? []);
             // 后端 `PageResult.total` 是 `long` ⇒ 全局序列化成**字符串**（`"17"`），
             // 而 vxe 的 pager 拿到 total 后要做算术语义（页数 = ceil(total/pageSize)）⇒
             // 在**进入表格前**转成 number，别把契约违例一路喂到分页组件里。
@@ -104,6 +116,32 @@ const [Grid, gridApi] = useVbenVxeGrid({
     toolbarConfig: { custom: true, export: false, refresh: true, zoom: true },
   } as VxeTableGridOptions<IotDeviceApi.DeviceResp>,
 });
+
+/**
+ * 批量取本页设备的活动告警数（一次请求；空页直接短路，不发请求）。
+ *
+ * 失败**不影响列表**：清空计数并把原因记到 `alertCountError`（控制台留痕），
+ * 列上显示 `-`。把「计数查询失败」渲染成「设备列表加载失败」会让用户以为整页不可用。
+ */
+async function loadAlertCounts(items: IotDeviceApi.DeviceResp[]) {
+  const ids = items.map((item) => item.id).filter((id) => !!id);
+  if (ids.length === 0) {
+    alertCounts.value = {};
+    alertCountError.value = '';
+    return;
+  }
+  try {
+    alertCounts.value = await getActiveAlertCounts(ids);
+    alertCountError.value = '';
+  } catch (error) {
+    alertCounts.value = {};
+    alertCountError.value = extractErrorMessage(
+      error,
+      $t('page.iot.alert.activeCountLoadFailed'),
+    );
+    console.warn('[iot] 活动告警数查询失败（列表照常展示）', error);
+  }
+}
 
 /**
  * 「从产品一键添加设备」（F2 的入口）落地处：产品详情点「添加设备」时带
@@ -140,6 +178,11 @@ function onAvailability(row: IotDeviceApi.DeviceResp) {
 
 function onSeries(row: IotDeviceApi.DeviceResp) {
   SeriesDrawerApi.setData(row).open();
+}
+
+/** 跳到全局告警中心并带上该设备（设备台账 → 告警的**第二个入口**，第一个在设备详情页签）。 */
+function onAlerts(row: IotDeviceApi.DeviceResp) {
+  router.push({ path: '/iot/alerts', query: { deviceId: row.id } });
 }
 
 function onDelete(row: IotDeviceApi.DeviceResp) {
@@ -194,6 +237,20 @@ function openLedger() {
       「已有数据后刷新失败」时旧行仍在、槽不渲染 ⇒ 失败提示**看不见**（只剩一次转瞬即逝的 toast），
       页面会继续展示**过期数据**而用户毫不知情。放在表格上方则任何一次失败都可见。
     -->
+    <!--
+      活动告警数查询失败：**辅助信息失败不能把设备列表画成失败态**，但也不能静默无声
+      （列上只会显示 `-`，用户会以为「这台设备没有告警」）。因此单独一条可关闭的提示。
+    -->
+    <Alert
+      v-if="alertCountError"
+      class="mb-2"
+      closable
+      :description="alertCountError"
+      :message="$t('page.iot.alert.activeCountLoadFailed')"
+      show-icon
+      type="warning"
+      @close="alertCountError = ''"
+    />
     <Alert
       v-if="listError"
       class="mb-2"
@@ -237,6 +294,13 @@ function openLedger() {
         />
       </template>
 
+      <template #alertActive="{ row }">
+        <Tag v-if="toBackendNumber(alertCounts[row.id] ?? 0) > 0" color="error">
+          {{ toBackendNumber(alertCounts[row.id] ?? 0) }}
+        </Tag>
+        <span v-else class="text-muted-foreground">-</span>
+      </template>
+
       <template #action="{ row }">
         <VbenTableAction
           :actions="[
@@ -245,6 +309,12 @@ function openLedger() {
               icon: 'lucide:info',
               auth: 'iot:device:list',
               onClick: () => onDetail(row),
+            },
+            {
+              text: $t('page.iot.alert.title'),
+              icon: 'lucide:bell-ring',
+              auth: 'iot:alert:list',
+              onClick: () => onAlerts(row),
             },
             {
               text: $t('page.iot.availability.title', ['']),

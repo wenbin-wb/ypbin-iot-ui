@@ -19,13 +19,21 @@ export function useColumns(): VxeTableGridColumns {
       cellRender: { name: 'CellTag' },
     },
     { field: 'lastSeenAt', title: $t('page.iot.device.lastSeenAt'), width: 170 },
+    {
+      // 活动告警标记（设计 §2.5.1「设备台账列表加一列/一个标记」）：
+      // 计数由**一次批量查询**给出（`/iot/alerts/active-counts`），不按行发请求
+      field: 'alertActive',
+      title: $t('page.iot.alert.activeCount'),
+      width: 110,
+      slots: { default: 'alertActive' },
+    },
     { field: 'createTime', title: $t('page.iot.device.createTime'), width: 170 },
     {
       title: $t('common.action'),
       field: 'action',
       fixed: 'right',
-      // 4 个带图标+文字的按钮（可用率 / 历史曲线 / 编辑 / 删除）排在一行，220 会被省略号截断
-      width: 380,
+      // 5 个带图标+文字的按钮（告警 / 可用率 / 历史曲线 / 编辑 / 删除）排在一行，220 会被省略号截断
+      width: 460,
       align: 'center',
       slots: { default: 'action' },
     },

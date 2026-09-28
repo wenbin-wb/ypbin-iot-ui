@@ -39,6 +39,7 @@ import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
 
 import Availability from './availability.vue';
+import DetailAlert from './detail-alert.vue';
 import DetailDebug from './detail-debug.vue';
 import DetailPoints from './detail-points.vue';
 import PanelErrorBoundary from './panel-error-boundary.vue';
@@ -105,6 +106,14 @@ const loading = ref(false);
 const { hasAccessByCodes } = useAccess();
 
 const canViewDebug = computed(() => hasAccessByCodes(['iot:debug:get']));
+
+  /**
+   * 「告警」页签的门禁：需要 `iot:alert:list`。
+   *
+   * 页签本身用 `v-if` 隐藏（`v-access` 只能摘掉元素，摘不掉 Tabs 的页签头 ⇒ 会留下一个点得动但空白的页签）。
+   * 页签内部的「确认 / 静默」按钮另用 `v-if + computed(canAck)` 把门（两者权限码不同）。
+   */
+  const canViewAlert = computed(() => hasAccessByCodes(['iot:alert:list']));
 
 /** 用 `Series`/`Availability` 各自的抽屉组件：曲线与可用率口径只有一份实现。 */
 const [SeriesDrawer, SeriesDrawerApi] = useVbenDrawer({
@@ -736,6 +745,21 @@ const [Drawer, drawerApi] = useVbenDrawer<null | IotDeviceApi.DeviceResp>({
             />
           </PanelErrorBoundary>
         </Tabs.TabPane>
+        <!-- ===== 告警（段 C1/C2）：活动告警 + 历史告警 + 一键确认/静默 ===== -->
+        <Tabs.TabPane
+          v-if="canViewAlert"
+          key="alert"
+          :tab="$t('page.iot.alert.title')"
+        >
+          <!-- 渲染错误边界：与「在线调试」同款防线（i18n/渲染期异常必须可见，不得整块空白） -->
+          <PanelErrorBoundary title-key="page.iot.alert.renderFailed">
+            <DetailAlert
+              :device-id="deviceId"
+              :product-id="device?.productId"
+            />
+          </PanelErrorBoundary>
+        </Tabs.TabPane>
+
       </Tabs>
     </Spin>
 

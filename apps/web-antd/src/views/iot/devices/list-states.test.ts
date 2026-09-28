@@ -1,3 +1,7 @@
+import { createApp, defineComponent, h, nextTick } from 'vue';
+
+import { registerAccessDirective } from '@vben/access';
+
 import {
   afterEach,
   beforeAll,
@@ -7,10 +11,8 @@ import {
   it,
   vi,
 } from 'vitest';
-import { createApp, defineComponent, h, nextTick } from 'vue';
 
-import { registerAccessDirective } from '@vben/access';
-
+import AlertsPage from '../alerts/index.vue';
 import DevicesPage from './index.vue';
 
 /**
@@ -32,7 +34,7 @@ import DevicesPage from './index.vue';
 
 const { captured, gridStub, mockApi } = vi.hoisted(() => ({
   /** 抓取页面传给 `useVbenVxeGrid` 的配置，用于直接触发 `ajax.query`。 */
-  captured: { options: null as any },
+  captured: { list: [] as any[], options: null as any },
   /** 表格桩是否渲染 `#empty` 槽（默认**否**：用来证明失败提示不依赖槽位）。 */
   gridStub: { renderEmpty: false },
   mockApi: {
@@ -42,15 +44,42 @@ const { captured, gridStub, mockApi } = vi.hoisted(() => ({
     getProductPage: vi.fn(),
     getTenantLedgerList: vi.fn(),
     getDeviceNameMap: vi.fn(),
+    // 告警中心页（两个表格：实例表在前、规则表在后）
+    ackAlerts: vi.fn(),
+    createAlertRule: vi.fn(),
+    getActiveAlertCounts: vi.fn(),
+    getAlertPage: vi.fn(),
+    getAlertPresets: vi.fn(),
+    getAlertRulePage: vi.fn(),
+    getAlertSummary: vi.fn(),
+    getDeviceOptions: vi.fn(),
+    getPublishedProductOptions: vi.fn(),
+    listProperties: vi.fn(),
+    listServices: vi.fn(),
+    setAlertRulesEnabled: vi.fn(),
+    silenceAlerts: vi.fn(),
+    updateAlertRule: vi.fn(),
   },
 }));
 
 vi.mock('#/api/iot', () => ({
+  ackAlerts: (...args: unknown[]) => mockApi.ackAlerts(...args),
   closeMaintenanceWindow: vi.fn(),
+  createAlertRule: vi.fn(),
   deleteDevice: vi.fn(),
   deleteGroup: vi.fn(),
   deleteProduct: vi.fn(),
+  getActiveAlertCounts: (...args: unknown[]) =>
+    mockApi.getActiveAlertCounts(...args),
+  getAlertPage: (...args: unknown[]) => mockApi.getAlertPage(...args),
+  getAlertPresets: vi.fn(),
+  getAlertRulePage: (...args: unknown[]) => mockApi.getAlertRulePage(...args),
+  getAlertSummary: (...args: unknown[]) => mockApi.getAlertSummary(...args),
   getDeviceNameMap: (...args: unknown[]) => mockApi.getDeviceNameMap(...args),
+  getDeviceOptions: vi.fn(),
+  getPublishedProductOptions: vi.fn(),
+  listProperties: vi.fn(),
+  listServices: vi.fn(),
   getDevicePage: (...args: unknown[]) => mockApi.getDevicePage(...args),
   getGroupList: (...args: unknown[]) => mockApi.getGroupList(...args),
   getMaintenanceWindowList: (...args: unknown[]) =>
@@ -66,7 +95,10 @@ vi.mock('#/api/iot', () => ({
 vi.mock('@vben/common-ui', () => ({
   Page: defineComponent({
     name: 'PageStub',
-    setup: (_props, { slots }) => () => h('div', slots.default?.()),
+    setup:
+      (_props, { slots }) =>
+      () =>
+        h('div', slots.default?.()),
   }),
   useVbenDrawer: () => [
     defineComponent({ name: 'DrawerStub', setup: () => () => null }),
@@ -80,10 +112,13 @@ vi.mock('#/adapter/vxe-table', () => ({
     setup: () => () => null,
   }),
   useVbenVxeGrid: (options: any) => {
-    captured.options = options;
+    // 告警中心页有**两个**表格：第 1 个才是实例表（批量确认/空态判据都在它上面）
+    captured.list.push(options);
+    captured.options = captured.list[0];
     const GridStub = defineComponent({
       name: 'GridStub',
-      setup: (_props, { slots }) =>
+      setup:
+        (_props, { slots }) =>
         () =>
           h(
             'div',
@@ -119,6 +154,14 @@ interface PageCase {
 }
 
 const PAGES: PageCase[] = [
+  {
+    name: '告警列表',
+    component: AlertsPage,
+    fetchMock: () => mockApi.getAlertPage,
+    failedTitle: '告警列表加载失败',
+    emptyFragment: '当前筛选条件下暂无告警',
+    paged: true,
+  },
   {
     name: '设备台账',
     component: DevicesPage,
@@ -165,6 +208,10 @@ beforeAll(async () => {
   const { setupI18n } = await import('#/locales');
   const app = createApp({ render: () => null });
   await setupI18n(app, { defaultLocale: 'zh-CN' });
+  // 告警中心页把 TabPane 本身挂在 `hasAccessByCodes` 上：不设权限码则整页不渲染内容
+  const { initStores, useAccessStore } = await import('@vben/stores');
+  await initStores(app, { namespace: 'test' });
+  useAccessStore().setAccessCodes(['*:*:*']);
 });
 
 /** 后端「业务失败」信封（HTTP 200 + `R.code != 200`，全仓约定）。 */
@@ -197,8 +244,16 @@ let mounted: undefined | { app: { unmount: () => void } };
 beforeEach(() => {
   for (const fn of Object.values(mockApi)) fn.mockReset();
   mockApi.getDeviceNameMap.mockResolvedValue({});
+  captured.list = [];
   captured.options = null;
   gridStub.renderEmpty = false;
+  // 告警页首屏会拉概览：给一个结构完整的空概览（避免 summary 渲染报错）
+  mockApi.getAlertSummary.mockResolvedValue({
+    ackedCount: '0',
+    activeCount: '0',
+    criticalCount: '0',
+    resolvedLast24h: '0',
+  });
 });
 
 afterEach(() => {
@@ -284,9 +339,7 @@ for (const page of PAGES) {
       await nextTick();
       expect(handle.container.innerHTML).toContain('偶发失败');
 
-      page
-        .fetchMock()
-        .mockResolvedValueOnce(page.paged ? { items: [] } : []);
+      page.fetchMock().mockResolvedValueOnce(page.paged ? { items: [] } : []);
       await runQuery();
       await nextTick();
 
