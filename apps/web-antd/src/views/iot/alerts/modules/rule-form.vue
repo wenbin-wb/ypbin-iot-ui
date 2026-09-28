@@ -268,10 +268,15 @@ function onProductChange() {
  * 清空时同步清掉点位与阈值，避免留下半截条件（后端会按「零点位条件」处理）。
  */
 function onOperatorChange(value: any) {
-  if (value === undefined || value === null || value === '') {
-    form.value.propertyId = '';
-    form.value.threshold = '';
+  const cleared = value === undefined || value === null || value === '';
+  if (!cleared) {
+    // ⚠️ 非清空分支**必须直接返回**：早期实现无条件调 `onScopeChange()`，而它开头就会清空
+    // propertyId/propertyOptions ⇒ 用户选好点位后把 `>` 改成 `<`，点位会被悄悄清掉、预览退回
+    // 「请选择要监控的点位」（独立复核 2026-10-03 判为**本轮新引入的回归**）。
+    return;
   }
+  form.value.propertyId = '';
+  form.value.threshold = '';
   onScopeChange();
 }
 
@@ -339,6 +344,11 @@ function applyRule(rule: IotAlertApi.RuleResp) {
   form.value.valueType = point?.valueType ?? 'NUMERIC';
   if (form.value.deviceId) {
     void onDeviceChange(form.value.deviceId).then(() => {
+      form.value.propertyId = point?.propertyId ?? '';
+    });
+  } else if (form.value.productId) {
+    // 产品级规则没有设备：必须按产品加载点位，否则点位下拉为空、人话预览里只能显示标识
+    void loadPropertiesForProduct().then(() => {
       form.value.propertyId = point?.propertyId ?? '';
     });
   }

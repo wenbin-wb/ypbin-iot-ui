@@ -186,7 +186,7 @@
         "pickPoint": "Choose the point to monitor",
         "thresholdPlaceholder": "Enter a number, e.g. 80",
         "preview": "2. What will happen with this configuration",
-        "offlineHint": "To drop the \"N times in a row\" condition, switch the scope to a single device / whole product / whole tenant to make it an offline alert.",
+        "offlineHint": "To drop the threshold, clear the operator (the rule then becomes an offline / data-interrupted alert); the scope only decides which devices the rule covers.",
         "saveFailed": "Failed to save the rule",
         "presetLoadFailed": "Failed to load the templates",
         "propertyLoadFailed": "Failed to load the point list",

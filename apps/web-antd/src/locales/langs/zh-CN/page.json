@@ -186,7 +186,7 @@
         "pickPoint": "选择要监控的点位",
         "thresholdPlaceholder": "填一个数字，例如 80",
         "preview": "② 这样配会发生什么",
-        "offlineHint": "不想要「连续 N 次」这类条件时，把作用范围改成「单台设备/整个产品/整个租户」即可变成离线告警。",
+        "offlineHint": "不想要阈值条件时，把「比较符」清空即可（这条规则就变成离线/数据中断告警）；作用范围只决定「哪些设备受这条规则管」。",
         "saveFailed": "规则保存失败",
         "presetLoadFailed": "模板加载失败",
         "propertyLoadFailed": "点位列表加载失败",
