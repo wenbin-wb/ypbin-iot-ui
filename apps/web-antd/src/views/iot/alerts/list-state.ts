@@ -46,3 +46,24 @@ export function resolveDeviceFilter(
   const preset = (presetDeviceId ?? '').trim();
   return preset === '' ? undefined : preset;
 }
+
+/**
+ * 后端 message 是否在说「缺少租户上下文」。
+ *
+ * 为什么需要它：平台管理员若在没有选定租户的身份下做**写操作**，后端会（在修复后）返回一句人话
+ * 业务错误而不是裸 500；页面除了原样展示这句话，还应给一条**能照着做**的引导。
+ * 判定刻意只认后端消息里的稳定短语（不猜前端状态），避免把普通错误误诊成租户问题。
+ *
+ * @param message 后端返回的 message（或前端兜底文案）
+ * @returns 疑似租户上下文问题
+ */
+export function isTenantContextError(message: string): boolean {
+  if (!message) {
+    return false;
+  }
+  return (
+    message.includes('租户上下文') ||
+    message.includes('tenant context') ||
+    message.includes('没有租户')
+  );
+}

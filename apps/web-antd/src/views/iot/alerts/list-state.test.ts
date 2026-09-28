@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { listSlotState, resolveDeviceFilter } from './list-state';
+import {
+  isTenantContextError,
+  listSlotState,
+  resolveDeviceFilter,
+} from './list-state';
 
 /**
  * 告警列表页两条纪律的用例（独立复核 2026-10-03 要求：覆盖缺口必须补**本机可跑**的用例）。
@@ -39,5 +43,23 @@ describe('resolveDeviceFilter（表单选择优先于 URL 带来的设备）', (
     expect(resolveDeviceFilter('', '')).toBeUndefined();
     expect(resolveDeviceFilter('   ', '   ')).toBeUndefined();
     expect(resolveDeviceFilter(undefined, undefined)).toBeUndefined();
+  });
+});
+
+describe('isTenantContextError（把「缺租户」翻译成可照做的引导）', () => {
+  it('★ 后端说「没有租户上下文」⇒ 判为租户问题（页面据此给「请先选择租户」引导）', () => {
+    expect(
+      isTenantContextError(
+        '当前登录身份没有租户上下文，无法保存：请先在右上角选择/切换到你管理的租户',
+      ),
+    ).toBe(true);
+    expect(isTenantContextError('missing tenant context')).toBe(true);
+  });
+
+  it('普通业务错误/空文案 ⇒ 不误诊为租户问题', () => {
+    expect(isTenantContextError('阈值必须是数字（当前填的是「八十」）')).toBe(
+      false,
+    );
+    expect(isTenantContextError('')).toBe(false);
   });
 });

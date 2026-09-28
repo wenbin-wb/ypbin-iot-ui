@@ -200,7 +200,8 @@
         "true": "on",
         "false": "off",
         "invalid": "A boolean point can only use 1 (true) or 0 (false)"
-      }
+      },
+      "noTenantHint": "Your session has no tenant selected, so alerts cannot be created/acknowledged/silenced: pick or switch to the tenant you manage (top-right) and retry."
     },
     "title": "IoT Platform",
     "device": {

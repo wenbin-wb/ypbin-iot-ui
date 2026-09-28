@@ -47,7 +47,11 @@ import {
   useInstanceFormSchema,
   useRuleColumns,
 } from './data';
-import { listSlotState, resolveDeviceFilter } from './list-state';
+import {
+  isTenantContextError,
+  listSlotState,
+  resolveDeviceFilter,
+} from './list-state';
 import InstanceCurve from './modules/instance-curve.vue';
 import RuleForm from './modules/rule-form.vue';
 
@@ -350,6 +354,14 @@ onMounted(reloadSummary);
           :message="$t('page.iot.alert.listLoadFailed')"
           show-icon
           type="error"
+        />
+        <!-- 失败若是「没有租户上下文」⇒ 给一条能照着做的引导（不弹原始码、不只是报错） -->
+        <Alert
+          v-if="isTenantContextError(listError)"
+          class="mb-2"
+          :message="$t('page.iot.alert.noTenantHint')"
+          show-icon
+          type="warning"
         />
         <InstanceGrid @checkbox-change="onCheckboxChange">
           <template #toolbar-tools>
