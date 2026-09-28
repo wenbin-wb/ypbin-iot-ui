@@ -1,6 +1,8 @@
 {
   "iot": {
     "alert": {
+      "fromDeviceEntry": "Filtered by device {0} (opened from the device ledger); close this notice to see all alerts.",
+      "renderFailed": "Failed to render the alert tab",
       "enabled": "Enabled",
       "allDevices": "All devices",
       "fromDeviceEntry": "Filtered by device {0} (opened from the device ledger); clear the device filter to see all alerts",
@@ -161,7 +163,7 @@
       "summaryCritical": "{0} critical",
       "summaryAcked": "{0} acknowledged",
       "summaryResolved24h": "{0} resolved in 24h",
-      "emptyReason": "No alert rule yet. Use \"New rule\" above and pick a template (device + point + one number); alerts appear here once a rule fires.",
+      "emptyReason": "No alert matches the current filter. If you have no rule yet, open the \"Alert Rules\" tab and use \"New alert rule\" with a template (device + point + one number).",
       "loadFailed": "Failed to query alerts",
       "activeSection": "Active alerts",
       "historySection": "Alert history",
@@ -172,6 +174,10 @@
       "expandHint": "Expand for details",
       "activeCountLoadFailed": "Failed to load active alert counts",
       "rule": {
+      "batchDisable": "Disable selected",
+      "batchEnable": "Enable selected",
+      "deviceLoadFailed": "Failed to load devices/products",
+      "pickProduct": "Choose a product",
       "save": "Save rule",
         "createTitle": "New alert rule",
         "editTitle": "Edit alert rule",

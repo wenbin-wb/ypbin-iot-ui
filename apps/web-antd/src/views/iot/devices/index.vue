@@ -237,6 +237,20 @@ function openLedger() {
       「已有数据后刷新失败」时旧行仍在、槽不渲染 ⇒ 失败提示**看不见**（只剩一次转瞬即逝的 toast），
       页面会继续展示**过期数据**而用户毫不知情。放在表格上方则任何一次失败都可见。
     -->
+    <!--
+      活动告警数查询失败：**辅助信息失败不能把设备列表画成失败态**，但也不能静默无声
+      （列上只会显示 `-`，用户会以为「这台设备没有告警」）。因此单独一条可关闭的提示。
+    -->
+    <Alert
+      v-if="alertCountError"
+      class="mb-2"
+      closable
+      :description="alertCountError"
+      :message="$t('page.iot.alert.activeCountLoadFailed')"
+      show-icon
+      type="warning"
+      @close="alertCountError = ''"
+    />
     <Alert
       v-if="listError"
       class="mb-2"

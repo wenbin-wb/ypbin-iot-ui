@@ -8,6 +8,7 @@ import {
   Button,
   Empty,
   message,
+  Skeleton,
   Space,
   Table,
   Tag,
@@ -67,6 +68,8 @@ const historyPage = ref(1);
 
 const historyError = ref('');
 
+const historyLoading = ref(false);
+
 const summaryText = ref('');
 
 const loading = ref(false);
@@ -121,6 +124,7 @@ async function loadHistory() {
     historyTotal.value = 0;
     return;
   }
+  historyLoading.value = true;
   try {
     const result = await getDeviceAlertPage(props.deviceId, {
       page: historyPage.value,
@@ -137,6 +141,8 @@ async function loadHistory() {
       caught,
       $t('page.iot.alert.loadFailed'),
     );
+  } finally {
+    historyLoading.value = false;
   }
 }
 
@@ -182,8 +188,14 @@ watch(
 
     <!-- 活动告警区 -->
     <div class="font-semibold">{{ $t('page.iot.alert.activeSection') }}</div>
+    <!--
+      🔴 三态顺序必须是「加载中 → 失败 → 空 → 内容」：早期版本把 `:loading` 挂在那张**要等有行才渲染**
+      的 Table 上，于是首屏请求未回来时用户看到的是「该设备暂无活动告警」——**把加载中画成了没有告警**
+      （与本仓已收口过的假空态同类）。独立复核 2026-10-03 判为必须整改。
+    -->
+    <Skeleton v-if="loading" active :paragraph="{ rows: 3 }" />
     <Alert
-      v-if="activeError"
+      v-else-if="activeError"
       :message="activeError"
       show-icon
       type="error"
@@ -293,8 +305,9 @@ watch(
 
     <!-- 历史告警区 -->
     <div class="font-semibold">{{ $t('page.iot.alert.historySection') }}</div>
+    <Skeleton v-if="historyLoading" active :paragraph="{ rows: 3 }" />
     <Alert
-      v-if="historyError"
+      v-else-if="historyError"
       :message="historyError"
       show-icon
       type="error"

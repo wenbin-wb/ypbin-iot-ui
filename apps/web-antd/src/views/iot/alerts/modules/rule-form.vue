@@ -25,6 +25,7 @@ import {
   createAlertRule,
   getAlertPresets,
   getDeviceOptions,
+  getPublishedProductOptions,
   listProperties,
   listServices,
   updateAlertRule,
@@ -78,7 +79,12 @@ const presets = ref<IotAlertApi.PresetResp[]>([]);
 
 const devices = ref<Awaited<ReturnType<typeof getDeviceOptions>>>([]);
 
-const propertyOptions = ref<{ label: string; unit?: string; value: string }[]>([]);
+const propertyOptions = ref<
+  { dataType?: string; label: string; unit?: string; value: string }[]
+>([]);
+
+/** 产品下拉（「整个产品」作用域必填；点位来自产品物模型，故点位/设备级也要用）。 */
+const productOptions = ref<{ label: string; value: string }[]>([]);
 
 const submitting = ref(false);
 
@@ -98,7 +104,7 @@ const form = ref({
   triggerMode: 'CONSECUTIVE_COUNT',
   triggerThreshold: 3,
   pendingTtlSec: 300,
-  repeatIntervalSec: 1800,
+  repeatIntervalSec: 600,
   severity: 'WARNING',
   enabled: true,
   channels: ['INBOX', 'EMAIL'] as string[],
@@ -122,6 +128,13 @@ const propertyUnit = computed(
       ?.unit,
 );
 
+const productLabel = computed(() => {
+  const hit = productOptions.value.find(
+    (item) => item.value === form.value.productId,
+  );
+  return hit?.label ?? '';
+});
+
 const deviceLabel = computed(() => {
   const hit = devices.value.find((item) => item.id === form.value.deviceId);
   return hit?.deviceName ?? hit?.deviceCode ?? '';
@@ -133,6 +146,7 @@ const summary = computed(() =>
     ...form.value,
     channels: form.value.channels.join(','),
     deviceLabel: deviceLabel.value,
+    productLabel: productLabel.value,
     operator: needsPoint.value ? form.value.operator : undefined,
     propertyLabel: propertyLabel.value,
     unit: propertyUnit.value,
@@ -159,12 +173,26 @@ async function loadPresets() {
   }
 }
 
+/** 设备下拉与产品下拉（两者都可能失败：失败必须**可见**，否则用户只看到一个空下拉）。 */
 async function loadDevices() {
-  if (devices.value.length > 0) {
-    return;
+  try {
+    if (devices.value.length === 0) {
+      devices.value = await getDeviceOptions();
+    }
+    if (productOptions.value.length === 0) {
+      const products = await getPublishedProductOptions();
+      productOptions.value = products.map((item) => ({
+        label: item.productName ?? item.productCode ?? item.id,
+        value: item.id,
+      }));
+    }
+    submitError.value = '';
+  } catch (caught) {
+    submitError.value = extractErrorMessage(
+      caught,
+      $t('page.iot.alert.rule.deviceLoadFailed'),
+    );
   }
-  const result = await getDeviceOptions();
-  devices.value = result;
 }
 
 /** 选设备 → 顺带把产品带上（点位来自产品物模型），并加载可选的属性列表。 */
@@ -178,11 +206,18 @@ async function onDeviceChange(deviceId: string) {
   }
   try {
     const services = await listServices(form.value.productId);
-    const options: { label: string; unit?: string; value: string }[] = [];
+    const options: {
+      dataType?: string;
+      label: string;
+      unit?: string;
+      value: string;
+    }[] = [];
     for (const service of services) {
       const properties = await listProperties(form.value.productId, service.id);
       for (const property of properties) {
         options.push({
+          // dataType 决定比较域：布尔点位只能「等于/不等于」，按数值阈值提交会被后端拒绝
+          dataType: property.dataType ?? undefined,
           label: `${property.propertyName} (${property.identifier})`,
           unit: property.unit ?? undefined,
           value: property.identifier,
@@ -195,6 +230,17 @@ async function onDeviceChange(deviceId: string) {
       caught,
       $t('page.iot.alert.rule.propertyLoadFailed'),
     );
+  }
+}
+
+/** 选点位 ⇒ 顺带按物模型决定比较域（布尔点位自动切到 BOOLEAN，比较符收敛为等于/不等于）。 */
+function onPropertyChange(propertyId: string) {
+  const hit = propertyOptions.value.find((item) => item.value === propertyId);
+  const boolLike = (hit?.dataType ?? '').toLowerCase().includes('bool');
+  form.value.valueType = boolLike ? 'BOOLEAN' : 'NUMERIC';
+  if (boolLike && !['EQ', 'NE'].includes(form.value.operator)) {
+    form.value.operator = 'EQ';
+    form.value.threshold = '1';
   }
 }
 
@@ -374,6 +420,26 @@ onMounted(loadPresets);
         </div>
       </div>
 
+      <!-- 产品级作用域：必须能选产品（否则预览永远「请先选择产品」、保存永久禁用） -->
+      <div v-if="form.scopeType === 'PRODUCT'" class="grid grid-cols-2 gap-3">
+        <div>
+          <div class="mb-1 text-sm">{{ $t('page.iot.product.name') }}</div>
+          <Select
+            v-model:value="form.productId"
+            :placeholder="$t('page.iot.alert.rule.pickProduct')"
+            show-search
+            style="width: 100%"
+          >
+            <SelectOption
+              v-for="item in productOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </Select>
+        </div>
+      </div>
+
       <div
         v-if="form.scopeType === 'DEVICE' || form.scopeType === 'POINT'"
         class="grid grid-cols-2 gap-3"
@@ -413,6 +479,7 @@ onMounted(loadPresets);
             :placeholder="$t('page.iot.alert.rule.pickPoint')"
             show-search
             style="width: 100%"
+            @change="(value: any) => onPropertyChange(String(value))"
           >
             <SelectOption
               v-for="item in propertyOptions"

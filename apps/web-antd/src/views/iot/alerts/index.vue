@@ -25,11 +25,14 @@ import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
 
 import {
+  conditionText,
   eventLabelKey,
   humanSeconds,
   notifyStatusLabelKey,
   reasonLabelKey,
   severityColor,
+  scopeLabelKey,
+  scopeTargetText,
   severityLabelKey,
   stateColor,
   stateLabelKey,
@@ -70,7 +73,7 @@ const route = useRoute();
  * 因此筛选框里显示「全部设备」而结果已按该设备过滤 —— 这一点在页面上以提示文案说明，
  * 避免用户误以为筛选失效（宁可有解释，也不要静默的空列表）。
  */
-const presetDeviceId = computed(() =>
+const presetDeviceId = ref(
   typeof route.query.deviceId === 'string' ? route.query.deviceId : '',
 );
 
@@ -203,10 +206,22 @@ const [RuleGrid, ruleGridApi] = useVbenVxeGrid({
         },
       },
     },
+    checkboxConfig: { checkMethod: () => canSaveRule.value },
     rowConfig: { keyField: 'id' },
     toolbarConfig: { custom: true, export: false, refresh: true, zoom: true },
   } as VxeTableGridOptions<IotAlertApi.RuleResp>,
 });
+
+/** 规则勾选（批量启用/停用）；与告警列表的勾选互不影响。 */
+const selectedRuleIds = ref<string[]>([]);
+
+function onRuleCheckboxChange({
+  records,
+}: {
+  records: IotAlertApi.RuleResp[];
+}) {
+  selectedRuleIds.value = records.map((item) => item.id);
+}
 
 async function onToggleRule(ids: string[], enabled: boolean) {
   try {
@@ -231,12 +246,20 @@ onMounted(reloadSummary);
     <Tabs v-model:activeKey="activeTab" :animated="false">
       <!-- ===== 告警列表 ===== -->
       <Tabs.TabPane v-if="canViewAlert" key="list" :tab="$t('page.iot.alert.tabList')">
+        <!-- 可关闭：否则用户无法在界面上解除「从设备台账带过来的设备过滤」（只能离开页面重进） -->
         <Alert
           v-if="presetDeviceId"
           class="mb-2"
+          closable
           :message="$t('page.iot.alert.fromDeviceEntry', [presetDeviceId])"
           show-icon
           type="info"
+          @close="
+            () => {
+              presetDeviceId = '';
+              instanceGridApi.query();
+            }
+          "
         />
         <Alert
           v-if="summaryError"
@@ -441,15 +464,31 @@ onMounted(reloadSummary);
           show-icon
           type="error"
         />
-        <RuleGrid>
+        <RuleGrid @checkbox-change="onRuleCheckboxChange">
           <template #toolbar-tools>
-            <Button
-              v-if="canSaveRule"
-              type="primary"
-              @click="RuleDrawerApi.setData({}).open()"
-            >
-              {{ $t('page.iot.alert.rule.createTitle') }}
-            </Button>
+            <Space>
+              <Button
+                v-if="canSaveRule"
+                :disabled="selectedRuleIds.length === 0"
+                @click="onToggleRule(selectedRuleIds, true)"
+              >
+                {{ $t('page.iot.alert.rule.batchEnable') }}
+              </Button>
+              <Button
+                v-if="canSaveRule"
+                :disabled="selectedRuleIds.length === 0"
+                @click="onToggleRule(selectedRuleIds, false)"
+              >
+                {{ $t('page.iot.alert.rule.batchDisable') }}
+              </Button>
+              <Button
+                v-if="canSaveRule"
+                type="primary"
+                @click="RuleDrawerApi.setData({}).open()"
+              >
+                {{ $t('page.iot.alert.rule.createTitle') }}
+              </Button>
+            </Space>
           </template>
 
           <template #empty>
@@ -460,15 +499,11 @@ onMounted(reloadSummary);
           </template>
 
           <template #scope="{ row }">
-            {{ $t(`page.iot.alert.scope.${String(row.scopeType).toLowerCase()}`) }}
+            <!-- 用映射函数而不是动态拼键：未知 scopeType 会渲染出 `page.iot.alert.scope.xxx` 原始键 -->
+            {{ $t(scopeLabelKey(row.scopeType)) }}
           </template>
           <template #scopeTarget="{ row }">
-            {{
-              row.deviceName ??
-              row.deviceCode ??
-              row.productName ??
-              $t('page.iot.alert.scope.tenant')
-            }}
+            {{ scopeTargetText(row) }}
           </template>
           <template #severity="{ row }">
             <Tag :color="severityColor(row.severity)">
@@ -476,16 +511,8 @@ onMounted(reloadSummary);
             </Tag>
           </template>
           <template #condition="{ row }">
-            <span v-if="(row.points?.length ?? 0) === 0">
-              {{ $t('page.iot.alert.kind.offline') }}
-            </span>
-            <span v-else>
-              {{
-                row.points
-                  ?.map((point) => `${point.propertyId} ${point.operator} ${point.threshold}`)
-                  .join(' / ')
-              }}
-            </span>
+            <!-- 与规则列表单元格共用同一份人话（不在模板里重复实现一遍，避免两处口径漂移） -->
+            {{ conditionText(row) }}
           </template>
           <template #enabled="{ row }">
             <Tag :color="row.enabled ? 'success' : 'default'">

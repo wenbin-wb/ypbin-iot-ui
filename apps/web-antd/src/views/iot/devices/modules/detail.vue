@@ -728,21 +728,6 @@ const [Drawer, drawerApi] = useVbenDrawer<null | IotDeviceApi.DeviceResp>({
           </div>
         </Tabs.TabPane>
 
-        <!-- ===== 告警（段 C1/C2）：活动告警 + 历史告警 + 一键确认/静默 ===== -->
-        <Tabs.TabPane
-          v-if="canViewAlert"
-          key="alert"
-          :tab="$t('page.iot.alert.title')"
-        >
-          <!-- 渲染错误边界：与「在线调试」同款防线（i18n/渲染期异常必须可见，不得整块空白） -->
-          <PanelErrorBoundary>
-            <DetailAlert
-              :device-id="deviceId"
-              :product-id="device?.productId"
-            />
-          </PanelErrorBoundary>
-        </Tabs.TabPane>
-
         <!-- ===== 在线调试（段 C）：MQTT 下行/命令调试（下发 → 轮询看状态与回执） ===== -->
         <Tabs.TabPane
           v-if="canViewDebug"
@@ -760,6 +745,21 @@ const [Drawer, drawerApi] = useVbenDrawer<null | IotDeviceApi.DeviceResp>({
             />
           </PanelErrorBoundary>
         </Tabs.TabPane>
+        <!-- ===== 告警（段 C1/C2）：活动告警 + 历史告警 + 一键确认/静默 ===== -->
+        <Tabs.TabPane
+          v-if="canViewAlert"
+          key="alert"
+          :tab="$t('page.iot.alert.title')"
+        >
+          <!-- 渲染错误边界：与「在线调试」同款防线（i18n/渲染期异常必须可见，不得整块空白） -->
+          <PanelErrorBoundary title-key="page.iot.alert.renderFailed">
+            <DetailAlert
+              :device-id="deviceId"
+              :product-id="device?.productId"
+            />
+          </PanelErrorBoundary>
+        </Tabs.TabPane>
+
       </Tabs>
     </Spin>
 

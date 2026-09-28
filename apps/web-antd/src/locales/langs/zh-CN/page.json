@@ -1,6 +1,8 @@
 {
   "iot": {
     "alert": {
+      "fromDeviceEntry": "已按设备 {0} 过滤（从设备台账进入）；点本提示右侧的关闭即可查看全部告警。",
+      "renderFailed": "告警页渲染失败",
       "enabled": "启用",
       "allDevices": "全部设备",
       "fromDeviceEntry": "已按设备 {0} 过滤（从设备台账进入）；清空设备筛选即可看全部告警",
@@ -161,7 +163,7 @@
       "summaryCritical": "严重 {0} 条",
       "summaryAcked": "已确认 {0} 条",
       "summaryResolved24h": "24 小时恢复 {0} 条",
-      "emptyReason": "还没有告警规则，点上面的「新建规则」用模板创建（选设备 + 点位 + 一个数字即可）；规则触发后这里会出现告警。",
+      "emptyReason": "当前筛选条件下暂无告警。若还没有规则，请到「告警规则」页签点「新建告警规则」用模板创建（选设备 + 点位 + 一个数字即可）。",
       "loadFailed": "告警查询失败",
       "activeSection": "活动告警",
       "historySection": "历史告警",
@@ -172,6 +174,10 @@
       "expandHint": "展开查看",
       "activeCountLoadFailed": "活动告警数查询失败",
       "rule": {
+      "batchDisable": "批量停用",
+      "batchEnable": "批量启用",
+      "deviceLoadFailed": "设备/产品列表加载失败",
+      "pickProduct": "选择产品",
       "save": "保存规则",
         "createTitle": "新建告警规则",
         "editTitle": "编辑告警规则",
