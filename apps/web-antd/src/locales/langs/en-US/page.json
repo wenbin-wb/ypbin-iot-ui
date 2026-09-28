@@ -157,6 +157,7 @@
         "dataInterrupt": "Data interrupted"
       },
       "listLoadFailed": "Failed to load alerts",
+      "queryTimeout": "Query timed out, please retry",
       "summaryLoadFailed": "Failed to load the alert summary",
       "summaryActive": "{0} active",
       "summaryCritical": "{0} critical",

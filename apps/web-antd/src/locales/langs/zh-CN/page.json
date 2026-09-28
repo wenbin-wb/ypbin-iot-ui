@@ -157,6 +157,7 @@
         "dataInterrupt": "数据中断"
       },
       "listLoadFailed": "告警列表加载失败",
+      "queryTimeout": "查询超时，请稍后重试",
       "summaryLoadFailed": "告警概览加载失败",
       "summaryActive": "活动告警 {0} 条",
       "summaryCritical": "严重 {0} 条",

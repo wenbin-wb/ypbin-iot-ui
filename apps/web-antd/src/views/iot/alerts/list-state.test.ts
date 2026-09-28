@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  createSerialRunner,
   isTenantContextError,
   listSlotState,
   resolveDeviceFilter,
@@ -61,5 +62,61 @@ describe('isTenantContextError（把「缺租户」翻译成可照做的引导�
       false,
     );
     expect(isTenantContextError('')).toBe(false);
+  });
+});
+
+describe('createSerialRunner（同一数据源至多一个在途请求）', () => {
+  it('★ 后发的任务必须等前一个结束后才开始（不并发）', async () => {
+    const run = createSerialRunner();
+    const order: string[] = [];
+    let releaseFirst!: () => void;
+    const firstBlocked = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+
+    const first = run(async () => {
+      order.push('first:start');
+      await firstBlocked;
+      order.push('first:end');
+      return 1;
+    });
+    const second = run(async () => {
+      order.push('second:start');
+      return 2;
+    });
+
+    // 前一个还没结束 ⇒ 第二个**连开始都不许开始**
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(order).toEqual(['first:start']);
+
+    releaseFirst();
+    await expect(first).resolves.toBe(1);
+    await expect(second).resolves.toBe(2);
+    expect(order).toEqual(['first:start', 'first:end', 'second:start']);
+  });
+
+  it('前一个失败 ⇒ 后一个照常执行（异常不吞掉队列，也不变成未处理拒绝）', async () => {
+    const run = createSerialRunner();
+    const first = run(async () => {
+      throw new Error('旧请求失败');
+    });
+    const second = run(async () => 'ok');
+
+    await expect(first).rejects.toThrow('旧请求失败');
+    await expect(second).resolves.toBe('ok');
+  });
+
+  it('三个排队任务的返回顺序与发出顺序一致（后发者一定最后落地）', async () => {
+    const run = createSerialRunner();
+    const settled: number[] = [];
+    const tasks = [1, 2, 3].map((n) =>
+      run(async () => {
+        settled.push(n);
+        return n;
+      }),
+    );
+    expect(await Promise.all(tasks)).toEqual([1, 2, 3]);
+    expect(settled).toEqual([1, 2, 3]);
   });
 });

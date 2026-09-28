@@ -48,6 +48,40 @@ export function resolveDeviceFilter(
 }
 
 /**
+ * 把同一数据源的并发请求**串行化**：任意时刻至多一个在途请求，且按**发出顺序**执行。
+ *
+ * 🔴 修前实测到的真实竞态（`list-refresh.test.ts` 判红的那条）：页面顶部的**告警计数摘要**
+ * `reloadSummary()` 是普通 async 函数，**不经过 vxe**，因此没有 vxe 那层在途守卫
+ * （vxe `commitProxy` 在 `tableLoading` 期间再来 query 会直接 `return`，详见 `index.vue` 注释）。
+ * 于是「进页面时的摘要请求（慢）」与「确认/静默后的摘要请求（快）」可以同时在途，
+ * 最终展示的值取决于**谁最后返回**而不是**谁最后发出**：
+ * 旧请求后到 ⇒ 用户刚确认完，顶部计数却回退成确认前的数字（`activeCount` 偏高、`ackedCount` 偏低）。
+ *
+ * 两张表格（实例/规则）**不需要**它：vxe 已经保证同一时刻至多一个在途 query，
+ * 那里的 `listError` 不会被乱序响应污染。所以本函数只用在摘要上——
+ * 不给不存在的竞态写守卫，也不留只为「看起来更稳」的空壳代码。
+ *
+ * 注意：**排队，不丢弃**（丢弃会让用户点了刷新却什么都不发生）。
+ *
+ * @returns `run(task)`：把 `task` 排到队尾，返回该 task 自身的结果 promise。
+ */
+export function createSerialRunner(): <T>(
+  task: () => Promise<T>,
+) => Promise<T> {
+  let tail: Promise<unknown> = Promise.resolve();
+  return function run<T>(task: () => Promise<T>): Promise<T> {
+    // 无论上一个成功还是失败，下一个都要跑（失败语义由各自调用方负责）
+    const started = tail.then(task, task);
+    // 队列尾部只关心「上一个结束了」，不把异常往后传（否则会变成未处理拒绝）
+    tail = started.then(
+      () => undefined,
+      () => undefined,
+    );
+    return started;
+  };
+}
+
+/**
  * 后端 message 是否在说「缺少租户上下文」。
  *
  * 为什么需要它：平台管理员若在没有选定租户的身份下做**写操作**，后端会（在修复后）返回一句人话

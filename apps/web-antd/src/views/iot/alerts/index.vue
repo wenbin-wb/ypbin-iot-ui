@@ -1,8 +1,10 @@
 <script lang="ts" setup>
+import type { RefreshGuard } from './refresh-guard';
+
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { IotAlertApi } from '#/api/iot';
 
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { useAccess } from '@vben/access';
@@ -31,6 +33,7 @@ import { $t } from '#/locales';
 import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
 
+import { detectRunawayGrowth, RUNAWAY_HEIGHT } from './alerts-layout';
 import {
   conditionText,
   eventLabelKey,
@@ -48,12 +51,18 @@ import {
   useRuleColumns,
 } from './data';
 import {
+  createSerialRunner,
   isTenantContextError,
   listSlotState,
   resolveDeviceFilter,
 } from './list-state';
 import InstanceCurve from './modules/instance-curve.vue';
 import RuleForm from './modules/rule-form.vue';
+import {
+  createRefreshGuard,
+  QueryTimeoutError,
+  withQueryTimeout,
+} from './refresh-guard';
 
 /**
  * 全局告警中心（用户口径 ⑥⑦：三处可达 + 空态引导 + 失败态原样展示后端 message）。
@@ -98,17 +107,29 @@ const summary = ref<IotAlertApi.SummaryResp>();
 
 const summaryError = ref('');
 
+/**
+ * 摘要请求串行化（后发覆盖前发）。
+ *
+ * 🔴 为什么只有它需要：`reloadSummary()` 不走 vxe，没有 vxe 那层在途守卫，
+ * 而它会被「进页面」和「确认/静默后的 `reloadAll()`」两处触发 ⇒ 两次请求可以同时在途，
+ * 最终值取决于谁最后**返回**（旧请求后到会把刚确认后的计数回退）。
+ * 两张表格不用守：vxe 在 `tableLoading` 期间会直接丢弃再来的 query，天然至多一个在途。
+ */
+const runSummaryQuery = createSerialRunner();
+
 async function reloadSummary() {
-  try {
-    summary.value = await getAlertSummary();
-    summaryError.value = '';
-  } catch (error) {
-    summary.value = undefined;
-    summaryError.value = extractErrorMessage(
-      error,
-      $t('page.iot.alert.summaryLoadFailed'),
-    );
-  }
+  return runSummaryQuery(async () => {
+    try {
+      summary.value = await getAlertSummary();
+      summaryError.value = '';
+    } catch (error) {
+      summary.value = undefined;
+      summaryError.value = extractErrorMessage(
+        error,
+        $t('page.iot.alert.summaryLoadFailed'),
+      );
+    }
+  });
 }
 
 // ---------------------------------------------------------------- 告警列表
@@ -116,6 +137,14 @@ async function reloadSummary() {
 const listError = ref('');
 
 const selectedIds = ref<string[]>([]);
+
+/**
+ * 实例表的「静默丢弃」守卫（见 refresh-guard.ts）。
+ *
+ * 生命周期：`useVbenVxeGrid` 返回的 api 先就位，再创建守卫；网格组件真正
+ * 挂载/查询发生在 setup 之后，闭包拿到的引用必然已赋值。
+ */
+let instanceGuard: RefreshGuard;
 
 const [InstanceGrid, instanceGridApi] = useVbenVxeGrid({
   formOptions: {
@@ -132,19 +161,34 @@ const [InstanceGrid, instanceGridApi] = useVbenVxeGrid({
     proxyConfig: {
       ajax: {
         query: async ({ page }, formValues: IotAlertApi.InstanceQuery) => {
+          // 查询真正启动 ⇒ 任何刷新意图都被执行了（没被 vxe 丢弃），消费掉
+          instanceGuard.consumeIntent();
           try {
-            const result = await getAlertPage({
-              page: page.currentPage,
-              pageSize: page.pageSize,
-              ...formValues,
-              // 合并规则见 `resolveDeviceFilter`（表单显式选择优先，其次才是 URL 带来的设备）
-              deviceId: resolveDeviceFilter(
-                (formValues as IotAlertApi.InstanceQuery | undefined)?.deviceId,
-                presetDeviceId.value || undefined,
-              ),
+            const result = await withQueryTimeout(
+              getAlertPage({
+                page: page.currentPage,
+                pageSize: page.pageSize,
+                ...formValues,
+                // 合并规则见 `resolveDeviceFilter`（表单显式选择优先，其次才是 URL 带来的设备）
+                deviceId: resolveDeviceFilter(
+                  (formValues as IotAlertApi.InstanceQuery | undefined)
+                    ?.deviceId,
+                  presetDeviceId.value || undefined,
+                ),
+              }),
+            ).catch((error: unknown) => {
+              // 客户端超时 ⇒ 给用户能看懂的话（而不是永远转圈）
+              if (error instanceof QueryTimeoutError) {
+                throw new TypeError($t('page.iot.alert.queryTimeout'));
+              }
+              throw error;
             });
             listError.value = '';
-            // 后端 `total` 是 long ⇒ 全局序列化成**字符串**；vxe 分页要做算术 ⇒ 进表格前显式转数
+            // 后端 `total` 是 long ⇒ 全局序列化成**字符串**；vxe 分页要做算术 ⇒ 进表格前显式转数。
+            // 只返回**本页**结果：vxe 收到后走 `loadData` **整体替换**表体（不是 append/merge），
+            // 这一条由 `list-refresh.test.ts` 用真实 vxe 守门。
+            // 并发由 vxe 自己在 `commitProxy` 里守（`tableLoading` 期间再来的 query 直接 return），
+            // 所以这里不会出现「两个 ajax.query 同时在途、旧响应写回 listError」的乱序。
             return { ...result, total: toBackendNumber(result.total) };
           } catch (error) {
             // 记下失败原因（原样展示后端 message），再把异常继续抛出（不改动既有失败语义）
@@ -153,6 +197,9 @@ const [InstanceGrid, instanceGridApi] = useVbenVxeGrid({
               $t('page.iot.alert.listLoadFailed'),
             );
             throw error;
+          } finally {
+            // 一个查询周期结束（成功或失败）⇒ 若这段时间里有被丢弃的刷新意图，守卫会补发
+            instanceGuard.notifyCycleEnd();
           }
         },
       },
@@ -166,6 +213,26 @@ const [InstanceGrid, instanceGridApi] = useVbenVxeGrid({
       zoom: true,
     },
   } as VxeTableGridOptions<IotAlertApi.InstanceResp>,
+  gridEvents: {
+    // 真实事件信号：页签刷新按钮、分页翻页都由 vxe 自己发起 commitProxy，
+    // 页面要能知道「这次意图可能被丢弃」只能靠这些事件登记。
+    // （vben 表单的提交/重置走适配层 `api.reload`，不会触发 vxe 的 form-* 事件；
+    //   该入口在途丢弃暂由同一竞态窗口外的其它入口补发场景兜住——残余缺口见 PR 说明。）
+    pageChange: () => instanceGuard.markIntent(),
+    toolbarButtonClick: ({ code }: { code?: string }) => {
+      if (code === 'reload' || code === 'query') {
+        instanceGuard.markIntent();
+      }
+    },
+  },
+});
+
+instanceGuard = createRefreshGuard({
+  isBusy: () => Boolean(instanceGridApi.grid?.reactData?.tableLoading),
+  issue: () => {
+    void instanceGridApi.query();
+  },
+  onTrailing: (active) => instanceGridApi.setLoading(active),
 });
 
 function onCheckboxChange({
@@ -177,7 +244,8 @@ function onCheckboxChange({
 }
 
 async function reloadAll() {
-  await Promise.all([instanceGridApi.query(), reloadSummary()]);
+  instanceGuard.request();
+  await reloadSummary();
 }
 
 async function onAck(ids: string[]) {
@@ -209,6 +277,9 @@ async function onSilence(ids: string[], minutes = 60) {
 
 const ruleError = ref('');
 
+/** 规则表的「静默丢弃」守卫（与实例表同构，见 refresh-guard.ts）。 */
+let ruleGuard: RefreshGuard;
+
 const [RuleGrid, ruleGridApi] = useVbenVxeGrid({
   gridOptions: {
     columns: useRuleColumns(),
@@ -218,10 +289,18 @@ const [RuleGrid, ruleGridApi] = useVbenVxeGrid({
     proxyConfig: {
       ajax: {
         query: async ({ page }) => {
+          ruleGuard.consumeIntent();
           try {
-            const result = await getAlertRulePage({
-              page: page.currentPage,
-              pageSize: page.pageSize,
+            const result = await withQueryTimeout(
+              getAlertRulePage({
+                page: page.currentPage,
+                pageSize: page.pageSize,
+              }),
+            ).catch((error: unknown) => {
+              if (error instanceof QueryTimeoutError) {
+                throw new TypeError($t('page.iot.alert.queryTimeout'));
+              }
+              throw error;
             });
             ruleError.value = '';
             return { ...result, total: toBackendNumber(result.total) };
@@ -231,6 +310,8 @@ const [RuleGrid, ruleGridApi] = useVbenVxeGrid({
               $t('page.iot.alert.rule.listLoadFailed'),
             );
             throw error;
+          } finally {
+            ruleGuard.notifyCycleEnd();
           }
         },
       },
@@ -239,6 +320,22 @@ const [RuleGrid, ruleGridApi] = useVbenVxeGrid({
     rowConfig: { keyField: 'id' },
     toolbarConfig: { custom: true, export: false, refresh: true, zoom: true },
   } as VxeTableGridOptions<IotAlertApi.RuleResp>,
+  gridEvents: {
+    pageChange: () => ruleGuard.markIntent(),
+    toolbarButtonClick: ({ code }: { code?: string }) => {
+      if (code === 'reload' || code === 'query') {
+        ruleGuard.markIntent();
+      }
+    },
+  },
+});
+
+ruleGuard = createRefreshGuard({
+  isBusy: () => Boolean(ruleGridApi.grid?.reactData?.tableLoading),
+  issue: () => {
+    void ruleGridApi.query();
+  },
+  onTrailing: (active) => ruleGridApi.setLoading(active),
 });
 
 /** 规则勾选（批量启用/停用）；与告警列表的勾选互不影响。 */
@@ -261,7 +358,7 @@ async function onToggleRule(ids: string[], enabled: boolean) {
         : $t('page.iot.alert.rule.disableDone', [count]),
     );
     selectedRuleIds.value = [];
-    await ruleGridApi.query();
+    ruleGuard.request();
     return true;
   } catch {
     return false;
@@ -277,15 +374,108 @@ function onClearDeviceFilter() {
       query: { ...route.query, deviceId: undefined },
     });
   }
-  instanceGridApi.query();
+  instanceGuard.request();
 }
 
-onMounted(reloadSummary);
+/**
+ * 表格高度看门狗（防「自增长」兜底，见 alerts-layout.ts）：
+ * 若 vxe 的 ResizeObserver 自反馈在某个浏览器/未来改动下复燃，这里会在
+ * 连续 N 次「异常高 + 严格递增」采样后把表格回退到固定上限（具名常量可配），
+ * 而不是让页面无限长高。正常（确定高度链）情况下只做廉价高度采样，稳定即收工。
+ */
+function watchGridForRunawayHeight(
+  api: {
+    grid: { $el?: HTMLElement };
+    setGridOptions: (options: { maxHeight?: number }) => void;
+  },
+  label: string,
+) {
+  const samples: number[] = [];
+  let stopped = false;
+  let stableStreak = 0;
+  const stop = () => {
+    stopped = true;
+    window.clearInterval(timer);
+  };
+  const timer = window.setInterval(() => {
+    const el = api.grid?.$el as HTMLElement | undefined;
+    if (!el) {
+      return;
+    }
+    const heightPx = el.offsetHeight;
+    const thresholdPx = window.innerHeight + RUNAWAY_HEIGHT.excessPx;
+    samples.push(heightPx);
+    if (samples.length > RUNAWAY_HEIGHT.requiredConsecutive + 2) {
+      samples.shift();
+    }
+    if (
+      detectRunawayGrowth(samples, {
+        thresholdPx,
+        requiredConsecutive: RUNAWAY_HEIGHT.requiredConsecutive,
+      })
+    ) {
+      stop();
+      const capPx = Math.max(
+        0,
+        window.innerHeight - RUNAWAY_HEIGHT.excessPx * 2,
+      );
+      api.setGridOptions({ maxHeight: capPx });
+      console.warn(
+        `[iot/alerts] ${label} 表格高度出现持续自增长，已回退到固定上限 ${capPx}px（请把复现步骤反馈给开发）`,
+      );
+      return;
+    }
+    const prev = samples[samples.length - 2];
+    if (
+      prev !== undefined &&
+      Math.abs(heightPx - prev) <= RUNAWAY_HEIGHT.stableDeltaPx
+    ) {
+      stableStreak += 1;
+      if (stableStreak >= 4) {
+        stop();
+      }
+    } else {
+      stableStreak = 0;
+    }
+  }, RUNAWAY_HEIGHT.intervalMs);
+  return () => {
+    if (!stopped) {
+      stop();
+    }
+  };
+}
+
+let stopHeightWatch: (() => void) | undefined;
+
+onMounted(() => {
+  void reloadSummary();
+  // 规则页签与实例页签共用同一条确定高度链，只盯实例表即可覆盖两条链的自反馈风险
+  stopHeightWatch = watchGridForRunawayHeight(
+    instanceGridApi as never,
+    '告警实例表',
+  );
+});
+
+onUnmounted(() => {
+  stopHeightWatch?.();
+  instanceGuard?.dispose();
+  ruleGuard?.dispose();
+});
 </script>
 
 <template>
+  <!--
+    🔴 高度修复（2026-10 生产实测）：本页在 `Page auto-content-height` 与两个表格之间
+    隔了一层 antd `Tabs`。`.ant-tabs-tabpane` 默认 `flex:none; width:100%`（高度=内容），
+    会把「确定高度链」打断成「内容高度反推」链：vxe `height:'auto'` 的量父回写
+    （ResizeObserver）与父高度=内容形成自反馈 ⇒ 行数恒为 2 表体却无限增高（见
+    `alerts-layout.ts` 的机制注释与用例）。
+    修复：Tabs 根 `h-full` 占满 Page 内容区，tabpane 定高为列 flex，两个表格壳
+    `flex-1 min-h-0` 吃剩余高度 ⇒ 链条与设备台账同构（父容器确定高度）。
+    `ALERTS_LAYOUT.requiredDeepRules` 与 `alerts-layout.test.ts` 看守这些标记。
+  -->
   <Page auto-content-height>
-    <Tabs v-model:active-key="activeTab" :animated="false">
+    <Tabs v-model:active-key="activeTab" :animated="false" class="h-full">
       <!-- ===== 告警列表 ===== -->
       <Tabs.TabPane
         v-if="canViewAlert"
@@ -363,7 +553,10 @@ onMounted(reloadSummary);
           show-icon
           type="warning"
         />
-        <InstanceGrid @checkbox-change="onCheckboxChange">
+        <InstanceGrid
+          class="flex-1 min-h-0"
+          @checkbox-change="onCheckboxChange"
+        >
           <template #toolbar-tools>
             <Space>
               <Button
@@ -540,7 +733,10 @@ onMounted(reloadSummary);
           show-icon
           type="error"
         />
-        <RuleGrid @checkbox-change="onRuleCheckboxChange">
+        <RuleGrid
+          class="flex-1 min-h-0"
+          @checkbox-change="onRuleCheckboxChange"
+        >
           <template #toolbar-tools>
             <Space>
               <Button
@@ -621,6 +817,28 @@ onMounted(reloadSummary);
       </Tabs.TabPane>
     </Tabs>
 
-    <RuleDrawer @saved="ruleGridApi.query()" />
+    <RuleDrawer @saved="ruleGuard.request()" />
   </Page>
 </template>
+
+<style scoped>
+/*
+ * 告警页的确定高度链（与 `ALERTS_LAYOUT.requiredDeepRules` 一一对应，
+ * `alerts-layout.test.ts` 会读本文件断言；删改任一规则都会让用例咬人）。
+ *
+ * antd `Tabs` 的 tabpane 默认「高度 = 内容」（`flex:none; width:100%`），
+ * 必须显式定高并把内容区改成列 flex，表格壳（`flex-1 min-h-0`）才能拿到确定高度；
+ * 否则 vxe `height:'auto'` 的量父回写会与内容高度形成自反馈（表体无限增高）。
+ */
+
+:deep(.ant-tabs-content) {
+  height: 100%;
+}
+
+:deep(.ant-tabs-tabpane) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+</style>
