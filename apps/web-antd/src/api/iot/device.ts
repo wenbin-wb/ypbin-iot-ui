@@ -13,6 +13,14 @@ export namespace IotDeviceApi {
     productId?: string;
     productVersion?: string;
     onlineStatus?: string;
+    /**
+     * 启停位：1 启用 / 0 停用（后端 `EntityStatus` 的码值）。
+     *
+     * ⚠️ 与 `onlineStatus` **不是一回事**：那是「设备现在连没连上」的观测值，本字段是运维意图。
+     * 停用后该设备不再进入采集规格下发（后端 `DeviceSpecServiceImpl` 只取 `status=1`）⇒ 停止采集。
+     * 后端可能返回 `undefined`（老数据的意外形态）⇒ 消费方按「启用」处理前必须显式判空。
+     */
+    status?: null | number;
     lastSeenAt?: string;
     remark?: string;
     createTime?: string;
@@ -32,6 +40,8 @@ export namespace IotDeviceApi {
     endpoint: string;
     productId?: string;
     productVersion?: string;
+    /** 启停位：1 启用 / 0 停用；**不传表示不改**（新建由 DB 默认值 1 兜底）。 */
+    status?: number;
     remark?: string;
   }
 
@@ -138,6 +148,17 @@ export async function updateDevice(
   data: IotDeviceApi.DeviceSaveReq,
 ) {
   return requestClient.put(`/iot/devices/${id}`, data);
+}
+
+/**
+ * 启用/停用设备（后端 `PUT /iot/devices/{id}/status/{status}`，权限 `iot:device:update`）。
+ *
+ * ⚠️ 为什么走**独立端点**而不是复用 `updateDevice`：编辑端点收的是整表单（设备编码/名称/协议/端点
+ * 都带 `@NotBlank`），列表里的启停开关只改一个位，回填其余字段等于「读到什么就写回什么」——
+ * 一旦读到的是旧值，就会把别人刚改的名称静默覆盖掉。
+ */
+export async function updateDeviceStatus(id: string, status: number) {
+  return requestClient.put(`/iot/devices/${id}/status/${status}`);
 }
 
 export async function deleteDevice(id: string) {

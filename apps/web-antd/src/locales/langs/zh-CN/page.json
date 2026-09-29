@@ -195,14 +195,17 @@
         "emptyReason": "还没有告警规则，点右上角「新建告警规则」用模板创建（选设备 + 点位 + 一个数字即可）。",
         "enableDone": "已启用 {0} 条规则",
         "disableDone": "已停用 {0} 条规则（其活动告警已同步收口为「已恢复」）",
-        "operatorHint": "清空表示「不做阈值判断」（变成离线告警）"
+        "operatorHint": "清空表示「不做阈值判断」（变成离线告警）",
+        "list": "查看告警规则"
       },
       "boolean": {
         "true": "开启",
         "false": "关闭",
         "invalid": "布尔点位的阈值只能是 1（真）或 0（假）"
       },
-      "noTenantHint": "当前登录身份没有选择租户，告警的新建/确认/静默无法保存：请先在**右上角**选择或切换到你管理的租户，然后重试。"
+      "noTenantHint": "当前登录身份没有选择租户，告警的新建/确认/静默无法保存：请先在**右上角**选择或切换到你管理的租户，然后重试。",
+      "ruleList": "查看告警规则",
+      "ruleSave": "保存告警规则"
     },
     "title": "IoT 平台",
     "device": {
@@ -241,7 +244,17 @@
       "runtimeEvents": "运行期事件",
       "recentEvents": "最近事件",
       "emptyReason": "该租户还没有设备：设备必须先属于一个产品（产品的物模型决定它能上报哪些属性），所以接入的第一步是建产品与定义物模型。",
-      "listLoadFailed": "设备列表加载失败"
+      "listLoadFailed": "设备列表加载失败",
+      "status": "启停",
+      "enabled": "启用",
+      "disabled": "停用",
+      "statusToggle": "启用 / 停用",
+      "statusHint": "停用后该设备不再进入采集规格下发，接入侧会解绑并停止采集（点位订阅一并撤销）；重新启用即恢复。",
+      "statusConfirmDisable": "停用后该设备将停止采集（接入侧解绑并撤销点位订阅），确定吗？",
+      "statusEnableDone": "设备已启用，采集将在下一轮对账后恢复",
+      "statusDisableDone": "设备已停用，采集将在下一轮对账后停止",
+      "statusUpdateFailed": "启停操作失败",
+      "statusDisabledTag": "已停用"
     },
     "event": {
       "title": "运行期事件",
@@ -841,7 +854,8 @@
       "shareEnabled": "分享已启用",
       "shareDisabled": "分享已关闭",
       "shareNotEnabled": "当前未启用分享。启用后将生成专属分享链接。",
-      "shareCopied": "分享链接已复制"
+      "shareCopied": "分享链接已复制",
+      "list": "查看知识库"
     },
     "wizard": {
       "title": "创建知识库向导",
@@ -930,7 +944,8 @@
       "noDocs": "该知识库暂无就绪文档",
       "noSearchResult": "没有匹配的文档",
       "reload": "重新加载",
-      "wikiTitle": "Wiki"
+      "wikiTitle": "Wiki",
+      "view": "阅读 Wiki"
     },
     "prompt": {
       "title": "Prompt 模板",
@@ -956,7 +971,8 @@
       "categoryAnalysis": "数据分析",
       "categoryTranslation": "翻译",
       "categoryQa": "问答助手",
-      "categoryOther": "其他"
+      "categoryOther": "其他",
+      "list": "查看模板"
     },
     "role": {
       "title": "对话角色",
@@ -1000,7 +1016,8 @@
       "date": "日期",
       "tokens": "Token 数",
       "percent": "占比",
-      "model": "模型"
+      "model": "模型",
+      "view": "查看统计看板"
     },
     "config": {
       "title": "AI 配置",
@@ -1060,6 +1077,16 @@
       "modelCreate": "新增模型",
       "modelEdit": "编辑模型",
       "modelDelete": "删除模型"
+    },
+    "document": {
+      "upload": "上传文档",
+      "delete": "删除文档"
+    },
+    "model": {
+      "list": "查看模型",
+      "create": "新增模型",
+      "edit": "编辑模型",
+      "delete": "删除模型"
     }
   },
   "auth": {

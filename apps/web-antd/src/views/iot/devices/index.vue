@@ -3,15 +3,27 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { IotDeviceApi } from '#/api/iot';
 
 import { onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
 import { Page, useVbenDrawer } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
-import { Alert, Button, message, Tag } from 'ant-design-vue';
-import { useRoute, useRouter } from 'vue-router';
+import {
+  Alert,
+  Button,
+  message,
+  Popconfirm,
+  Switch,
+  Tag,
+} from 'ant-design-vue';
 
 import { useVbenVxeGrid, VbenTableAction } from '#/adapter/vxe-table';
-import { deleteDevice, getActiveAlertCounts, getDevicePage } from '#/api/iot';
+import {
+  deleteDevice,
+  getActiveAlertCounts,
+  getDevicePage,
+  updateDeviceStatus,
+} from '#/api/iot';
 import { $t } from '#/locales';
 import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
@@ -19,7 +31,6 @@ import { extractErrorMessage } from '#/utils/error';
 import EmptyGuide from '../onboarding/modules/empty-guide.vue';
 import OnboardingGuide from '../onboarding/modules/guide.vue';
 import TenantLedger from '../tenant-ledger/modules/ledger.vue';
-
 import { useColumns } from './data';
 import Availability from './modules/availability.vue';
 import Detail from './modules/detail.vue';
@@ -51,10 +62,12 @@ const [GuideDrawer, GuideDrawerApi] = useVbenDrawer();
  * 租户接入台账（F5）抽屉。
  *
  * **为什么挂在设备台账页**：平台级权限码 `iot:ledger:list/update` 本来就挂在设备菜单（`sys_menu`
- * 320014/320015，`platform_only=1`，见 `deploy/sql/007-iot-data.sql`），而**台账页暂时没有页面级菜单**
- * （本轮不新建 `sys_menu` 记录，避开与其它改动的冲突）。挂在设备页的工具栏里，平台管理员今天就能用，
- * 且不影响任何非平台角色（按钮由 `v-access:code` 按权限码隐藏）。
- * 页面级落点 `views/iot/tenant-ledger/index.vue` 已备好，接上菜单即生效。
+ * 320014/320015，`platform_only=1`，见 `deploy/sql/007-iot-data.sql`）。
+ * **菜单已由迁移补齐**（2026-09-29 更正，此前写的是「台账页暂时没有页面级菜单」）：
+ * `deploy/sql/migration/2026-09-29-iot-menu-onboarding-ledger.sql` 补了 3206
+ * （`type='menu'`、`platform_only=1`、标题键 `page.iot.ledger.pageTitle`）。
+ * 此处保留抽屉入口仍有价值：平台管理员在设备台账页可**就地**查看/修改本租户归属，
+ * 不必跳到独立页面。
  */
 const [LedgerDrawer, LedgerDrawerApi] = useVbenDrawer();
 
@@ -201,6 +214,68 @@ function openGuide() {
 }
 
 /**
+ * 启停位与后端 `EntityStatus` 的码值对齐（1 启用 / 0 停用）。
+ *
+ * 用具名常量而不是散落的字面量：这两个数字同时出现在「开关取值」与「行是否停用」两处判断里，
+ * 写错一处就会出现「行显示已停用、开关却是开的」这种自相矛盾的界面。
+ */
+const DEVICE_ENABLED = 1;
+
+const DEVICE_DISABLED = 0;
+
+/**
+ * 正在切换启停的设备 id 集合（开关的 `loading` 与防重复提交）。
+ *
+ * 按行记而不是一个全局布尔：并发切换两台设备时，全局布尔会让**所有**开关一起转，
+ * 也会把第二台设备的点击误判成「已在提交中」而静默丢弃（点了没反应）。
+ */
+const statusPending = ref<Record<string, boolean>>({});
+
+/** 后端启停位按「启用」处理当且仅当它显式等于 1（`null/undefined` 视为启用，与 DB 默认值一致）。 */
+function isDeviceEnabled(row: IotDeviceApi.DeviceResp) {
+  return toBackendNumber(row.status ?? DEVICE_ENABLED) === DEVICE_ENABLED;
+}
+
+/**
+ * 切换设备启停（G7′）。
+ *
+ * 🔴 为什么要二次确认：停用是**破坏性**动作——接入侧会解绑该设备并撤销其全部点位订阅，
+ * 采集立刻停止。确认文案必须把这个后果说清楚，而不是干巴巴一句「确定吗」。
+ *
+ * 失败时**不保留乐观状态**：`.finally` 里无条件重查列表，让开关回到后端的真实值；
+ * 成功时也重查（不能只翻本地位，否则「停用是否真的生效」在界面上无从体现）。
+ */
+function onToggleStatus(row: IotDeviceApi.DeviceResp, checked: boolean) {
+  const target = checked ? DEVICE_ENABLED : DEVICE_DISABLED;
+  statusPending.value = { ...statusPending.value, [row.id]: true };
+  updateDeviceStatus(row.id, target)
+    .then(() => {
+      message.success(
+        $t(
+          target === DEVICE_ENABLED
+            ? 'page.iot.device.statusEnableDone'
+            : 'page.iot.device.statusDisableDone',
+        ),
+      );
+    })
+    .catch((error: unknown) => {
+      // 原样展示后端 message：全局拦截器也会弹一次，但这里给出的是「这次切换没生效」的明确结论
+      message.error(
+        extractErrorMessage(error, $t('page.iot.device.statusUpdateFailed')),
+      );
+    })
+    .finally(() => {
+      // 用「删键后重新赋值」而不是 `delete`：oxlint 的 `no-dynamic-delete` 禁止对动态键做
+      // delete（频繁删除会把对象推进字典模式、伤内联缓存）。这里用解构剔除该 id，
+      // 语义与原写法一致（未在途的行不再有 loading 标记）。
+      const { [row.id]: _removed, ...rest } = statusPending.value;
+      void _removed;
+      statusPending.value = rest;
+      gridApi.query();
+    });
+}
+
+/**
  * 向导第 3 步点了「添加设备」：先关向导，否则它会盖在设备表单抽屉上；
  * 表单本身由 `consumeCreateQuery()` 消费 `?productId=&action=create` 后打开（同一条既有链路）。
  */
@@ -220,15 +295,9 @@ function openLedger() {
     <AvailabilityDrawer />
     <SeriesDrawer />
     <GuideDrawer :title="$t('page.iot.onboarding.title')" class="w-[900px]">
-      <OnboardingGuide
-        @add-device="onGuideAddDevice"
-        @done="gridApi.query()"
-      />
+      <OnboardingGuide @add-device="onGuideAddDevice" @done="gridApi.query()" />
     </GuideDrawer>
-    <LedgerDrawer
-      :title="$t('page.iot.ledger.pageTitle')"
-      class="w-[1000px]"
-    >
+    <LedgerDrawer :title="$t('page.iot.ledger.pageTitle')" class="w-[1000px]">
       <TenantLedger />
     </LedgerDrawer>
     <!--
@@ -299,6 +368,44 @@ function openLedger() {
           {{ toBackendNumber(alertCounts[row.id] ?? 0) }}
         </Tag>
         <span v-else class="text-muted-foreground">-</span>
+      </template>
+
+      <!--
+        启停开关（G7′）。
+        🔴 这里用 `Popconfirm` **包住** `Switch`，而不是给 Switch 传 `popconfirm` 属性：
+        ant-design-vue 4.2.6 的 Switch **没有** `popconfirm` 这个 prop（只有 React antd 有），
+        传进去会被静默忽略 ⇒ 「停用会停止采集」这道确认**根本不会弹**。
+        `Popconfirm` 只在**要停用时**才渲染（`v-if="isDeviceEnabled(row)"`）：启用没有意外后果，
+        若也弹确认，用户会习惯性点确定 ⇒ 真正危险的那次确认就失去拦截力。
+        开关是**受控**的（`:checked` + `@change` 后重查），不做乐观翻转——
+        慢请求期间先翻再回滚等于界面先撒一次谎。
+      -->
+      <template #status="{ row }">
+        <Popconfirm
+          v-if="isDeviceEnabled(row)"
+          :cancel-text="$t('common.cancel')"
+          :ok-text="$t('page.iot.device.disabled')"
+          :title="$t('page.iot.device.statusConfirmDisable')"
+          @confirm="onToggleStatus(row, false)"
+        >
+          <Switch
+            v-access:code="['iot:device:update']"
+            :checked="true"
+            :loading="!!statusPending[row.id]"
+            size="small"
+          />
+        </Popconfirm>
+        <Switch
+          v-else
+          v-access:code="['iot:device:update']"
+          :checked="false"
+          :loading="!!statusPending[row.id]"
+          size="small"
+          @change="() => onToggleStatus(row, true)"
+        />
+        <Tag v-if="!isDeviceEnabled(row)" class="ml-1" color="default">
+          {{ $t('page.iot.device.statusDisabledTag') }}
+        </Tag>
       </template>
 
       <template #action="{ row }">

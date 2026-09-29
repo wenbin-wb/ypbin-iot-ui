@@ -18,7 +18,20 @@ export function useColumns(): VxeTableGridColumns {
       width: 110,
       cellRender: { name: 'CellTag' },
     },
-    { field: 'lastSeenAt', title: $t('page.iot.device.lastSeenAt'), width: 170 },
+    {
+      // 启停开关（G7′）：此前设备没有停用写入口，用户要停采只能**删设备**或**删映射**，
+      // 两者都会丢台账信息（且删设备是逻辑删除，编码按唯一键不可复用）。
+      // 这是「运维意图」，与在线状态（观测值）分列展示，避免被读成同一件事。
+      field: 'status',
+      title: $t('page.iot.device.status'),
+      width: 110,
+      slots: { default: 'status' },
+    },
+    {
+      field: 'lastSeenAt',
+      title: $t('page.iot.device.lastSeenAt'),
+      width: 170,
+    },
     {
       // 活动告警标记（设计 §2.5.1「设备台账列表加一列/一个标记」）：
       // 计数由**一次批量查询**给出（`/iot/alerts/active-counts`），不按行发请求
@@ -27,7 +40,11 @@ export function useColumns(): VxeTableGridColumns {
       width: 110,
       slots: { default: 'alertActive' },
     },
-    { field: 'createTime', title: $t('page.iot.device.createTime'), width: 170 },
+    {
+      field: 'createTime',
+      title: $t('page.iot.device.createTime'),
+      width: 170,
+    },
     {
       title: $t('common.action'),
       field: 'action',
