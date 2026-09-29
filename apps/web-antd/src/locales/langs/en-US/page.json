@@ -195,14 +195,17 @@
         "emptyReason": "No alert rule yet. Use \"New alert rule\" at the top right and pick a template (device + point + one number).",
         "enableDone": "Enabled {0} rule(s)",
         "disableDone": "Disabled {0} rule(s); their active alerts were closed as resolved",
-        "operatorHint": "Clear to remove the threshold (turns into an offline alert)"
+        "operatorHint": "Clear to remove the threshold (turns into an offline alert)",
+        "list": "View Alert Rules"
       },
       "boolean": {
         "true": "on",
         "false": "off",
         "invalid": "A boolean point can only use 1 (true) or 0 (false)"
       },
-      "noTenantHint": "Your session has no tenant selected, so alerts cannot be created/acknowledged/silenced: pick or switch to the tenant you manage (top-right) and retry."
+      "noTenantHint": "Your session has no tenant selected, so alerts cannot be created/acknowledged/silenced: pick or switch to the tenant you manage (top-right) and retry.",
+      "ruleList": "View Alert Rules",
+      "ruleSave": "Save Alert Rules"
     },
     "title": "IoT Platform",
     "device": {
@@ -241,7 +244,17 @@
       "runtimeEvents": "Runtime events",
       "recentEvents": "Recent events",
       "emptyReason": "This tenant has no devices yet: every device must belong to a product (the product's thing model defines what it can report), so onboarding starts with creating a product and defining its thing model.",
-      "listLoadFailed": "Failed to load the device list"
+      "listLoadFailed": "Failed to load the device list",
+      "status": "Status",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "statusToggle": "Enable / Disable",
+      "statusHint": "Once disabled the device is excluded from spec delivery, so the access side unbinds it and stops collecting (its point subscriptions are revoked). Re-enable to restore.",
+      "statusConfirmDisable": "Disabling stops collection for this device (the access side unbinds it and revokes point subscriptions). Continue?",
+      "statusEnableDone": "Device enabled; collection resumes after the next reconcile round",
+      "statusDisableDone": "Device disabled; collection stops after the next reconcile round",
+      "statusUpdateFailed": "Failed to change device status",
+      "statusDisabledTag": "Disabled"
     },
     "event": {
       "title": "Runtime events",
@@ -853,7 +866,8 @@
       "shareEnabled": "Sharing enabled",
       "shareDisabled": "Sharing disabled",
       "shareNotEnabled": "Sharing is not enabled yet. Enable it to generate a unique share link.",
-      "shareCopied": "Share link copied"
+      "shareCopied": "Share link copied",
+      "list": "View Knowledge Base"
     },
     "wizard": {
       "title": "Create Knowledge Base Wizard",
@@ -942,7 +956,8 @@
       "noDocs": "No ready documents in this knowledge base",
       "noSearchResult": "No matching documents",
       "reload": "Reload",
-      "wikiTitle": "Wiki"
+      "wikiTitle": "Wiki",
+      "view": "Read Wiki"
     },
     "prompt": {
       "title": "Prompt Templates",
@@ -968,7 +983,8 @@
       "categoryAnalysis": "Analysis",
       "categoryTranslation": "Translation",
       "categoryQa": "Q&A Assistant",
-      "categoryOther": "Other"
+      "categoryOther": "Other",
+      "list": "View Templates"
     },
     "role": {
       "title": "Chat Roles",
@@ -1012,7 +1028,8 @@
       "date": "Date",
       "tokens": "Tokens",
       "percent": "Share",
-      "model": "Model"
+      "model": "Model",
+      "view": "View Statistics"
     },
     "config": {
       "title": "AI Config",
@@ -1072,6 +1089,16 @@
       "modelCreate": "Add Model",
       "modelEdit": "Edit Model",
       "modelDelete": "Delete Model"
+    },
+    "document": {
+      "upload": "Upload Document",
+      "delete": "Delete Document"
+    },
+    "model": {
+      "list": "View Models",
+      "create": "Add Model",
+      "edit": "Edit Model",
+      "delete": "Delete Models"
     }
   },
   "dashboard": {

@@ -62,6 +62,16 @@ const deviceId = ref('');
 /** 抽屉数据就是设备台账行（`GET /iot/devices` 的行对象），字段与列表页一致。 */
 const device = ref<IotDeviceApi.DeviceResp>();
 
+/**
+ * 启停位是否为「启用」（G7′）。
+ *
+ * 判据与列表页一致：只有显式等于 1 才算启用，`null/undefined` 按启用处理（与 DB 默认值对齐）。
+ * 口径写在一处（这里是详情页的唯一入口），不要在模板里内联比较裸数字。
+ */
+const isDeviceEnabled = computed(
+  () => toBackendNumber(device.value?.status ?? 1) === 1,
+);
+
 /** 最新值（G1）：命中 / 空 / 失败三态分别展示，禁把失败显示成「没有数据」。 */
 const latest = ref<IotDeviceApi.LatestValueResp[]>([]);
 
@@ -107,13 +117,13 @@ const { hasAccessByCodes } = useAccess();
 
 const canViewDebug = computed(() => hasAccessByCodes(['iot:debug:get']));
 
-  /**
-   * 「告警」页签的门禁：需要 `iot:alert:list`。
-   *
-   * 页签本身用 `v-if` 隐藏（`v-access` 只能摘掉元素，摘不掉 Tabs 的页签头 ⇒ 会留下一个点得动但空白的页签）。
-   * 页签内部的「确认 / 静默」按钮另用 `v-if + computed(canAck)` 把门（两者权限码不同）。
-   */
-  const canViewAlert = computed(() => hasAccessByCodes(['iot:alert:list']));
+/**
+ * 「告警」页签的门禁：需要 `iot:alert:list`。
+ *
+ * 页签本身用 `v-if` 隐藏（`v-access` 只能摘掉元素，摘不掉 Tabs 的页签头 ⇒ 会留下一个点得动但空白的页签）。
+ * 页签内部的「确认 / 静默」按钮另用 `v-if + computed(canAck)` 把门（两者权限码不同）。
+ */
+const canViewAlert = computed(() => hasAccessByCodes(['iot:alert:list']));
 
 /** 用 `Series`/`Availability` 各自的抽屉组件：曲线与可用率口径只有一份实现。 */
 const [SeriesDrawer, SeriesDrawerApi] = useVbenDrawer({
@@ -176,9 +186,7 @@ function human(seconds?: number | string): string {
     .join('');
 }
 
-const latestLoaded = computed(
-  () => latestError.value === '' && !loading.value,
-);
+const latestLoaded = computed(() => latestError.value === '' && !loading.value);
 
 /** 概览卡片：可用率/断档都取自同一个可用率响应，避免两处数字对不上。 */
 const availabilityText = computed(() => {
@@ -195,9 +203,7 @@ const ongoingOutageCount = computed(
 );
 
 /** 概览区的「最近事件」（时间线已按发生时刻倒序，直接取前几条）。 */
-const recentEvents = computed(() =>
-  events.value.slice(0, RECENT_EVENT_SIZE),
-);
+const recentEvents = computed(() => events.value.slice(0, RECENT_EVENT_SIZE));
 
 /** 是否还有更多事件没在本页展示（提示用户去页签或用级别/时间收窄）。 */
 const eventsTruncated = computed(() => eventsTotal.value > events.value.length);
@@ -319,7 +325,10 @@ async function load() {
   const boundProductId = device.value?.productId;
   if (boundProductId) {
     try {
-      productName.value = (await getProductDetail(boundProductId)).productName;
+      // 先取值再取成员（oxlint `no-await-expression-member`）：`(await f()).x` 可读性差，
+      // 且报错行号会指向「取成员」这一行而不是真正失败的那次 await。
+      const product = await getProductDetail(boundProductId);
+      productName.value = product.productName;
     } catch (error) {
       // 产品名只是「锦上添花」，取不到时展示裸 ID（不静默吞掉：记在控制台便于排查）
       console.warn('[iot] 产品名查询失败，回落展示产品 ID', error);
@@ -328,7 +337,7 @@ async function load() {
   loading.value = false;
 }
 
-const [Drawer, drawerApi] = useVbenDrawer<null | IotDeviceApi.DeviceResp>({
+const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) {
       return;
@@ -357,12 +366,33 @@ const [Drawer, drawerApi] = useVbenDrawer<null | IotDeviceApi.DeviceResp>({
               {{ device?.deviceName ?? '-' }}
             </DescriptionsItem>
             <DescriptionsItem :label="$t('page.iot.device.onlineStatus')">
-              <Tag :color="device?.onlineStatus === 'online' ? 'success' : 'default'">
+              <Tag
+                :color="
+                  device?.onlineStatus === 'online' ? 'success' : 'default'
+                "
+              >
                 {{ device?.onlineStatus ?? 'unknown' }}
               </Tag>
             </DescriptionsItem>
             <DescriptionsItem :label="$t('page.iot.device.lastSeenAt')">
               {{ device?.lastSeenAt ?? '-' }}
+            </DescriptionsItem>
+            <!--
+              启停位（G7′）：与在线状态分两行展示，避免被读成同一件事——
+              「在线状态」是设备现在连没连上的**观测值**，本行是运维**意图**。
+              停用后接入侧会解绑并撤销点位订阅 ⇒ 采集停止，故这里同时给出后果说明。
+            -->
+            <DescriptionsItem :label="$t('page.iot.device.status')" :span="2">
+              <Tag :color="isDeviceEnabled ? 'success' : 'default'">
+                {{
+                  isDeviceEnabled
+                    ? $t('page.iot.device.enabled')
+                    : $t('page.iot.device.disabled')
+                }}
+              </Tag>
+              <span v-if="!isDeviceEnabled" class="text-amber-600">
+                {{ $t('page.iot.device.statusHint') }}
+              </span>
             </DescriptionsItem>
             <DescriptionsItem :label="$t('page.iot.device.product')">
               <template v-if="device?.productId">
@@ -509,10 +539,7 @@ const [Drawer, drawerApi] = useVbenDrawer<null | IotDeviceApi.DeviceResp>({
                   </div>
                 </TimelineItem>
               </Timeline>
-              <div
-                v-if="eventsTruncated"
-                class="text-xs text-muted-foreground"
-              >
+              <div v-if="eventsTruncated" class="text-xs text-muted-foreground">
                 {{ $t('page.iot.event.goToTab') }}
               </div>
             </template>
@@ -759,7 +786,6 @@ const [Drawer, drawerApi] = useVbenDrawer<null | IotDeviceApi.DeviceResp>({
             />
           </PanelErrorBoundary>
         </Tabs.TabPane>
-
       </Tabs>
     </Spin>
 

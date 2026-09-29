@@ -59,6 +59,8 @@ const { captured, gridStub, mockApi } = vi.hoisted(() => ({
     setAlertRulesEnabled: vi.fn(),
     silenceAlerts: vi.fn(),
     updateAlertRule: vi.fn(),
+    // 设备启停（G7′）：`PUT /iot/devices/{id}/status/{status}`
+    updateDeviceStatus: vi.fn(),
   },
 }));
 
@@ -89,6 +91,8 @@ vi.mock('#/api/iot', () => ({
     mockApi.getTenantLedgerList(...args),
   publishProduct: vi.fn(),
   updateTenantLedgerAssignable: vi.fn(),
+  updateDeviceStatus: (...args: unknown[]) =>
+    mockApi.updateDeviceStatus(...args),
 }));
 
 /** 只留 `Page` 与 `useVbenDrawer`；抽屉渲染成空壳 ⇒ 抽屉里的内容组件不会被挂载。 */

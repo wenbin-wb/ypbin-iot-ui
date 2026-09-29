@@ -43,6 +43,25 @@ jobs:
       - name: i18n 文案编译校验（全库，zh-CN + en-US）
         run: node scripts/check-i18n-message-compile.mjs
 
+      # 🔴 **新增门禁**（本 PR 提案，理由/范围/误报风险见 PR 描述与脚本头注释）：
+      # 前两步只覆盖**前端源码里 `$t('…')` 写的键**；而菜单/权限的文案来源是**后端 `sys_menu.title`**
+      # ——那一列存的就是 i18n 键本身，前端对它做 `$t(title)`，缺键时不报错、直接渲染原始键。
+      # 实证：本门禁落地前实测 11 个键缺失（10 个 `page.ai.*` + `page.iot.alert.rule.list`），
+      # 全是权限分配界面上要显示的按钮标题，而 typecheck / 构建 / 上面两条 i18n 门禁**全绿**。
+      - name: 检出 ypbin-iot（sys_menu.title 的事实源）
+        uses: actions/checkout@v4
+        with:
+          repository: wenbin-wb/ypbin-iot
+          ref: main
+          path: ypbin-iot
+
+      - name: 菜单标题 i18n 键校验（SQL sys_menu.title ↔ zh-CN/en-US）
+        env:
+          # 必须与上方 checkout 的 `path:` 逐字一致；脚本读不到该目录时会以退出码 1 明确报
+          # 「配置/检出问题」，不会退化成「0 个键 ⇒ 全绿」的假绿。
+          IOT_REPO_DIR: ${{ github.workspace }}/ypbin-iot
+        run: node scripts/check-menu-i18n-keys.mjs
+
       - name: Typecheck（web-antd）
         run: pnpm -F @vben/web-antd run typecheck
 
