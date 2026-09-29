@@ -44,6 +44,7 @@ import DetailDebug from './detail-debug.vue';
 import DetailPoints from './detail-points.vue';
 import PanelErrorBoundary from './panel-error-boundary.vue';
 import Series from './series.vue';
+import Trace from './trace.vue';
 
 /**
  * 设备详情（F1）：5 个可落地区块 = 概览 / 属性与点位 / 历史曲线 / 事件与断档 / 在线调试（+ 影子状态）。
@@ -116,6 +117,15 @@ const loading = ref(false);
 const { hasAccessByCodes } = useAccess();
 
 const canViewDebug = computed(() => hasAccessByCodes(['iot:debug:get']));
+
+/**
+ * 「消息跟踪」页签的门禁：**与「在线调试」同一个权限码 `iot:debug:get`**。
+ *
+ * 刻意不复用 `iot:device:list`：本页签展示下行的命令标识、归因码与"设备回执"入口，
+ * 属命令侧读能力；`iot:device:list` 是设备列表页的菜单级权限，范围宽得多，
+ * 用它把关等于**权限降级**（与后端 `DeviceTraceController` 同一决定）。
+ */
+const canViewTrace = computed(() => hasAccessByCodes(['iot:debug:get']));
 
 /**
  * 「告警」页签的门禁：需要 `iot:alert:list`。
@@ -770,6 +780,17 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
               :device-id="deviceId"
               :product-id="device?.productId"
             />
+          </PanelErrorBoundary>
+        </Tabs.TabPane>
+        <!-- ===== 消息跟踪（看板 #8）：设备消息时序 + 失败项的「定位建议」 ===== -->
+        <Tabs.TabPane
+          v-if="canViewTrace"
+          key="trace"
+          :tab="$t('page.iot.device.trace.title')"
+        >
+          <!-- 渲染错误边界：与「在线调试」「告警」同款防线（渲染期异常必须可见，不得整块空白） -->
+          <PanelErrorBoundary title-key="page.iot.device.trace.renderFailed">
+            <Trace :device-id="deviceId" />
           </PanelErrorBoundary>
         </Tabs.TabPane>
         <!-- ===== 告警（段 C1/C2）：活动告警 + 历史告警 + 一键确认/静默 ===== -->
