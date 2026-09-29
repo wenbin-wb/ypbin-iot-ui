@@ -35,6 +35,7 @@ import { useColumns } from './data';
 import Availability from './modules/availability.vue';
 import Detail from './modules/detail.vue';
 import Form from './modules/form.vue';
+import DeviceImport from './modules/import.vue';
 import Series from './modules/series.vue';
 
 const route = useRoute();
@@ -70,6 +71,16 @@ const [GuideDrawer, GuideDrawerApi] = useVbenDrawer();
  * 不必跳到独立页面。
  */
 const [LedgerDrawer, LedgerDrawerApi] = useVbenDrawer();
+/**
+ * 批量导入（CSV）抽屉（看板 #7）——「下载模板 → 上传 → 看结果」三步闭环。
+ *
+ * 抽屉打开时拉一次批次列表：用户点开这个入口时想看的就是「我以前传过什么、结果如何」，
+ * 而不是一个空面板等着他去上传。
+ */
+const [ImportDrawer, ImportDrawerApi] = useVbenDrawer();
+
+/** 批量导入面板的实例（用来在打开抽屉时触发一次列表刷新）。 */
+const ImportPanel = ref<InstanceType<typeof DeviceImport> | null>(null);
 
 /**
  * 列表**加载失败**的原因（非空即代表「这次没取到数据」）。
@@ -287,6 +298,23 @@ function onGuideAddDevice() {
 function openLedger() {
   LedgerDrawerApi.open();
 }
+
+/**
+ * 打开批量导入抽屉（G7/#7）。
+ *
+ * 入口按 `iot:device:import` 门禁（**新造的权限码**，不复用 `iot:device:create`）：
+ * 批量导入一次能建上万台设备，比单条创建高危得多；复用 create 会让「只想让某角色逐台建」
+ * 的租户被迫放开批量口子。
+ *
+ * 抽屉打开时补拉一次列表，覆盖「上次打开后又传了一批」的情况。
+ */
+function openImport() {
+  ImportDrawerApi.open();
+  // 打开时拉一次批次列表（覆盖「上次打开后又传了一批」的情况）。
+  // 组件可能还没挂载（首次打开时抽屉内容是懒挂的）⇒ 用可选链，挂载后由组件自己的
+  // onMounted 拉取，两条路径都不会漏。
+  ImportPanel.value?.onOpen?.();
+}
 </script>
 <template>
   <Page auto-content-height>
@@ -300,6 +328,12 @@ function openLedger() {
     <LedgerDrawer :title="$t('page.iot.ledger.pageTitle')" class="w-[1000px]">
       <TenantLedger />
     </LedgerDrawer>
+    <ImportDrawer
+      :title="$t('page.iot.device.import.title')"
+      class="w-[1000px]"
+    >
+      <DeviceImport ref="ImportPanel" />
+    </ImportDrawer>
     <!--
       🔴 失败态**必须挂在表格之外**（不能只放 `#empty` 槽里）：
       真实 vxe 只在**表体没有行**时才渲染 `#empty` 槽 ⇒ 若把失败提示只放槽里，
@@ -342,6 +376,14 @@ function openLedger() {
           @click="openLedger"
         >
           {{ $t('page.iot.ledger.pageTitle') }}
+        </Button>
+        <!-- 批量导入（CSV）：一次能建上万台设备 ⇒ 独立权限码 iot:device:import -->
+        <Button
+          v-access:code="['iot:device:import']"
+          class="mr-2"
+          @click="openImport"
+        >
+          {{ $t('page.iot.device.import.title') }}
         </Button>
         <Button
           v-access:code="['iot:device:create']"
