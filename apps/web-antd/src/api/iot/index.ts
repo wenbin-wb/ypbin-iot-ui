@@ -12,3 +12,4 @@ export * from './product';
 export * from './series';
 export * from './shadow';
 export * from './thingmodel';
+export * from './trace';
