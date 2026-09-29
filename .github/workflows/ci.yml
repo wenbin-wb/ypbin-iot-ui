@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 检出代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 配置 pnpm
         uses: pnpm/action-setup@v4
@@ -49,7 +49,7 @@ jobs:
       # 实证：本门禁落地前实测 11 个键缺失（10 个 `page.ai.*` + `page.iot.alert.rule.list`），
       # 全是权限分配界面上要显示的按钮标题，而 typecheck / 构建 / 上面两条 i18n 门禁**全绿**。
       - name: 检出 ypbin-iot（sys_menu.title 的事实源）
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: wenbin-wb/ypbin-iot
           ref: main
@@ -123,17 +123,17 @@ jobs:
       # 若还没合入「base 迁出 / 宿主目录」，本门禁必然失败，而此时失败性质是**检出/配置**而非事件码漂移，
       # 生成器会以退出码 2 明确区分（见 scripts/sync-tracking-events.mjs 头部说明）。
       - name: 检出代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 检出 starter（base 层事件目录事实源）
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: wenbin-wb/ypbin-starter
           ref: master
           path: ypbin-starter
 
       - name: 检出 admin（宿主 project 层事件目录）
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: wenbin-wb/ypbin-admin
           ref: main
