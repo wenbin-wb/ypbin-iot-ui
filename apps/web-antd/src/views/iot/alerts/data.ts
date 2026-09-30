@@ -236,7 +236,15 @@ export function useInstanceColumns(): VxeTableGridColumns {
 }
 
 /** 告警列表筛选（状态/级别/设备/时间范围）。 */
-export function useInstanceFormSchema() {
+export type InstanceFilterInitial = {
+  deviceId?: string;
+  severity?: string;
+  state?: string;
+};
+
+/** 告警实例搜索表单 schema（看板 #12「筛选持久化」）：接受持久化初始值（defaultValue 注入），首次进入即回填上次筛选；值已过 sanitizeFilter「不信任存储」校验（见 shared/list-filter.ts）。 */
+export function useInstanceFormSchema(initial?: InstanceFilterInitial) {
+  const init = initial ?? {};
   return [
     {
       component: 'Select',
@@ -251,6 +259,7 @@ export function useInstanceFormSchema() {
         placeholder: $t('page.iot.alert.allStates'),
       },
       fieldName: 'state',
+      defaultValue: init.state,
       label: $t('page.iot.alert.stateField'),
     },
     {
@@ -265,6 +274,7 @@ export function useInstanceFormSchema() {
         placeholder: $t('page.iot.alert.allSeverities'),
       },
       fieldName: 'severity',
+      defaultValue: init.severity,
       label: $t('page.iot.alert.severityField'),
     },
     {
@@ -278,6 +288,7 @@ export function useInstanceFormSchema() {
         valueField: 'id',
       },
       fieldName: 'deviceId',
+      defaultValue: init.deviceId,
       label: $t('page.iot.device.name'),
     },
   ];
