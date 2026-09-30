@@ -662,7 +662,14 @@
       "reportTs": "Reported at",
       "desiredTs": "Written at",
       "reportedDisabled": "The reported section is not wired up yet (no producer in production code, proposal G2); what you see is the real state, not evidence that the device never reported",
-      "loadFailed": "Failed to load the device shadow"
+      "loadFailed": "Failed to load the device shadow",
+      "editDesired": "Edit desired",
+      "editDesiredTitle": "Edit desired (cloud intent)",
+      "desiredPlaceholder": "Paste or type a JSON object (key-value pairs); empty object clears it",
+      "desiredHint": "desired is the target config pushed to the device (replaces whole map).",
+      "desiredSaved": "Desired saved",
+      "desiredFailed": "Failed to save desired",
+      "cancel": "Cancel"
     },
     "tag": {
       "title": "Device Tags",

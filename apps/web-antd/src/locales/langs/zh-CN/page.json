@@ -662,7 +662,14 @@
       "reportTs": "上报时刻",
       "desiredTs": "写入时刻",
       "reportedDisabled": "reported 区尚未启用（生产代码无写入方，方案 G2）；这里显示的是真实状态，不代表设备没上报",
-      "loadFailed": "设备影子查询失败"
+      "loadFailed": "设备影子查询失败",
+      "editDesired": "编辑期望值",
+      "editDesiredTitle": "编辑 desired（云端期望）",
+      "desiredPlaceholder": "粘贴或输入 JSON 对象（键值对），空对象 = 清空",
+      "desiredHint": "desired 是平台将下发给设备的目标配置（整体替换）。",
+      "desiredSaved": "期望值已保存",
+      "desiredFailed": "期望值保存失败",
+      "cancel": "取消"
     },
     "tag": {
       "title": "设备标签",

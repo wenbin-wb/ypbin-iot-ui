@@ -44,6 +44,7 @@ import DetailDebug from './detail-debug.vue';
 import DetailPoints from './detail-points.vue';
 import PanelErrorBoundary from './panel-error-boundary.vue';
 import Series from './series.vue';
+import ShadowEdit from './shadow-edit.vue';
 import DeviceTags from './tags.vue';
 import Trace from './trace.vue';
 
@@ -596,8 +597,15 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
               </template>
             </div>
             <div>
-              <div class="mb-2 font-semibold">
-                {{ $t('page.iot.shadow.desired') }}
+              <div class="mb-2 flex items-center justify-between">
+                <span class="font-semibold">
+                  {{ $t('page.iot.shadow.desired') }}
+                </span>
+                <ShadowEdit
+                  :device-id="deviceId"
+                  :initial-desired="shadow?.desired"
+                  @saved="load"
+                />
               </div>
               <Empty
                 v-if="shadowRows(shadow?.desired).length === 0"
