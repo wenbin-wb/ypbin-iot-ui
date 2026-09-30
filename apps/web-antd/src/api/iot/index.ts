@@ -1,6 +1,7 @@
 export * from './alert';
 export * from './availability';
 export * from './command';
+export * from './credential';
 export * from './device';
 export * from './device-import';
 export * from './event';
