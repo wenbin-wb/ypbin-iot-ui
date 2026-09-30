@@ -24,6 +24,8 @@ export interface OnboardingTemplateProperty {
   maxValue?: string;
   /** 点位建议（展示用；不是自动建点位）。 */
   pointHint: string;
+  /** 必选功能：创建物模型属性时写入 required=true，UI 标「必选」（与后端 IotPropertyReq.required 对齐）。 */
+  required?: boolean;
 }
 
 export interface OnboardingTemplate {
@@ -65,6 +67,7 @@ export function useOnboardingTemplates(): OnboardingTemplate[] {
       serviceName: $t('page.iot.onboarding.templateTempHumidityService'),
       properties: [
         {
+          required: true,
           identifier: 'temperature',
           propertyName: $t('page.iot.onboarding.propertyTemperature'),
           dataType: 'decimal',
@@ -75,6 +78,7 @@ export function useOnboardingTemplates(): OnboardingTemplate[] {
           pointHint: $t('page.iot.onboarding.templateTempHumidityPointTemp'),
         },
         {
+          required: true,
           identifier: 'humidity',
           propertyName: $t('page.iot.onboarding.propertyHumidity'),
           dataType: 'decimal',
@@ -82,7 +86,9 @@ export function useOnboardingTemplates(): OnboardingTemplate[] {
           unit: '%RH',
           minValue: '0',
           maxValue: '100',
-          pointHint: $t('page.iot.onboarding.templateTempHumidityPointHumidity'),
+          pointHint: $t(
+            'page.iot.onboarding.templateTempHumidityPointHumidity',
+          ),
         },
       ],
     },
@@ -97,6 +103,7 @@ export function useOnboardingTemplates(): OnboardingTemplate[] {
       serviceName: $t('page.iot.onboarding.templateRelayService'),
       properties: [
         {
+          required: true,
           identifier: 'power',
           propertyName: $t('page.iot.onboarding.propertyPower'),
           dataType: 'bool',
