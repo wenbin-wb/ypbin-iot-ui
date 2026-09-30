@@ -39,6 +39,7 @@ import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
 
 import Availability from './availability.vue';
+import Credential from './credential.vue';
 import DetailAlert from './detail-alert.vue';
 import DetailDebug from './detail-debug.vue';
 import DetailPoints from './detail-points.vue';
@@ -633,6 +634,11 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
           <!-- 标签（看板 #13）：设备描述性元数据，展示 + 增删改；权限按 iot:tag:* -->
           <div class="rounded border p-3">
             <DeviceTags :device-id="deviceId" />
+          </div>
+
+          <!-- 设备凭据（看板 #13）：MQTT 接入所需；密码仅签发时刻展示一次 -->
+          <div class="rounded border p-3">
+            <Credential :device-id="deviceId" />
           </div>
         </Tabs.TabPane>
 
