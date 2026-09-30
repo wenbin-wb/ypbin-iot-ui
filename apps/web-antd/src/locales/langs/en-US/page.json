@@ -665,7 +665,26 @@
       "loadFailed": "Failed to load the device shadow"
     },
     "tag": {
-      "title": "Device tags"
+      "title": "Device Tags",
+      "add": "Add tag",
+      "edit": "Edit",
+      "delete": "Delete",
+      "editTitle": "Edit tag: {0}",
+      "createTitle": "Add tag",
+      "key": "Tag key",
+      "keyPlaceholder": "e.g. site / env / zone (<=64 chars)",
+      "value": "Tag value",
+      "valuePlaceholder": "e.g. east / prod (<=255 chars)",
+      "empty": "No tags yet. Click \"Add tag\" to attach descriptive metadata to this device.",
+      "loadFailed": "Failed to load tags",
+      "createSuccess": "Tag added",
+      "updateSuccess": "Tag updated",
+      "deleteSuccess": "Tag deleted",
+      "saveFailed": "Failed to save tag",
+      "deleteFailed": "Failed to delete tag",
+      "deleteConfirm": "Delete tag \"{0}\"?",
+      "cancel": "Cancel",
+      "okText": "OK"
     },
     "credential": {
       "get": "View device credential",
