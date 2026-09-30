@@ -859,6 +859,33 @@
       "resendNotAllowed": "Only failed/timed-out commands can be resent",
       "renderFailed": "The online-debug panel failed to render (caught, not swallowed): full error below",
       "total": "{0} in total"
+    },
+    "platformAlert": {
+      "title": "Platform Alerts",
+      "rule": "Rule",
+      "severityField": "Severity",
+      "stateField": "State",
+      "summary": "Summary",
+      "snapshot": "Metric snapshot",
+      "startTs": "Started",
+      "resolvedTs": "Resolved",
+      "rounds": "Observed rounds",
+      "allStates": "All states",
+      "allSeverities": "All severities",
+      "empty": "No platform alerts (platform is healthy).",
+      "loadFailed": "Failed to load platform alerts",
+      "noPermission": "No permission (iot:alert:list)",
+      "state": {
+        "firing": "Firing",
+        "pending": "Pending",
+        "resolved": "Resolved",
+        "unknown": "Unknown"
+      },
+      "severity": {
+        "critical": "Critical",
+        "warning": "Warning",
+        "unknown": "Unknown"
+      }
     }
   },
   "auth": {

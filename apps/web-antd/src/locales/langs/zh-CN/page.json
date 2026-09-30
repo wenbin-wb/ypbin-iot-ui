@@ -859,6 +859,33 @@
       "resendNotAllowed": "只有失败/超时的指令可以重发",
       "renderFailed": "在线调试页渲染失败（已捕获，未静默吞掉）：下面是完整错误",
       "total": "共 {0} 条"
+    },
+    "platformAlert": {
+      "title": "平台自告警",
+      "rule": "规则",
+      "severityField": "级别",
+      "stateField": "状态",
+      "summary": "概要",
+      "snapshot": "指标快照",
+      "startTs": "开始",
+      "resolvedTs": "恢复",
+      "rounds": "异常轮数",
+      "allStates": "全部状态",
+      "allSeverities": "全部级别",
+      "empty": "暂无平台告警（平台自评估健康）。",
+      "loadFailed": "平台告警加载失败",
+      "noPermission": "无查看权限（iot:alert:list）",
+      "state": {
+        "firing": "持续告警",
+        "pending": "待确认",
+        "resolved": "已恢复",
+        "unknown": "未知"
+      },
+      "severity": {
+        "critical": "严重",
+        "warning": "警告",
+        "unknown": "未知"
+      }
     }
   },
   "ai": {
