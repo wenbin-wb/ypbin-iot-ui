@@ -325,6 +325,12 @@ export function useRuleColumns(): VxeTableGridColumns {
       slots: { default: 'condition' },
     },
     {
+      field: 'notifyTargets',
+      title: $t('page.iot.alert.notify.title'),
+      width: 140,
+      slots: { default: 'notifyRisk' },
+    },
+    {
       field: 'enabled',
       title: $t('page.iot.alert.enabled'),
       width: 90,
