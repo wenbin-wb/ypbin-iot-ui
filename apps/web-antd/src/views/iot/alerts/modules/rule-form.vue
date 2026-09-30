@@ -30,9 +30,15 @@ import {
   listServices,
   updateAlertRule,
 } from '#/api/iot';
+import { UserSelect } from '#/components/user-select';
 import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
 
+import {
+  findInvalidEmails,
+  joinNotifyTargets,
+  splitNotifyTargets,
+} from '../notify-targets';
 import { buildRuleSummary, resolveArgs } from '../summary';
 
 const emit = defineEmits<{ saved: [] }>();
@@ -110,11 +116,31 @@ const form = ref({
   severity: 'WARNING',
   enabled: true,
   channels: ['INBOX', 'EMAIL'] as string[],
-  notifyTargets: '',
+  /**
+   * 收件人拆成三段编辑（保存时合回后端的 `notifyTargets` 单字段契约）。
+   *
+   * 为什么拆：原来是一个自由文本框，用户要**手敲用户 ID**——
+   * 既不知道 ID 是多少，也认不出自己敲的对不对。现在"选系统用户"为主，
+   * 额外邮箱（非系统用户的邮箱，如公共告警组）保留为次。
+   */
+  notifyUserIds: [] as string[],
+  notifyExtraEmails: [] as string[],
+  /** 既非用户 ID 也非邮箱的历史 token（原样保留，避免保存即静默清除）。 */
+  notifyUnrecognized: [] as string[],
   description: '',
 });
 
 const needsPoint = computed(() => Boolean(form.value.operator));
+
+/**
+ * 额外邮箱里"不像邮箱"的条目（不含 `@`）。
+ *
+ * 🔴 必须提示而不是放过去：后端按**形态**分流，不含 `@` 的 token 会被**静默忽略**
+ * ⇒ 用户以为填了收件人，告警却没人收到。这条提示就是为了消灭那个静默失败。
+ */
+const invalidEmails = computed(() =>
+  findInvalidEmails(form.value.notifyExtraEmails),
+);
 
 /** 点位选择项的展示名（含单位），预览里用同一份数据。 */
 const propertyLabel = computed(() => {
@@ -335,7 +361,11 @@ function applyRule(rule: IotAlertApi.RuleResp) {
     .split(',')
     .map((item) => item.trim())
     .filter((item) => item !== '');
-  form.value.notifyTargets = rule.notifyTargets ?? '';
+  // 拆分历史值（形态分流）：旧的自由文本里可能混着用户 ID 与邮箱，甚至无效 token
+  const splitTargets = splitNotifyTargets(rule.notifyTargets);
+  form.value.notifyUserIds = splitTargets.userIds;
+  form.value.notifyExtraEmails = splitTargets.emails;
+  form.value.notifyUnrecognized = splitTargets.unrecognized;
   form.value.description = rule.description ?? '';
   const point = rule.points?.[0];
   form.value.propertyId = point?.propertyId ?? '';
@@ -385,7 +415,14 @@ function toRequest(): IotAlertApi.RuleSaveReq {
     pendingTtlSec: form.value.pendingTtlSec,
     repeatIntervalSec: form.value.repeatIntervalSec,
     notifyChannels: form.value.channels.join(','),
-    notifyTargets: form.value.notifyTargets || undefined,
+    // 合回后端契约（用户 ID + 邮箱 + 无法识别项，逗号分隔）：
+    // 空串转 undefined 以保留"留空 = 发给规则创建者"的既有语义。
+    notifyTargets:
+      joinNotifyTargets({
+        userIds: form.value.notifyUserIds,
+        emails: form.value.notifyExtraEmails,
+        unrecognized: form.value.notifyUnrecognized,
+      }) || undefined,
     description: form.value.description || undefined,
     points: pointLike
       ? [
@@ -651,18 +688,65 @@ onMounted(loadPresets);
             {{ $t('page.iot.alert.channelHint') }}
           </div>
         </div>
+      </div>
+
+      <!--
+        收件人：以「选系统用户」为主、额外邮箱为辅。
+        保存时会**合回**后端 `notify_targets` 的单字段契约（用户ID + 邮箱，逗号分隔），
+        因此后端无需任何改动，且**线上既有数据（含邮箱的历史规则）能原样回显与保存**。
+      -->
+      <div class="space-y-2">
         <div>
           <div class="mb-1 text-sm">
-            {{ $t('page.iot.alert.notifyTargets') }}
+            {{ $t('page.iot.alert.notifyUsers') }}
           </div>
-          <Input
-            v-model:value="form.notifyTargets"
-            :placeholder="$t('page.iot.alert.notifyTargetsPlaceholder')"
-          />
+          <!-- 系统通用用户选择器：多选 / 可搜索 / 按 id 回显（编辑时显示姓名而不是裸 ID） -->
+          <UserSelect v-model="form.notifyUserIds" />
           <div class="mt-1 text-xs text-muted-foreground">
-            {{ $t('page.iot.alert.notifyTargetsHint') }}
+            {{ $t('page.iot.alert.notifyUsersHint') }}
           </div>
         </div>
+
+        <div>
+          <div class="mb-1 text-sm">
+            {{ $t('page.iot.alert.notifyExtraEmails') }}
+          </div>
+          <Select
+            v-model:value="form.notifyExtraEmails"
+            mode="tags"
+            :placeholder="$t('page.iot.alert.notifyExtraEmailsPlaceholder')"
+            :token-separators="[',', ' ', ';']"
+          />
+          <!--
+            🔴 不含 @ 的条目会被后端按形态**静默忽略** ⇒ 必须当场指出。
+            不提示的后果是"我明明填了收件人，告警却没人收到"，且无从排查。
+          -->
+          <div
+            v-if="invalidEmails.length > 0"
+            class="mt-1 text-xs text-red-500"
+          >
+            {{
+              $t('page.iot.alert.notifyExtraEmailsInvalid', [
+                invalidEmails.join(', '),
+              ])
+            }}
+          </div>
+          <div class="mt-1 text-xs text-muted-foreground">
+            {{ $t('page.iot.alert.notifyExtraEmailsHint') }}
+          </div>
+        </div>
+
+        <!-- 历史遗留 token：原样保留并如实告知（静默清除才是更糟的选择） -->
+        <Alert
+          v-if="form.notifyUnrecognized.length > 0"
+          type="warning"
+          show-icon
+          :message="
+            $t('page.iot.alert.notifyUnrecognized', [
+              form.notifyUnrecognized.join(', '),
+            ])
+          "
+        />
       </div>
 
       <div>

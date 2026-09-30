@@ -205,7 +205,14 @@
       },
       "noTenantHint": "当前登录身份没有选择租户，告警的新建/确认/静默无法保存：请先在**右上角**选择或切换到你管理的租户，然后重试。",
       "ruleList": "查看告警规则",
-      "ruleSave": "保存告警规则"
+      "ruleSave": "保存告警规则",
+      "notifyUsers": "通知用户",
+      "notifyUsersHint": "留空则发给规则创建者的站内信。",
+      "notifyExtraEmails": "额外邮箱",
+      "notifyExtraEmailsPlaceholder": "输入邮箱后回车，可填多个",
+      "notifyExtraEmailsInvalid": "以下条目不是合法邮箱，保存后会被忽略：{0}",
+      "notifyExtraEmailsHint": "用于非系统用户的邮箱（如公共告警组）。",
+      "notifyUnrecognized": "以下历史条目既不是用户也不是邮箱，将原样保留（平台不会向它们发送）：{0}"
     },
     "title": "IoT 平台",
     "device": {
