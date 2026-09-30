@@ -205,7 +205,14 @@
       },
       "noTenantHint": "Your session has no tenant selected, so alerts cannot be created/acknowledged/silenced: pick or switch to the tenant you manage (top-right) and retry.",
       "ruleList": "View Alert Rules",
-      "ruleSave": "Save Alert Rules"
+      "ruleSave": "Save Alert Rules",
+      "notifyUsers": "Notify users",
+      "notifyUsersHint": "If left empty, the in-app message goes to the rule creator.",
+      "notifyExtraEmails": "Additional emails",
+      "notifyExtraEmailsPlaceholder": "Type an email and press Enter; multiple allowed",
+      "notifyExtraEmailsInvalid": "These entries are not valid emails and will be ignored on save: {0}",
+      "notifyExtraEmailsHint": "For mailboxes that are not system users (e.g. a shared alert group).",
+      "notifyUnrecognized": "These legacy entries are neither users nor emails; they are kept as-is (the platform will not send to them): {0}"
     },
     "title": "IoT Platform",
     "device": {
