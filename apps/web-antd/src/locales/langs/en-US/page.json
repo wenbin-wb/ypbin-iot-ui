@@ -600,7 +600,8 @@
       "templateRelayProduct": "Relay switch",
       "templateRelayService": "Switch control",
       "templateRelayPointPower": "Coil 0x0000 (00001), 1 = closed, 0 = open; only properties with RW access can be written down",
-      "templateRelayPointVoltage": "Holding register 0x0010 (40017), unsigned 16-bit ×0.1, unit V"
+      "templateRelayPointVoltage": "Holding register 0x0010 (40017), unsigned 16-bit ×0.1, unit V",
+      "required": "Required"
     },
     "ledger": {
       "title": "Ledger changes",

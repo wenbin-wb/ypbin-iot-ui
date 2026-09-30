@@ -2,10 +2,9 @@
 import type { OnboardingTemplate } from './templates';
 
 import { computed, onMounted, ref } from 'vue';
-
 import { useRouter } from 'vue-router';
 
-import { Alert, Button, Input, Steps, Tag, message } from 'ant-design-vue';
+import { Alert, Button, Input, message, Steps, Tag } from 'ant-design-vue';
 
 import {
   createProduct,
@@ -38,10 +37,10 @@ import { useOnboardingTemplates } from './templates';
  * 因此一旦租户下有产品**或**设备，就折叠成一行提示，需要时手动展开。
  */
 const emit = defineEmits<{
-  /** 向导里产生了新数据（产品），宿主页面据此刷新列表。 */
-  done: [];
   /** 请求宿主打开「添加设备」（设备台账页用它开预选产品的表单）。 */
   addDevice: [productId: string];
+  /** 向导里产生了新数据（产品），宿主页面据此刷新列表。 */
+  done: [];
 }>();
 
 const router = useRouter();
@@ -72,11 +71,14 @@ const countsFailed = ref(false);
 const expanded = ref(false);
 
 const selected = computed(
-  () => templates.find((item) => item.key === selectedKey.value) ?? templates[0],
+  () =>
+    templates.find((item) => item.key === selectedKey.value) ?? templates[0],
 );
 
 /** 租户下是否已经有数据（有 ⇒ 默认折叠，不干扰老用户）。 */
-const hasData = computed(() => counts.value.products > 0 || counts.value.devices > 0);
+const hasData = computed(
+  () => counts.value.products > 0 || counts.value.devices > 0,
+);
 
 const showWizard = computed(() => !hasData.value || expanded.value);
 
@@ -130,12 +132,15 @@ async function reloadCounts() {
       products: toBackendNumber(products?.total),
     };
     countsFailed.value = false;
-  } catch (caught) {
+  } catch {
     // 计数只用于「是否弱化引导」这一个判断：取不到就按「没有数据」把引导显示全（失败开放），
     // 宁愿多显示引导也不能因为一次统计失败让新用户看不到入口。
     // 但**不静默**：置 countsFailed 让界面明说「这是按兜底口径展示的」，并留痕便于排查。
     countsFailed.value = true;
-    console.warn('[iot] 接入向导的统计查询失败，按「暂无数据」展示完整引导', caught);
+    console.warn(
+      '[iot] 接入向导的统计查询失败，按「暂无数据」展示完整引导',
+      error,
+    );
   }
 }
 
@@ -185,6 +190,7 @@ async function applyTemplate() {
         maxValue: property.maxValue,
         minValue: property.minValue,
         propertyName: property.propertyName,
+        required: property.required,
         sort,
         unit: property.unit,
       });
@@ -199,9 +205,9 @@ async function applyTemplate() {
     await reloadCounts();
     expanded.value = true;
     emit('done');
-  } catch (caught) {
+  } catch {
     error.value = extractErrorMessage(
-      caught,
+      error,
       $t('page.iot.onboarding.createFailed'),
     );
   } finally {
@@ -221,9 +227,9 @@ async function publishCreated() {
     message.success(
       `${$t('page.iot.onboarding.publishSuccess')} ${version ?? ''}`.trim(),
     );
-  } catch (caught) {
+  } catch {
     error.value = extractErrorMessage(
-      caught,
+      error,
       $t('page.iot.onboarding.publishFailed'),
     );
   } finally {
@@ -320,7 +326,15 @@ onMounted(async () => {
                 :key="property.identifier"
               >
                 {{ property.propertyName }} · {{ property.dataType
-                }}<template v-if="property.unit"> · {{ property.unit }}</template>
+                }}<template v-if="property.unit">
+                  · {{ property.unit }}
+                </template>
+                <template v-if="property.required">
+                  ·
+                  <span class="text-primary">{{
+                    $t('page.iot.onboarding.required')
+                  }}</span>
+                </template>
               </Tag>
             </div>
           </button>
@@ -343,7 +357,10 @@ onMounted(async () => {
         <div v-if="selected" class="mt-3 text-xs text-muted-foreground">
           <div class="mb-1">{{ $t('page.iot.onboarding.pointSuggest') }}</div>
           <ul class="list-disc pl-5">
-            <li v-for="property in selected.properties" :key="property.identifier">
+            <li
+              v-for="property in selected.properties"
+              :key="property.identifier"
+            >
               {{ property.propertyName }}：{{ property.pointHint }}
             </li>
           </ul>
@@ -384,7 +401,10 @@ onMounted(async () => {
             {{ $t('page.iot.product.publish') }}
           </Button>
         </div>
-        <div v-if="createdProductCode" class="mt-1 text-xs text-muted-foreground">
+        <div
+          v-if="createdProductCode"
+          class="mt-1 text-xs text-muted-foreground"
+        >
           {{ $t('page.iot.onboarding.createdProduct', [createdProductCode]) }}
         </div>
       </div>

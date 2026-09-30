@@ -600,7 +600,8 @@
       "templateRelayProduct": "继电器开关",
       "templateRelayService": "开关控制",
       "templateRelayPointPower": "线圈 0x0000（00001），1 = 合闸、0 = 分闸；属性读写权限为 RW 才可下发",
-      "templateRelayPointVoltage": "保持寄存器 0x0010（40017），16 位无符号 ×0.1，单位 V"
+      "templateRelayPointVoltage": "保持寄存器 0x0010（40017），16 位无符号 ×0.1，单位 V",
+      "required": "必选"
     },
     "ledger": {
       "title": "设备台账变更",
