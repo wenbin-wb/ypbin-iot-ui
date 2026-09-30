@@ -103,7 +103,7 @@ catalog:
   '@vueuse/integrations': ^14.3.0
   '@vueuse/motion': ^3.0.3
   ant-design-vue: ^4.2.6
-  antdv-next: ^1.4.5
+  antdv-next: ^1.5.4
   archiver: ^8.0.0
   axios: ^1.18.1
   axios-mock-adapter: ^2.1.0
