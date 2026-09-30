@@ -11,5 +11,6 @@ export * from './point';
 export * from './product';
 export * from './series';
 export * from './shadow';
+export * from './tag';
 export * from './thingmodel';
 export * from './trace';

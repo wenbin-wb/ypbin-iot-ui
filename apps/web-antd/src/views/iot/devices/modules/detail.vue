@@ -44,6 +44,7 @@ import DetailDebug from './detail-debug.vue';
 import DetailPoints from './detail-points.vue';
 import PanelErrorBoundary from './panel-error-boundary.vue';
 import Series from './series.vue';
+import DeviceTags from './tags.vue';
 import Trace from './trace.vue';
 
 /**
@@ -619,6 +620,11 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
                 {{ shadow?.desiredTs ?? '-' }}
               </div>
             </div>
+          </div>
+
+          <!-- 标签（看板 #13）：设备描述性元数据，展示 + 增删改；权限按 iot:tag:* -->
+          <div class="rounded border p-3">
+            <DeviceTags :device-id="deviceId" />
           </div>
         </Tabs.TabPane>
 

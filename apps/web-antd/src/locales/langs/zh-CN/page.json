@@ -665,7 +665,26 @@
       "loadFailed": "设备影子查询失败"
     },
     "tag": {
-      "title": "设备标签"
+      "title": "设备标签",
+      "add": "添加标签",
+      "edit": "编辑",
+      "delete": "删除",
+      "editTitle": "编辑标签：{0}",
+      "createTitle": "添加标签",
+      "key": "标签键",
+      "keyPlaceholder": "如 site / env / zone（≤64 字符）",
+      "value": "标签值",
+      "valuePlaceholder": "如 华东 / prod（≤255 字符）",
+      "empty": "还没有标签。点击右上角「添加标签」为设备补充描述性元数据。",
+      "loadFailed": "标签加载失败",
+      "createSuccess": "标签已添加",
+      "updateSuccess": "标签已更新",
+      "deleteSuccess": "标签已删除",
+      "saveFailed": "标签保存失败",
+      "deleteFailed": "删除失败",
+      "deleteConfirm": "确定删除标签「{0}」吗？",
+      "cancel": "取消",
+      "okText": "确定"
     },
     "credential": {
       "get": "查看设备凭据",
