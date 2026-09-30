@@ -36,7 +36,7 @@ export const shared = defineConfig({
   srcDir: 'src',
   themeConfig: {
     i18nRouting: true,
-    logo: 'https://unpkg.com/@vbenjs/static-source@0.1.7/source/logo-v1.webp',
+    logo: '/ypbin-logo.png',
     search: {
       options: {
         locales: {
@@ -134,7 +134,7 @@ function head(): HeadConfig[] {
         name: 'keywords',
       },
     ],
-    ['link', { href: '/favicon.ico', rel: 'icon', type: 'image/svg+xml' }],
+    ['link', { href: '/ypbin-logo.png', rel: 'icon', type: 'image/png' }],
     [
       'meta',
       {
@@ -144,7 +144,7 @@ function head(): HeadConfig[] {
       },
     ],
     ['meta', { content: 'vben admin docs', name: 'keywords' }],
-    ['link', { href: '/favicon.ico', rel: 'icon' }],
+    ['link', { href: '/ypbin-logo.png', rel: 'icon' }],
     // [
     //   'script',
     //   {

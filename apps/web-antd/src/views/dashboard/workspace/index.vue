@@ -5,7 +5,7 @@ import type {
   WorkbenchTodoItem,
 } from '@vben/common-ui';
 
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 
 import {
@@ -17,35 +17,28 @@ import {
 } from '@vben/common-ui';
 import { preferences } from '@vben/preferences';
 import { useUserStore } from '@vben/stores';
-import { openWindow } from '@vben/utils';
 
-import { Button, Empty, Result, Spin } from 'ant-design-vue';
+import { Empty, Spin, Tag } from 'ant-design-vue';
 
-import { getDashboardStats } from '#/api';
 import { $t } from '#/locales';
 
+import { useIotOverview } from '../shared/use-iot-overview';
 import { useWorkbenchTrends } from './use-workbench-trends';
 
 const userStore = useUserStore();
 const router = useRouter();
 
-// 动态趋势域（操作日志流 + 演示数据兜底）
-const {
-  loadTrends,
-  trendError,
-  trendItems,
-  trendLoading,
-  trendsLoaded,
-  usingDemoTrends,
-} = useWorkbenchTrends();
+// 运行总览（真实接口缺位时演示数据兜底，页面上以徽标标注）
+const { loading, overview, usingDemo } = useIotOverview();
 
-void loadStats();
+// 最近告警动态流
+const { trendItems } = useWorkbenchTrends(overview);
 
-// ---- 统一视觉（与统计看板/分析页同语言）----
+// ---- 统一视觉（与分析页同一套语言）----
 const BRAND_GRAD =
   'linear-gradient(135deg, hsl(var(--primary)), hsl(245 82% 67%))';
 
-// ---- 今日概览指标（真实数据：GET /dashboard/stats）----
+// ---- IoT 今日概览指标 ----
 interface MetricCard {
   key: string;
   label: string;
@@ -55,212 +48,201 @@ interface MetricCard {
   glow: string;
 }
 
-const stats = ref({
-  userCount: 0,
-  roleCount: 0,
-  deptCount: 0,
-  menuCount: 0,
-  onlineCount: 0,
-  logCount: 0,
+const metricCards = computed<MetricCard[]>(() => {
+  const d = overview.value;
+  return [
+    {
+      key: 'device',
+      label: $t('page.dashboard.deviceTotal'),
+      value: d ? d.deviceTotal.toLocaleString() : '—',
+      icon: 'i-lucide-cpu',
+      grad: 'linear-gradient(135deg, hsl(var(--primary)), hsl(245 82% 67%))',
+      glow: 'hsl(var(--primary) / 30%)',
+    },
+    {
+      key: 'online',
+      label: $t('page.dashboard.onlineRate'),
+      value: d ? `${d.onlineRate}%` : '—',
+      icon: 'i-lucide-wifi',
+      grad: 'linear-gradient(135deg, hsl(161 90% 43%), hsl(199 89% 48%))',
+      glow: 'hsl(161 90% 43% / 30%)',
+    },
+    {
+      key: 'message',
+      label: $t('page.dashboard.messageToday'),
+      value: d ? formatCompact(d.messageToday) : '—',
+      icon: 'i-lucide-radio-tower',
+      grad: 'linear-gradient(135deg, hsl(199 89% 48%), hsl(161 90% 43%))',
+      glow: 'hsl(199 89% 48% / 30%)',
+    },
+    {
+      key: 'alert',
+      label: $t('page.dashboard.alertPending'),
+      value: d ? String(d.alertPending) : '—',
+      icon: 'i-lucide-triangle-alert',
+      grad: 'linear-gradient(135deg, hsl(32 95% 44%), hsl(16 90% 50%))',
+      glow: 'hsl(32 95% 44% / 30%)',
+    },
+  ];
 });
 
-const metricCards = computed<MetricCard[]>(() => [
-  {
-    key: 'user',
-    label: $t('page.dashboard.user'),
-    value: String(stats.value.userCount ?? 0),
-    icon: 'i-lucide-users',
-    grad: 'linear-gradient(135deg, hsl(var(--primary)), hsl(245 82% 67%))',
-    glow: 'hsl(var(--primary) / 30%)',
-  },
-  {
-    key: 'role',
-    label: $t('page.dashboard.role'),
-    value: String(stats.value.roleCount ?? 0),
-    icon: 'i-lucide-user-cog',
-    grad: 'linear-gradient(135deg, hsl(245 82% 67%), hsl(161 90% 43%))',
-    glow: 'hsl(245 82% 67% / 30%)',
-  },
-  {
-    key: 'dept',
-    label: $t('page.dashboard.dept'),
-    value: String(stats.value.deptCount ?? 0),
-    icon: 'i-lucide-building-2',
-    grad: 'linear-gradient(135deg, hsl(199 89% 48%), hsl(161 90% 43%))',
-    glow: 'hsl(199 89% 48% / 30%)',
-  },
-  {
-    key: 'online',
-    label: $t('page.dashboard.online'),
-    value: String(stats.value.onlineCount ?? 0),
-    icon: 'i-lucide-wifi',
-    grad: 'linear-gradient(135deg, hsl(32 95% 44%), hsl(16 90% 50%))',
-    glow: 'hsl(32 95% 44% / 30%)',
-  },
-]);
-
-async function loadStats() {
-  try {
-    const data = await getDashboardStats();
-    stats.value = { ...stats.value, ...data };
-  } catch (error) {
-    console.error('Failed to load dashboard stats:', error);
-  }
+function formatCompact(n: number) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+  return String(n);
 }
 
-// ---- 快捷导航 ----
+// ---- 快捷导航（IoT 模块，路径与后端菜单一致）----
 const quickNavItems: WorkbenchQuickNavItem[] = [
   {
     color: '#0066f5',
-    icon: 'carbon:user',
-    title: $t('system.user.title'),
-    url: '/system/user',
+    icon: 'carbon:iot-platform',
+    title: $t('page.iot.device.title'),
+    url: '/iot/devices',
   },
   {
     color: '#7c7cf0',
-    icon: 'carbon:user-role',
-    title: $t('system.role.title'),
-    url: '/system/role',
-  },
-  {
-    color: '#0ec9a3',
-    icon: 'carbon:menu',
-    title: $t('system.menu.title'),
-    url: '/system/menu',
-  },
-  {
-    color: '#f0b429',
-    icon: 'carbon:container-services',
-    title: $t('system.dept.title'),
-    url: '/system/dept',
+    icon: 'carbon:product',
+    title: $t('page.iot.product.title'),
+    url: '/iot/products',
   },
   {
     color: '#f2547b',
-    icon: 'carbon:document',
-    title: $t('system.log.title'),
-    url: '/system/log',
+    icon: 'carbon:warning',
+    title: $t('page.iot.alert.title'),
+    url: '/iot/alerts',
+  },
+  {
+    color: '#0ec9a3',
+    icon: 'carbon:group',
+    title: $t('page.iot.group.title'),
+    url: '/iot/groups',
+  },
+  {
+    color: '#f0b429',
+    icon: 'carbon:flow',
+    title: $t('page.iot.onboarding.title'),
+    url: '/iot/onboarding',
   },
   {
     color: '#5a6cf0',
-    icon: 'carbon:user-online',
-    title: $t('system.onlineUser.title'),
-    url: '/system/online-user',
+    icon: 'carbon:tool-box',
+    title: $t('page.iot.maintenance.shortTitle'),
+    url: '/iot/maintenance',
   },
 ];
 
-// ---- 项目卡片（真实统计入口）----
+// ---- 平台能力卡片（IoT 功能入口）----
 const PROJECT_COLORS = [
-  '#0066f5', // 蓝（primary）
-  '#7c7cf0', // 靛紫
-  '#0ec9a3', // 青绿
-  '#f0b429', // 黄
-  '#f2547b', // 红
-  '#5a6cf0', // 蓝紫
+  '#0066f5',
+  '#7c7cf0',
+  '#0ec9a3',
+  '#f0b429',
+  '#f2547b',
+  '#5a6cf0',
 ];
 
 const projectItems = computed<WorkbenchProjectItem[]>(() => [
   {
-    title: $t('page.dashboard.projectKb'),
-    icon: 'carbon:database-enterprise',
+    title: $t('page.iot.onboarding.title'),
+    icon: 'carbon:flow',
     color: PROJECT_COLORS[0],
-    content: $t('page.dashboard.projectKbContent'),
-    group: $t('page.dashboard.groupKnowledge'),
+    content: $t('page.dashboard.featOnboardContent'),
+    group: $t('page.dashboard.grpAccess'),
     date: $t('page.dashboard.justNow'),
-    url: '/ai/knowledge',
+    url: '/iot/onboarding',
   },
   {
-    title: $t('page.dashboard.projectChat'),
-    icon: 'carbon:chat-bot',
+    title: $t('page.iot.product.title'),
+    icon: 'carbon:model-alt',
     color: PROJECT_COLORS[1],
-    content: $t('page.dashboard.projectChatContent'),
-    group: $t('page.dashboard.groupAiApp'),
+    content: $t('page.dashboard.featModelContent'),
+    group: $t('page.dashboard.grpAccess'),
     date: $t('page.dashboard.justNow'),
-    url: '/ai/chat',
+    url: '/iot/products',
   },
   {
-    title: $t('page.dashboard.projectModel'),
-    icon: 'carbon:ai-status',
+    title: $t('page.iot.device.title'),
+    icon: 'carbon:iot-platform',
     color: PROJECT_COLORS[2],
-    content: $t('page.dashboard.projectModelContent'),
-    group: $t('page.dashboard.groupResource'),
+    content: $t('page.dashboard.featDeviceContent'),
+    group: $t('page.dashboard.grpMonitor'),
     date: $t('page.dashboard.justNow'),
-    url: '/ai/config',
+    url: '/iot/devices',
   },
   {
-    title: $t('page.dashboard.projectUsage'),
-    icon: 'carbon:chart-line',
+    title: $t('page.iot.alert.title'),
+    icon: 'carbon:warning',
     color: PROJECT_COLORS[3],
-    content: $t('page.dashboard.projectUsageContent'),
-    group: $t('page.dashboard.groupAnalysis'),
+    content: $t('page.dashboard.featAlertContent'),
+    group: $t('page.dashboard.grpOps'),
     date: $t('page.dashboard.justNow'),
-    url: '/ai/usage',
+    url: '/iot/alerts',
   },
   {
-    title: $t('page.dashboard.projectWidget'),
-    icon: 'carbon:web-services-container',
+    title: $t('page.iot.group.title'),
+    icon: 'carbon:group',
     color: PROJECT_COLORS[4],
-    content: $t('page.dashboard.projectWidgetContent'),
-    group: $t('page.dashboard.groupIntegration'),
+    content: $t('page.dashboard.featGroupContent'),
+    group: $t('page.dashboard.grpOps'),
     date: $t('page.dashboard.justNow'),
-    url: '/ai/knowledge',
+    url: '/iot/groups',
   },
   {
-    title: $t('page.dashboard.projectShare'),
-    icon: 'carbon:share',
+    title: $t('page.iot.maintenance.shortTitle'),
+    icon: 'carbon:tool-box',
     color: PROJECT_COLORS[5],
-    content: $t('page.dashboard.projectShareContent'),
-    group: $t('page.dashboard.groupIntegration'),
+    content: $t('page.dashboard.featMaintContent'),
+    group: $t('page.dashboard.grpOps'),
     date: $t('page.dashboard.justNow'),
-    url: '/ai/knowledge',
+    url: '/iot/maintenance',
   },
 ]);
 
-// ---- 待办（无后端接口，标注演示数据）----
-const todoItems: WorkbenchTodoItem[] = [
+// ---- 运营待办（暂无后端接口，演示数据标注）----
+const todoItems = computed<WorkbenchTodoItem[]>(() => [
   {
-    title: $t('page.dashboard.todoKbDocs'),
-    content: $t('page.dashboard.todoKbDocsContent'),
+    title: $t('page.dashboard.todoAckAlert'),
+    content: $t('page.dashboard.todoAckAlertContent'),
     completed: false,
     date: $t('page.dashboard.today'),
   },
   {
-    title: $t('page.dashboard.todoConfigModel'),
-    content: $t('page.dashboard.todoConfigModelContent'),
+    title: $t('page.dashboard.todoCheckOffline'),
+    content: $t('page.dashboard.todoCheckOfflineContent'),
     completed: false,
     date: $t('page.dashboard.today'),
   },
   {
-    title: $t('page.dashboard.todoShare'),
-    content: $t('page.dashboard.todoShareContent'),
+    title: $t('page.dashboard.todoRule'),
+    content: $t('page.dashboard.todoRuleContent'),
     completed: true,
     date: $t('page.dashboard.yesterday'),
   },
   {
-    title: $t('page.dashboard.todoTestRecall'),
-    content: $t('page.dashboard.todoTestRecallContent'),
+    title: $t('page.dashboard.todoModel'),
+    content: $t('page.dashboard.todoModelContent'),
     completed: false,
     date: $t('page.dashboard.thisWeek'),
   },
   {
-    title: $t('page.dashboard.todoViewStats'),
-    content: $t('page.dashboard.todoViewStatsContent'),
+    title: $t('page.dashboard.todoImport'),
+    content: $t('page.dashboard.todoImportContent'),
     completed: false,
     date: $t('page.dashboard.thisWeek'),
   },
-];
-
-// ---- 动态趋势（后端日志，失败/不足时标注演示数据）----
+]);
 
 const welcomeTitle = computed(
   () =>
     `${$t('page.dashboard.welcome')}, ${userStore.userInfo?.realName ?? ''}`,
 );
 
+const avatar = computed(
+  () => userStore.userInfo?.avatar || preferences.app.defaultAvatar,
+);
+
 function navTo(nav: WorkbenchQuickNavItem) {
-  if (nav.url?.startsWith('http')) {
-    openWindow(nav.url);
-    return;
-  }
   if (nav.url?.startsWith('/')) {
     router.push(nav.url).catch((error) => {
       console.error('Navigation failed:', error);
@@ -279,17 +261,24 @@ function onProjectClick(item: WorkbenchProjectItem) {
 
 <template>
   <div class="p-5">
-    <!-- 页头：问候 + 右侧炫彩计数 -->
-    <WorkbenchHeader
-      :avatar="userStore.userInfo?.avatar || preferences.app.defaultAvatar"
-    >
-      <template #title>{{ welcomeTitle }}</template>
-      <template #description>{{ $t('page.dashboard.headerDesc') }}</template>
+    <!-- 页头：问候 + 右侧关键计数 -->
+    <WorkbenchHeader :avatar="avatar">
+      <template #title>
+        <span class="inline-flex items-center gap-2">
+          {{ welcomeTitle }}
+          <Tag v-if="usingDemo" color="orange" class="!mr-0">
+            {{ $t('page.dashboard.demoBadge') }}
+          </Tag>
+        </span>
+      </template>
+      <template #description>
+        {{ $t('page.dashboard.headerDesc') }}
+      </template>
       <template #actions>
         <div class="flex items-center gap-6 md:gap-10">
           <div class="flex flex-col items-end">
             <span class="text-xs text-muted-foreground">{{
-              $t('page.dashboard.users')
+              $t('page.dashboard.deviceTotal')
             }}</span>
             <span
               class="text-2xl font-bold tabular-nums leading-none"
@@ -298,7 +287,9 @@ function onProjectClick(item: WorkbenchProjectItem) {
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
               }"
-              >{{ stats.userCount }}</span>
+              >{{
+                overview ? overview.deviceTotal.toLocaleString() : '—'
+              }}</span>
           </div>
           <div class="flex flex-col items-end">
             <span class="text-xs text-muted-foreground">{{
@@ -311,11 +302,13 @@ function onProjectClick(item: WorkbenchProjectItem) {
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
               }"
-              >{{ stats.onlineCount }}</span>
+              >{{
+                overview ? overview.deviceOnline.toLocaleString() : '—'
+              }}</span>
           </div>
           <div class="flex flex-col items-end">
             <span class="text-xs text-muted-foreground">{{
-              $t('page.dashboard.logs')
+              $t('page.dashboard.alertPending')
             }}</span>
             <span
               class="text-2xl font-bold tabular-nums leading-none"
@@ -324,7 +317,7 @@ function onProjectClick(item: WorkbenchProjectItem) {
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
               }"
-              >{{ stats.logCount }}</span>
+              >{{ overview ? overview.alertPending : '—' }}</span>
           </div>
         </div>
       </template>
@@ -366,32 +359,21 @@ function onProjectClick(item: WorkbenchProjectItem) {
       </div>
     </div>
 
-    <!-- 动态趋势 + 快捷导航 -->
+    <!-- 最近告警动态 + 快捷导航 -->
     <div class="mt-5 flex flex-col gap-4 xl:flex-row">
       <div class="min-w-0 flex-1">
-        <Spin :spinning="trendLoading">
+        <Spin :spinning="loading">
           <WorkbenchTrends
-            v-if="trendsLoaded && trendItems.length > 0"
+            v-if="!loading && trendItems.length > 0"
             :items="trendItems"
             :title="
-              usingDemoTrends
-                ? `${$t('page.dashboard.latestActivity')}${$t('page.dashboard.demoSuffix')}`
-                : $t('page.dashboard.latestActivity')
+              usingDemo
+                ? `${$t('page.dashboard.recentAlerts')}${$t('page.dashboard.demoSuffix')}`
+                : $t('page.dashboard.recentAlerts')
             "
           />
-          <Result
-            v-else-if="trendError"
-            status="error"
-            :title="$t('page.dashboard.loadFailed')"
-          >
-            <template #extra>
-              <Button type="primary" @click="loadTrends">
-                {{ $t('page.dashboard.retry') }}
-              </Button>
-            </template>
-          </Result>
           <Empty
-            v-else-if="trendsLoaded"
+            v-else-if="!loading"
             :description="$t('page.dashboard.noData')"
           />
         </Spin>
@@ -405,7 +387,7 @@ function onProjectClick(item: WorkbenchProjectItem) {
       </div>
     </div>
 
-    <!-- 我的项目 -->
+    <!-- 平台能力入口 -->
     <div class="mt-5">
       <WorkbenchProject
         :items="projectItems"
@@ -433,7 +415,7 @@ function onProjectClick(item: WorkbenchProjectItem) {
       </WorkbenchProject>
     </div>
 
-    <!-- 待办事项（演示数据，标注） -->
+    <!-- 运营待办（演示数据，标注） -->
     <div class="mt-5 flex flex-col gap-4 xl:flex-row">
       <div class="min-w-0 flex-1">
         <WorkbenchTodo

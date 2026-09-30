@@ -8,8 +8,8 @@ hero:
   text: Enterprise-Level Management System Framework
   tagline: Fully Upgraded, Ready to Use, Simple and Efficient
   image:
-    src: https://unpkg.com/@vbenjs/static-source@0.1.7/source/logo-v1.webp
-    alt: Vben Admin
+    src: /ypbin-logo.png
+    alt: Ypbin IoT
   actions:
     - theme: brand
       text: Get Started ->

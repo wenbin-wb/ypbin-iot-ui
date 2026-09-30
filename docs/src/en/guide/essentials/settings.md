@@ -363,8 +363,7 @@ const defaultPreferences: Preferences = {
     contentPaddingLeft: 0,
     contentPaddingRight: 0,
     contentPaddingTop: 0,
-    defaultAvatar:
-      'https://unpkg.com/@vbenjs/static-source@0.1.7/source/avatar-v1.webp',
+    defaultAvatar: '/avatar-default.svg',
     defaultHomePath: '/dashboard/analytics',
     dynamicTitle: true,
     enableCheckUpdates: true,
@@ -411,8 +410,8 @@ const defaultPreferences: Preferences = {
   logo: {
     enable: true,
     fit: 'contain',
-    source: 'https://unpkg.com/@vbenjs/static-source@0.1.7/source/logo-v1.webp',
-    // sourceDark: 'https://unpkg.com/@vbenjs/static-source@0.1.7/source/logo-dark.webp', // Optional: Dark theme logo
+    source: '/ypbin-logo.png',
+    // sourceDark: '/ypbin-logo.png', // Optional: Dark theme logo
   },
   navigation: {
     accordion: true,

@@ -1,92 +1,85 @@
 <script lang="ts" setup>
 import type { EchartsUIType } from '@vben/plugins/echarts';
 
-import { onMounted, ref } from 'vue';
+import type { IotDashboardApi } from '#/api/dashboard/iot-overview';
+
+import { onMounted, ref, watch } from 'vue';
 
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 
 import { $t } from '#/locales';
 
+defineOptions({ name: 'AnalyticsProtocolDistribution' });
+
+const props = defineProps<{
+  /** 接入协议分布（按设备数） */
+  items: IotDashboardApi.NameValue[];
+}>();
+
 const chartRef = ref<EchartsUIType>();
 const { renderEcharts } = useEcharts(chartRef);
 
-onMounted(() => {
+const PALETTE = [
+  '#0066f5',
+  '#7c7cf0',
+  '#0ec9a3',
+  '#f0b429',
+  '#f2547b',
+  '#5a6cf0',
+];
+
+/**
+ * 必须在挂载后渲染：useEcharts 内部 isActiveRef 要 onMounted 才为 true，
+ * setup 期（watch immediate）调用 renderEcharts 会被静默丢弃且不重试。
+ */
+function renderChart(items: IotDashboardApi.NameValue[]) {
+  if (items.length === 0) {
+    return;
+  }
   renderEcharts({
+    color: PALETTE,
     legend: {
-      bottom: 0,
-      data: [$t('page.dashboard.visitName'), $t('page.dashboard.trendName')],
-    },
-    radar: {
-      indicator: [
-        {
-          name: $t('page.dashboard.web'),
-        },
-        {
-          name: $t('page.dashboard.mobile'),
-        },
-        {
-          name: 'Ipad',
-        },
-        {
-          name: $t('page.dashboard.client'),
-        },
-        {
-          name: $t('page.dashboard.thirdParty'),
-        },
-        {
-          name: $t('page.dashboard.other'),
-        },
-      ],
-      radius: '60%',
-      splitNumber: 8,
+      bottom: '2%',
+      left: 'center',
     },
     series: [
       {
-        areaStyle: {
-          color: {
-            type: 'linear',
-            x: 0,
-            x2: 1,
-            y: 0,
-            y2: 1,
-            colorStops: [
-              { offset: 0, color: 'rgba(124,124,240,0.5)' },
-              { offset: 1, color: 'rgba(124,124,240,0.05)' },
-            ],
-          },
-          opacity: 1,
-          shadowBlur: 12,
-          shadowColor: 'rgba(124,124,240,0.4)',
-          shadowOffsetX: 0,
-          shadowOffsetY: 6,
+        animationDelay(idx: number) {
+          return idx * 20;
         },
-        data: [
-          {
-            itemStyle: {
-              color: '#7c7cf0',
-            },
-            name: $t('page.dashboard.visitName'),
-            value: [90, 50, 86, 40, 50, 20],
-          },
-          {
-            itemStyle: {
-              color: '#0ec9a3',
-            },
-            name: $t('page.dashboard.trendName'),
-            value: [70, 75, 70, 76, 20, 85],
-          },
-        ],
+        animationEasing: 'exponentialInOut',
+        animationType: 'scale',
+        avoidLabelOverlap: false,
+        data: items.map((item) => ({ ...item })),
+        emphasis: {
+          label: { fontSize: '12', fontWeight: 'bold', show: true },
+          scaleSize: 8,
+        },
         itemStyle: {
-          borderRadius: 10,
+          borderColor: 'transparent',
+          borderRadius: 6,
           borderWidth: 2,
         },
-        symbolSize: 0,
-        type: 'radar',
+        label: { position: 'center', show: false },
+        labelLine: { show: false },
+        name: $t('page.dashboard.protocolTitle'),
+        radius: ['42%', '66%'],
+        type: 'pie',
       },
     ],
-    tooltip: {},
+    tooltip: {
+      trigger: 'item',
+      valueFormatter: (value) =>
+        `${Number(value).toLocaleString()} ${$t('page.dashboard.deviceUnit')}`,
+    },
   });
+}
+
+onMounted(() => {
+  renderChart(props.items);
 });
+
+watch(() => props.items, renderChart, { deep: true });
 </script>
 
 <template>

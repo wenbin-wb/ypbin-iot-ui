@@ -7,10 +7,16 @@
  * 因此只在 `preferences.ts` 里把 `app.layout` 改成 `mixed-nav`，对**已经访问过本站**
  * 的用户不生效——localStorage 里的旧布局会盖掉新默认值。</p>
  *
- * <p>做法：按命名空间记录一个「布局归一版本号」。版本落后时**只删除缓存里 `app.layout`
- * 这一个字段**（不碰主题 / 语言，也不碰业务 store 的令牌），删掉后由 `initPreferences`
- * 用代码默认值补齐。用户此后在「偏好设置」里自行切换的布局会被保留（版本号已是最新，
- * 不再清理）。</p>
+ * <p>做法：按命名空间记录一个「布局归一版本号」。版本落后时**只删除缓存里下列
+ * 代码驱动的字段**（不碰主题 / 语言，也不碰业务 store 的令牌）。
+ * - `app.layout`：平台级导航要求 mixed-nav；
+ * - `app.name`：应用已由基座名（Ypbin Admin）改为 Ypbin IoT 物联网平台，
+ *   老缓存里的旧名会盖掉新默认值，清掉后由代码默认值补齐；
+ * - `app.defaultHomePath`：首次登录落点由无组件的 `/dashboard`（白屏）改为
+ *   `/dashboard/analytics`，老缓存里的旧值会把登录后去向改回白屏页；
+ * - `app.defaultAvatar`：默认头像由基座 unpkg 外链图改为本地 IoT 头像；
+ * - `header.menuAlign`：顶部大模块导航要求居中；
+ * - `sidebar.autoActivateChild`：点顶部大模块时内容区要同步切换。</p>
  *
  * <p>为什么直接改缓存 blob 而不是用公开的 `updatePreferences`：后者的落盘是 150ms
  * debounce，页面在 debounce 触发前关闭会留下「版本号已写、布局没落盘」的永久不一致；
@@ -24,8 +30,18 @@
 /** 平台级导航要求的布局（vben 原生：顶部一级大模块 + 左侧二级菜单）。 */
 export const REQUIRED_LAYOUT = 'mixed-nav';
 
-/** 布局归一版本号；修改 `REQUIRED_LAYOUT` 或调整默认布局时递增。 */
-const LAYOUT_MIGRATION_VERSION = 1;
+/** 布局归一版本号；修改下述任一代码默认值时递增。 */
+const LAYOUT_MIGRATION_VERSION = 4;
+
+/** 需要从老缓存里清除的代码驱动字段：[偏好分区, 字段名] */
+const STALE_PREFERENCE_FIELDS: Array<[string, string]> = [
+  ['app', 'layout'],
+  ['app', 'name'],
+  ['app', 'defaultHomePath'],
+  ['app', 'defaultAvatar'],
+  ['header', 'menuAlign'],
+  ['sidebar', 'autoActivateChild'],
+];
 
 /** 与 `@vben-core/preferences` 的 `STORAGE_KEYS.MAIN` 保持一致。 */
 const PREFERENCES_STORAGE_KEY = 'preferences';
@@ -39,10 +55,11 @@ function cachedPreferencesKey(namespace: string): string {
 }
 
 /**
- * 删除缓存偏好里的 `app.layout`（只删这一个字段）。
+ * 删除缓存偏好里的代码驱动字段（见 STALE_PREFERENCE_FIELDS，只删这些，
+ * 用户自选的主题/语言/布局等不动）。
  *
  * @param namespace 偏好缓存命名空间
- * @returns 缓存侧是否已确保不含 `app.layout`；`false` 表示缓存结构不符合预期，需上层兜底
+ * @returns 缓存侧是否已确保不含旧字段；`false` 表示缓存结构不符合预期，需上层兜底
  */
 function clearCachedLayout(namespace: string): boolean {
   const raw = window.localStorage.getItem(cachedPreferencesKey(namespace));
@@ -50,14 +67,34 @@ function clearCachedLayout(namespace: string): boolean {
     return true;
   }
   const stored = JSON.parse(raw) as {
-    value?: { app?: Record<string, unknown> };
+    value?: Record<string, Record<string, unknown> | undefined>;
   };
-  const app = stored?.value?.app;
-  if (!app || typeof app !== 'object') {
+  const root = stored?.value;
+  if (!root || typeof root !== 'object') {
     return false;
   }
-  if ('layout' in app) {
-    delete app.layout;
+  let dirty = false;
+  for (const [section, key] of STALE_PREFERENCE_FIELDS) {
+    const group = root[section];
+    if (!group || typeof group !== 'object' || !(key in group)) {
+      continue;
+    }
+    // 不用 `delete group[key]`：oxlint no-dynamic-delete 禁止动态键删除，
+    // 这里用白名单重建对象达到同样效果
+    const stale = new Set(
+      STALE_PREFERENCE_FIELDS.filter(([s]) => s === section).map(([, k]) => k),
+    );
+    const kept: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(group)) {
+      if (stale.has(k)) {
+        dirty = true;
+      } else {
+        kept[k] = v;
+      }
+    }
+    root[section] = kept;
+  }
+  if (dirty) {
     window.localStorage.setItem(
       cachedPreferencesKey(namespace),
       JSON.stringify(stored),
@@ -67,7 +104,7 @@ function clearCachedLayout(namespace: string): boolean {
 }
 
 /**
- * 把老用户偏好缓存里的 `app.layout` 一次性清掉，使代码默认布局对其生效。
+ * 把老用户偏好缓存里的代码驱动字段一次性清掉，使代码默认值对其生效。
  *
  * @param namespace 偏好缓存命名空间（必须与 `initPreferences` 传入的一致）
  * @returns 是否已确保缓存侧不含旧布局；`false` 时调用方应用 `updatePreferences` 兜底

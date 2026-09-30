@@ -73,7 +73,7 @@ onMounted(() => {
 
 onUnmounted(messageStore.closeSse);
 
-const YPBIN_GITHUB_URL = 'https://github.com/wenbin-wb/ypbin-admin-ui';
+const YPBIN_GITHUB_URL = 'https://github.com/wenbin-wb/ypbin-iot-ui';
 const YPBIN_DOC_URL = 'https://ypbin.cn';
 
 const menus = computed(() => [

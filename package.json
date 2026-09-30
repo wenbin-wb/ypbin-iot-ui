@@ -1,22 +1,23 @@
 {
-  "name": "ypbin-admin-ui",
+  "name": "ypbin-iot-ui",
   "version": "1.0.0",
   "private": true,
   "keywords": [
     "ypbin",
-    "ypbin admin",
-    "admin",
+    "ypbin iot",
+    "iot",
+    "iot platform",
     "vue",
     "vue admin",
     "vue3"
   ],
-  "homepage": "https://github.com/wenbin-wb/ypbin-admin-ui",
-  "bugs": "https://github.com/wenbin-wb/ypbin-admin-ui/issues",
-  "repository": "wenbin-wb/ypbin-admin-ui.git",
+  "homepage": "https://github.com/wenbin-wb/ypbin-iot-ui",
+  "bugs": "https://github.com/wenbin-wb/ypbin-iot-ui/issues",
+  "repository": "wenbin-wb/ypbin-iot-ui.git",
   "license": "MIT",
   "author": {
-    "name": "ypbin-admin authors",
-    "url": "https://github.com/wenbin-wb/ypbin-admin-ui"
+    "name": "ypbin-iot authors",
+    "url": "https://github.com/wenbin-wb/ypbin-iot-ui"
   },
   "type": "module",
   "scripts": {

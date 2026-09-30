@@ -17,8 +17,9 @@ async function initApplication() {
   const appVersion = import.meta.env.VITE_APP_VERSION;
   const namespace = `${import.meta.env.VITE_APP_NAMESPACE}-${appVersion}-${env}`;
 
-  // K1：偏好是「缓存优先」，老用户 localStorage 里的旧布局会盖掉 overrides 里的默认布局。
-  // 启动前先做一次性归一：只清缓存里的 app.layout（不动主题/语言，也不动业务令牌）。
+  // K1：偏好是「缓存优先」，老用户 localStorage 里的旧值会盖掉 overrides 里的默认值。
+  // 启动前先做一次性归一：只清代码驱动的字段（见 STALE_PREFERENCE_FIELDS），
+  // 不动主题/语言，也不动业务令牌。
   const layoutNormalized = normalizeCachedLayoutPreference(namespace);
 
   // app偏好设置初始化

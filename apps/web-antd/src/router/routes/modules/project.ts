@@ -3,8 +3,8 @@ import type { RouteRecordRaw } from 'vue-router';
 import { IFrameView } from '#/layouts';
 import { $t } from '#/locales';
 
-// ypbin-admin 项目相关路由（文档/GitHub/关于）。
-const YPBIN_GITHUB_URL = 'https://github.com/wenbin-wb/ypbin-admin-ui';
+// ypbin-iot 项目相关路由（文档/GitHub/关于）。
+const YPBIN_GITHUB_URL = 'https://github.com/wenbin-wb/ypbin-iot-ui';
 const YPBIN_DOC_URL = 'https://ypbin.cn';
 
 const routes: RouteRecordRaw[] = [

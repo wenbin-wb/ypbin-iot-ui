@@ -1,0 +1,42 @@
+/**
+ * 顶部大模块导航（对标智慧园区管理平台：logo 左 / 大模块居中 / 用户区右，
+ * 选中项底部粉→蓝渐变条）。
+ *
+ * 只作用于 header 内居中的横向菜单：`.menu-align-center` 是
+ * `header.menuAlign = 'center'` 时 vben 布局自带的包裹类；
+ * `.vben-menu.is-horizontal` / `.vben-menu-item` / `.is-active` 是
+ * `@vben-core/menu-ui` 的实际渲染类（`is()` 生成 `is-` 前缀，不是裸类名）。
+ * 注意菜单自带 `font-size: var(--menu-font-size) !important`，此处必须同带
+ * `!important` 才能覆盖，且限定在 header 居中菜单内，不影响侧边栏。
+ */
+.menu-align-center .vben-menu.is-horizontal > .vben-menu-item {
+  position: relative;
+  padding: 0 22px !important;
+  margin: 0 2px !important;
+  font-size: 18px !important;
+  font-weight: 500;
+  transition: color 0.25s ease;
+}
+
+.menu-align-center .vben-menu.is-horizontal > .vben-menu-item.is-active {
+  font-weight: 600;
+
+  /* 有渐变下划线就够了，去掉主题自带的蓝色选中底（主题侧用了 !important） */
+  background: transparent !important;
+}
+
+.menu-align-center
+  .vben-menu.is-horizontal
+  > .vben-menu-item.is-active::after {
+  position: absolute;
+  right: 20px;
+  bottom: 6px;
+  left: 20px;
+  height: 4px;
+  content: '';
+
+  /* 项目品牌渐变（主蓝→靛紫，与指标卡/页头同一套）；不用粉色头，
+     粉色在 IoT 语义里是告警严重色，放导航上风格冲突 */
+  background: linear-gradient(90deg, #0066f5 0%, #7c7cf0 100%);
+  border-radius: 2px;
+}

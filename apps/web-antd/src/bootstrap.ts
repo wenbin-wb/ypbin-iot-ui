@@ -18,6 +18,9 @@ import { initSetupVbenForm } from './adapter/form';
 import App from './app.vue';
 import { router } from './router';
 
+// IoT 定制：顶部大模块导航样式（居中 + 渐变选中条）
+import './styles/top-modules.css';
+
 async function bootstrap(namespace: string) {
   // 初始化组件适配器
   await initComponentAdapter();
@@ -61,7 +64,7 @@ async function bootstrap(namespace: string) {
   // 埋点：只有配置了 VITE_GLOB_TRACK_URL 才真正启用；未配置时 SDK 会打印告警且不安装任何采集器
   // （上报走 SDK 自己的通道，不复用 requestClient，避免与全局错误提示/加载态互相干扰）
   initTracking(app, router, {
-    appId: 'ypbin-admin-ui',
+    appId: 'ypbin-iot-ui',
     // 令牌与业务请求客户端**同源**（同一个 accessStore.accessToken，见 api/request.ts 的
     // 请求拦截器）。这里传回调而非令牌值：登录/登出/过期都会改变令牌，回调每次都取最新值；
     // 未登录时返回 undefined，SDK 端退化为匿名上报（不阻断上报）。
