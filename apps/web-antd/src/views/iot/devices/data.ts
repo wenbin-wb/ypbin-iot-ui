@@ -104,6 +104,7 @@ export function useFormSchema(): FormSchema[] {
         ],
         placeholder: $t('page.iot.device.protocolPlaceholder'),
       },
+      defaultValue: 'modbus',
       fieldName: 'protocol',
       label: $t('page.iot.device.protocol'),
       rules: 'required',
