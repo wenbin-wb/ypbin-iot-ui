@@ -100,7 +100,11 @@
         "sent": "Sent",
         "failed": "Failed",
         "givenUp": "Given up",
-        "unknown": "Unknown"
+        "unknown": "Unknown",
+        "riskEmailBroken": "EMAIL no recipient",
+        "riskInboxOnly": "Creator only",
+        "riskOk": "OK",
+        "emailBrokenHint": "The EMAIL channel has no recipient mailbox: its notifications will fail (recorded as GIVEN_UP). Add an email recipient or disable the EMAIL channel."
       },
       "kind": {
         "offline": "Device offline (no data)"

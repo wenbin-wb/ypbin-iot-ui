@@ -66,6 +66,7 @@ import {
   resolveDeviceFilter,
 } from './list-state';
 import InstanceCurve from './modules/instance-curve.vue';
+import NotifyRiskTag from './modules/notify-risk-tag.vue';
 import RuleForm from './modules/rule-form.vue';
 import {
   createRefreshGuard,
@@ -812,6 +813,12 @@ onUnmounted(() => {
           <template #condition="{ row }">
             <!-- 与规则列表单元格共用同一份人话（不在模板里重复实现一遍，避免两处口径漂移） -->
             {{ conditionText(row) }}
+          </template>
+          <template #notifyRisk="{ row }">
+            <NotifyRiskTag
+              :channels="row.notifyChannels"
+              :targets="row.notifyTargets"
+            />
           </template>
           <template #enabled="{ row }">
             <Tag :color="row.enabled ? 'success' : 'default'">

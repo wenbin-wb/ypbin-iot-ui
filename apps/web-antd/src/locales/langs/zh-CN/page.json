@@ -100,7 +100,11 @@
         "sent": "已发送",
         "failed": "发送失败",
         "givenUp": "已放弃",
-        "unknown": "未知"
+        "unknown": "未知",
+        "riskEmailBroken": "EMAIL 无收件人",
+        "riskInboxOnly": "仅发创建者",
+        "riskOk": "正常",
+        "emailBrokenHint": "该 EMAIL 渠道没有收件邮箱：后续该渠道通知会投递失败（后端记为 GIVEN_UP）。请补充邮箱收件人或关闭 EMAIL 渠道。"
       },
       "kind": {
         "offline": "设备离线（数据中断）"

@@ -34,6 +34,7 @@ import { UserSelect } from '#/components/user-select';
 import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
 
+import { resolveNotifyRisk } from '../notify-risk';
 import {
   findInvalidEmails,
   joinNotifyTargets,
@@ -450,7 +451,15 @@ async function onSubmit() {
     await (editingId.value
       ? updateAlertRule(editingId.value, request)
       : createAlertRule(request));
-    message.success($t('common.success'));
+    // 看板 #14：EMAIL 渠道无收件邮箱时，后端投递必失败（无兜底则 GIVEN_UP）——保存虽成功，但要当场提示
+    if (
+      resolveNotifyRisk(request.notifyChannels, request.notifyTargets) ===
+      'emailBroken'
+    ) {
+      message.warning($t('page.iot.alert.notify.emailBrokenHint'));
+    } else {
+      message.success($t('common.success'));
+    }
     drawerApi.close();
     emit('saved');
   } catch (error) {
