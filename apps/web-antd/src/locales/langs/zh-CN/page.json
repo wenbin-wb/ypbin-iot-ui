@@ -890,6 +890,9 @@
         "warning": "警告",
         "unknown": "未知"
       }
+    },
+    "openApiKey": {
+      "title": "开放 API Key"
     }
   },
   "ai": {
