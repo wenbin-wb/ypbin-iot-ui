@@ -723,6 +723,7 @@ onMounted(loadPresets);
           <Select
             v-model:value="form.notifyExtraEmails"
             mode="tags"
+            class="w-full"
             :placeholder="$t('page.iot.alert.notifyExtraEmailsPlaceholder')"
             :token-separators="[',', ' ', ';']"
           />
