@@ -201,6 +201,7 @@ function onSearch(keyword: string) {
     :show-search="true"
     :value="multiple ? selectedIds : selectedIds[0]"
     allow-clear
+    class="w-full"
     show-arrow
     @search="onSearch"
     @update:value="emitChange"
