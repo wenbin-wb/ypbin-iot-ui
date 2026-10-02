@@ -1,12 +1,14 @@
 <script lang="ts" setup>
+import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { IotPlatformAlertApi } from '#/api/iot';
 
-import { computed, onMounted, ref } from 'vue';
+import { computed, ref } from 'vue';
 
 import { useAccess } from '@vben/access';
 
-import { Alert, Empty, Select, Tag } from 'ant-design-vue';
+import { Select, Tag } from 'ant-design-vue';
 
+import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getPlatformAlerts } from '#/api/iot';
 import { $t } from '#/locales';
 import { toBackendNumber } from '#/utils/backend-number';
@@ -17,7 +19,6 @@ import {
   platformAlertSeverityLabelKey,
   platformAlertStateColor,
   platformAlertStateLabelKey,
-  resolvePlatformAlertListState,
   snapshotLabel,
   tsLabel,
 } from './platform-alert-state';
@@ -28,62 +29,103 @@ import {
  * 平台健康问题（评估器停摆/通知投递失败/入站丢弃）的**只读视图**；
  * 数据来自后端判定器落库结果，本页不产告警。
  *
- * 约束（与设备告警页同口径）：
- *   ① 失败态与空态严格分离（加载失败不画成"没有告警"）；
- *   ② 状态/级别标签与后端枚举对齐（未知值回落"未知"）；
- *   ③ 分页计数/页码为字符串 ⇒ 交给 vxe 前显式转数。
+ * 表现层约束（架构统一，硬性要求）：
+ *   ① 列表用架构自带 `useVbenVxeGrid`（vxe-table），不用原生 `<table>`；
+ *   ② 失败态与空态严格分离（加载失败不画成"没有告警"，失败原因记 `listError` 并继续抛出走 vxe 失败分支）；
+ *   ③ 状态/级别标签与后端枚举对齐（未知值回落"未知"）；
+ *   ④ 分页计数/页码为字符串 ⇒ 交给 vxe 前显式转数。
  */
 const { hasAccessByCodes } = useAccess();
 const canView = computed(() => hasAccessByCodes(['iot:alert:list']));
 
-const loading = ref(false);
-const errorMessage = ref('');
-const rows = ref<IotPlatformAlertApi.PlatformAlertResp[]>([]);
-const total = ref(0);
+const listError = ref('');
 
 const stateFilter = ref<string | undefined>();
 const severityFilter = ref<string | undefined>();
 
-const listState = computed(() =>
-  resolvePlatformAlertListState(
-    loading.value,
-    errorMessage.value,
-    rows.value.length,
-  ),
-);
-
-async function load() {
-  loading.value = true;
-  errorMessage.value = '';
-  try {
-    const result = await getPlatformAlerts({
-      page: 1,
-      pageSize: 50,
-      state: stateFilter.value || undefined,
-      severity: severityFilter.value || undefined,
-    });
-    rows.value = result.items ?? [];
-    total.value = toBackendNumber(result.total);
-  } catch (error) {
-    rows.value = [];
-    errorMessage.value = extractErrorMessage(
-      error,
-      $t('page.iot.platformAlert.loadFailed'),
-    );
-  } finally {
-    loading.value = false;
-  }
-}
+const [Grid, gridApi] = useVbenVxeGrid({
+  gridOptions: {
+    columns: [
+      {
+        field: 'ruleCode',
+        title: $t('page.iot.platformAlert.rule'),
+        minWidth: 180,
+      },
+      {
+        field: 'severity',
+        title: $t('page.iot.platformAlert.severityField'),
+        width: 110,
+        slots: { default: 'severity' },
+      },
+      {
+        field: 'state',
+        title: $t('page.iot.platformAlert.stateField'),
+        width: 110,
+        slots: { default: 'state' },
+      },
+      {
+        field: 'summary',
+        title: $t('page.iot.platformAlert.summary'),
+        minWidth: 200,
+      },
+      {
+        field: 'metricSnapshot',
+        title: $t('page.iot.platformAlert.snapshot'),
+        minWidth: 160,
+        slots: { default: 'snapshot' },
+      },
+      {
+        field: 'startTs',
+        title: $t('page.iot.platformAlert.startTs'),
+        width: 170,
+        slots: { default: 'startTs' },
+      },
+      {
+        field: 'resolvedTs',
+        title: $t('page.iot.platformAlert.resolvedTs'),
+        width: 170,
+        slots: { default: 'resolvedTs' },
+      },
+      {
+        field: 'observedRounds',
+        title: $t('page.iot.platformAlert.rounds'),
+        width: 90,
+      },
+    ],
+    height: 'auto',
+    keepSource: true,
+    pagerConfig: { enabled: true },
+    proxyConfig: {
+      ajax: {
+        query: async ({ page }) => {
+          try {
+            const result = await getPlatformAlerts({
+              page: page.currentPage,
+              pageSize: page.pageSize,
+              state: stateFilter.value || undefined,
+              severity: severityFilter.value || undefined,
+            });
+            listError.value = '';
+            // 后端计数是字符串（long 全局序列化），进 vxe 前转数
+            return { ...result, total: toBackendNumber(result.total) };
+          } catch (error) {
+            listError.value = extractErrorMessage(
+              error,
+              $t('page.iot.platformAlert.loadFailed'),
+            );
+            throw error;
+          }
+        },
+      },
+    },
+    rowConfig: { keyField: 'id' },
+    toolbarConfig: { custom: true, export: false, refresh: true, zoom: true },
+  } as VxeTableGridOptions<IotPlatformAlertApi.PlatformAlertResp>,
+});
 
 function reloadOnFilter() {
-  void load();
+  gridApi.query();
 }
-
-onMounted(() => {
-  if (canView.value) {
-    void load();
-  }
-});
 </script>
 
 <template>
@@ -123,60 +165,31 @@ onMounted(() => {
           {{ $t('page.iot.platformAlert.severity.warning') }}
         </Select.Option>
       </Select>
-      <span class="text-xs text-muted-foreground">{{ total }}</span>
     </div>
 
-    <Alert
-      v-if="listState === 'error'"
-      type="error"
-      show-icon
-      :message="$t('page.iot.platformAlert.loadFailed')"
-      :description="errorMessage"
-    />
-
-    <Empty
-      v-if="listState === 'empty'"
-      :description="$t('page.iot.platformAlert.empty')"
-    />
-
-    <table v-if="listState === 'ready'" class="w-full text-sm">
-      <thead>
-        <tr class="text-left text-gray-500">
-          <th class="py-1">{{ $t('page.iot.platformAlert.rule') }}</th>
-          <th class="py-1">{{ $t('page.iot.platformAlert.severityField') }}</th>
-          <th class="py-1">{{ $t('page.iot.platformAlert.stateField') }}</th>
-          <th class="py-1">{{ $t('page.iot.platformAlert.summary') }}</th>
-          <th class="py-1">{{ $t('page.iot.platformAlert.snapshot') }}</th>
-          <th class="py-1">{{ $t('page.iot.platformAlert.startTs') }}</th>
-          <th class="py-1">{{ $t('page.iot.platformAlert.resolvedTs') }}</th>
-          <th class="py-1">{{ $t('page.iot.platformAlert.rounds') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="row in rows" :key="row.id" class="border-t">
-          <td class="py-1">
-            <span class="font-mono text-xs">{{ row.ruleCode }}</span>
-          </td>
-          <td class="py-1">
-            <Tag :color="platformAlertSeverityColor(row.severity)">
-              {{ $t(platformAlertSeverityLabelKey(row.severity)) }}
-            </Tag>
-          </td>
-          <td class="py-1">
-            <Tag :color="platformAlertStateColor(row.state)">
-              {{ $t(platformAlertStateLabelKey(row.state)) }}
-            </Tag>
-          </td>
-          <td class="py-1">{{ row.summary }}</td>
-          <td class="max-w-56 truncate py-1 font-mono text-xs">
-            {{ snapshotLabel(row.metricSnapshot) }}
-          </td>
-          <td class="py-1">{{ tsLabel(row.startTs) }}</td>
-          <td class="py-1">{{ tsLabel(row.resolvedTs) }}</td>
-          <td class="py-1">{{ row.observedRounds ?? '-' }}</td>
-        </tr>
-      </tbody>
-    </table>
+    <Grid>
+      <template #severity="{ row }">
+        <Tag :color="platformAlertSeverityColor(row.severity)">
+          {{ $t(platformAlertSeverityLabelKey(row.severity)) }}
+        </Tag>
+      </template>
+      <template #state="{ row }">
+        <Tag :color="platformAlertStateColor(row.state)">
+          {{ $t(platformAlertStateLabelKey(row.state)) }}
+        </Tag>
+      </template>
+      <template #snapshot="{ row }">
+        <span class="font-mono text-xs">
+          {{ snapshotLabel(row.metricSnapshot) }}
+        </span>
+      </template>
+      <template #startTs="{ row }">
+        {{ tsLabel(row.startTs) }}
+      </template>
+      <template #resolvedTs="{ row }">
+        {{ tsLabel(row.resolvedTs) }}
+      </template>
+    </Grid>
 
     <div v-if="!canView" class="p-4 text-sm text-muted-foreground">
       {{ $t('page.iot.platformAlert.noPermission') }}

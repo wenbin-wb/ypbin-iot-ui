@@ -1,9 +1,10 @@
 <script lang="ts" setup>
 import type { Dayjs } from 'dayjs';
 
+import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { IotOpenApiKeyApi } from '#/api/iot';
 
-import { computed, onMounted, ref } from 'vue';
+import { computed, ref } from 'vue';
 
 import { useAccess } from '@vben/access';
 
@@ -12,16 +13,15 @@ import {
   Button,
   Checkbox,
   DatePicker,
-  Empty,
   Input,
   InputNumber,
   message,
   Modal,
   Popconfirm,
-  Spin,
   Tag,
 } from 'ant-design-vue';
 
+import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import { createOpenApiKey, getOpenApiKeys, revokeOpenApiKey } from '#/api/iot';
 import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
@@ -35,7 +35,6 @@ import {
   openApiKeyStatusColor,
   openApiKeyStatusLabelKey,
   openApiKeyTimeLabel,
-  resolveOpenApiKeyListState,
 } from './open-api-key-state';
 
 /**
@@ -43,7 +42,7 @@ import {
  *
  * 后端契约（OpenApiKeyController）只有三端点：创建/列表/吊销（无更新）。
  * 本页一次做到位：
- *   ① 列表（prefix/appName/scopes/status/expireAt/lastUsedAt，失败态与空态分离）；
+ *   ① 列表用架构自带 `useVbenVxeGrid`（后端一次返回全量，分页关闭；失败态与空态分离）；
  *   ② 签发 Modal（应用名+作用域多选+配额+过期时间，校验与后端同口径；
  *      明文 secret 仅在签发结果 Modal 展示一次，可复制，不持久化）；
  *   ③ 吊销 Popconfirm 二次确认（仅启用态可点）；
@@ -54,17 +53,84 @@ const canList = computed(() => hasAccessByCodes(['iot:openapi:key-list']));
 const canCreate = computed(() => hasAccessByCodes(['iot:openapi:key-create']));
 const canRevoke = computed(() => hasAccessByCodes(['iot:openapi:key-revoke']));
 
-const loading = ref(false);
-const errorMessage = ref('');
-const rows = ref<IotOpenApiKeyApi.KeyItem[]>([]);
+const listError = ref('');
 
-const listState = computed(() =>
-  resolveOpenApiKeyListState(
-    loading.value,
-    errorMessage.value,
-    rows.value.length,
-  ),
-);
+const [Grid, gridApi] = useVbenVxeGrid({
+  gridOptions: {
+    columns: [
+      {
+        field: 'appName',
+        title: $t('page.iot.openApiKey.appName'),
+        minWidth: 140,
+      },
+      {
+        field: 'accessKeyId',
+        title: $t('page.iot.openApiKey.accessKey'),
+        minWidth: 170,
+        slots: { default: 'accessKey' },
+      },
+      {
+        field: 'secretPrefix',
+        title: $t('page.iot.openApiKey.prefix'),
+        width: 120,
+        slots: { default: 'mono' },
+      },
+      {
+        field: 'scopes',
+        title: $t('page.iot.openApiKey.scopes'),
+        minWidth: 200,
+        slots: { default: 'scopes' },
+      },
+      {
+        field: 'status',
+        title: $t('page.iot.openApiKey.status'),
+        width: 100,
+        slots: { default: 'status' },
+      },
+      {
+        field: 'expireAt',
+        title: $t('page.iot.openApiKey.expireAt'),
+        width: 170,
+        slots: { default: 'expireAt' },
+      },
+      {
+        field: 'lastUsedAt',
+        title: $t('page.iot.openApiKey.lastUsed'),
+        width: 170,
+        slots: { default: 'lastUsedAt' },
+      },
+      {
+        title: $t('page.iot.openApiKey.action'),
+        field: 'action',
+        width: 90,
+        fixed: 'right',
+        slots: { default: 'action' },
+      },
+    ],
+    height: 'auto',
+    keepSource: true,
+    pagerConfig: { enabled: false },
+    proxyConfig: {
+      ajax: {
+        query: async () => {
+          try {
+            const items = (await getOpenApiKeys()) ?? [];
+            listError.value = '';
+            return { items, total: items.length };
+          } catch (error) {
+            listError.value = extractErrorMessage(
+              error,
+              $t('page.iot.openApiKey.loadFailed'),
+            );
+            throw error;
+          }
+        },
+      },
+    },
+    rowConfig: { keyField: 'id' },
+    toolbarConfig: { custom: true, export: false, refresh: true, zoom: true },
+  } as VxeTableGridOptions<IotOpenApiKeyApi.KeyItem>,
+});
 
 // ---------- 创建表单 ----------
 const createOpen = ref(false);
@@ -78,22 +144,6 @@ const creating = ref(false);
 // ---------- 签发结果（明文仅此一次） ----------
 const issuedOpen = ref(false);
 const issuedResult = ref<IotOpenApiKeyApi.CreateResp>();
-
-async function load() {
-  loading.value = true;
-  errorMessage.value = '';
-  try {
-    rows.value = (await getOpenApiKeys()) ?? [];
-  } catch (error) {
-    rows.value = [];
-    errorMessage.value = extractErrorMessage(
-      error,
-      $t('page.iot.openApiKey.loadFailed'),
-    );
-  } finally {
-    loading.value = false;
-  }
-}
 
 function openCreate() {
   formAppName.value = '';
@@ -133,7 +183,7 @@ async function submitCreate() {
     createOpen.value = false;
     issuedOpen.value = true;
     message.success($t('page.iot.openApiKey.createSuccess'));
-    await load();
+    gridApi.query();
   } catch (error) {
     message.error(
       extractErrorMessage(error, $t('page.iot.openApiKey.saveFailed')),
@@ -147,7 +197,7 @@ async function revoke(row: IotOpenApiKeyApi.KeyItem) {
   try {
     await revokeOpenApiKey(row.id);
     message.success($t('page.iot.openApiKey.revokeSuccess'));
-    await load();
+    gridApi.query();
   } catch (error) {
     message.error(
       extractErrorMessage(error, $t('page.iot.openApiKey.revokeFailed')),
@@ -163,12 +213,6 @@ async function copyText(text: string) {
     message.error($t('page.iot.openApiKey.copyFailed'));
   }
 }
-
-onMounted(() => {
-  if (canList.value) {
-    void load();
-  }
-});
 </script>
 
 <template>
@@ -180,69 +224,55 @@ onMounted(() => {
       <Button v-if="canCreate" type="primary" size="small" @click="openCreate">
         {{ $t('page.iot.openApiKey.create') }}
       </Button>
-      <span class="text-xs text-muted-foreground">{{ rows.length }}</span>
     </div>
 
-    <Spin :spinning="loading">
-      <Alert
-        v-if="listState === 'error'"
-        type="error"
-        show-icon
-        :message="$t('page.iot.openApiKey.loadFailed')"
-        :description="errorMessage"
-      />
+    <Alert
+      v-if="listError"
+      type="error"
+      show-icon
+      :message="$t('page.iot.openApiKey.loadFailed')"
+      :description="listError"
+      class="mb-3"
+    />
 
-      <Empty
-        v-if="listState === 'empty'"
-        :description="$t('page.iot.openApiKey.empty')"
-      />
-
-      <table v-if="listState === 'ready'" class="w-full text-sm">
-        <thead>
-          <tr class="text-left text-gray-500">
-            <th class="py-1">{{ $t('page.iot.openApiKey.appName') }}</th>
-            <th class="py-1">{{ $t('page.iot.openApiKey.accessKey') }}</th>
-            <th class="py-1">{{ $t('page.iot.openApiKey.prefix') }}</th>
-            <th class="py-1">{{ $t('page.iot.openApiKey.scopes') }}</th>
-            <th class="py-1">{{ $t('page.iot.openApiKey.status') }}</th>
-            <th class="py-1">{{ $t('page.iot.openApiKey.expireAt') }}</th>
-            <th class="py-1">{{ $t('page.iot.openApiKey.lastUsed') }}</th>
-            <th class="py-1">{{ $t('page.iot.openApiKey.action') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in rows" :key="row.id" class="border-t">
-            <td class="py-1">{{ row.appName }}</td>
-            <td class="py-1 font-mono text-xs">{{ row.accessKeyId }}</td>
-            <td class="py-1 font-mono text-xs">{{ row.secretPrefix }}</td>
-            <td class="max-w-64 truncate py-1 font-mono text-xs">
-              {{ openApiKeyScopesLabel(row.scopes) }}
-            </td>
-            <td class="py-1">
-              <Tag :color="openApiKeyStatusColor(row.status)">
-                {{ $t(openApiKeyStatusLabelKey(row.status)) }}
-              </Tag>
-            </td>
-            <td class="py-1">{{ openApiKeyTimeLabel(row.expireAt) }}</td>
-            <td class="py-1">{{ openApiKeyTimeLabel(row.lastUsedAt) }}</td>
-            <td class="py-1">
-              <Popconfirm
-                v-if="canRevoke && row.status === 1"
-                :title="$t('page.iot.openApiKey.revokeConfirm')"
-                :ok-text="$t('page.iot.openApiKey.revoke')"
-                :cancel-text="$t('page.iot.openApiKey.cancel')"
-                @confirm="revoke(row)"
-              >
-                <Button size="small" type="link" danger>
-                  {{ $t('page.iot.openApiKey.revoke') }}
-                </Button>
-              </Popconfirm>
-              <span v-else class="text-xs text-muted-foreground">-</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </Spin>
+    <Grid>
+      <template #accessKey="{ row }">
+        <span class="font-mono text-xs">{{ row.accessKeyId }}</span>
+      </template>
+      <template #mono="{ row }">
+        <span class="font-mono text-xs">{{ row.secretPrefix }}</span>
+      </template>
+      <template #scopes="{ row }">
+        <span class="font-mono text-xs">
+          {{ openApiKeyScopesLabel(row.scopes) }}
+        </span>
+      </template>
+      <template #status="{ row }">
+        <Tag :color="openApiKeyStatusColor(row.status)">
+          {{ $t(openApiKeyStatusLabelKey(row.status)) }}
+        </Tag>
+      </template>
+      <template #expireAt="{ row }">
+        {{ openApiKeyTimeLabel(row.expireAt) }}
+      </template>
+      <template #lastUsedAt="{ row }">
+        {{ openApiKeyTimeLabel(row.lastUsedAt) }}
+      </template>
+      <template #action="{ row }">
+        <Popconfirm
+          v-if="canRevoke && row.status === 1"
+          :title="$t('page.iot.openApiKey.revokeConfirm')"
+          :ok-text="$t('page.iot.openApiKey.revoke')"
+          :cancel-text="$t('page.iot.openApiKey.cancel')"
+          @confirm="revoke(row)"
+        >
+          <Button size="small" type="link" danger>
+            {{ $t('page.iot.openApiKey.revoke') }}
+          </Button>
+        </Popconfirm>
+        <span v-else class="text-xs text-muted-foreground">-</span>
+      </template>
+    </Grid>
 
     <div v-if="!canList" class="p-4 text-sm text-muted-foreground">
       {{ $t('page.iot.openApiKey.noPermission') }}
