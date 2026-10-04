@@ -116,22 +116,22 @@ export function openApiKeyScopesLabel(scopes?: null | string[]): string {
 
 /** 用量进度（0–100 clamp；配额不限/未知时回 0，调用方按不限/未知展示，不画进度）。 */
 export function openApiKeyUsagePercent(
-  usedToday?: null | number,
+  usedToday?: null | number | string,
   dailyQuota?: null | number,
 ): number {
+  const used = toFiniteNumber(usedToday);
   if (
-    usedToday === undefined ||
-    usedToday === null ||
+    used === undefined ||
     dailyQuota === undefined ||
     dailyQuota === null ||
     dailyQuota <= 0
   ) {
     return 0;
   }
-  if (usedToday <= 0) {
+  if (used <= 0) {
     return 0;
   }
-  return Math.min(100, Math.round((usedToday / dailyQuota) * 100));
+  return Math.min(100, Math.round((used / dailyQuota) * 100));
 }
 
 /** 用量展示形态（limited 才画进度条）。 */
@@ -139,21 +139,34 @@ export type OpenApiKeyUsageKind = 'limited' | 'unknown' | 'unlimited';
 
 /** 用量展示形态判定（与 percent 配套：limited 才画进度条）。 */
 export function openApiKeyUsageKind(
-  usedToday?: null | number,
+  usedToday?: null | number | string,
   dailyQuota?: null | number,
 ): OpenApiKeyUsageKind {
   if (dailyQuota === undefined || dailyQuota === null || dailyQuota <= 0) {
     return 'unlimited';
   }
-  if (usedToday === undefined || usedToday === null) {
+  if (toFiniteNumber(usedToday) === undefined) {
     return 'unknown';
   }
   return 'limited';
 }
 
 /** 用量文本（`12`；调用方按 kind 决定是否展示，缺席显示 '-'）。 */
-export function openApiKeyUsageLabel(usedToday?: null | number): string {
-  return usedToday === undefined || usedToday === null
-    ? '-'
-    : String(usedToday);
+export function openApiKeyUsageLabel(
+  usedToday?: null | number | string,
+): string {
+  const used = toFiniteNumber(usedToday);
+  return used === undefined ? '-' : String(used);
+}
+
+/**
+ * 后端 Long 序列化成字符串（本仓 Jackson 全局把 Long 转 String，防 JS 精度丢失；
+ * `tenantId` 同理）——此处统一归一化，非数字字符串按缺席处理。
+ */
+function toFiniteNumber(value?: null | number | string): number | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : undefined;
 }

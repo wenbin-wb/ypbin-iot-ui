@@ -147,4 +147,16 @@ describe('usage helpers', () => {
     expect(openApiKeyUsageKind(null, 0)).toBe('unlimited');
     expect(openApiKeyUsageKind(undefined, undefined)).toBe('unlimited');
   });
+
+  it('后端 Long 序列化成字符串也能正确处理（tenantId 同口径）', () => {
+    expect(openApiKeyUsagePercent('12', 100)).toBe(12);
+    expect(openApiKeyUsageKind('12', 100)).toBe('limited');
+    expect(openApiKeyUsageLabel('12')).toBe('12');
+  });
+
+  it('非数字字符串按未知处理（不让 NaN 进进度条）', () => {
+    expect(openApiKeyUsageKind('abc', 100)).toBe('unknown');
+    expect(openApiKeyUsagePercent('abc', 100)).toBe(0);
+    expect(openApiKeyUsageLabel('abc')).toBe('-');
+  });
 });
