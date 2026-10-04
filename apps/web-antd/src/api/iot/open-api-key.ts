@@ -46,6 +46,11 @@ export namespace IotOpenApiKeyApi {
     expireAt?: string;
     lastUsedAt?: string;
     createTime?: string;
+    /** 当日已用次数（null/缺席 = 未知，如 Redis 不可用）。 */
+    usedToday?: null | number;
+    rateLimitQps?: number;
+    /** 日配额（0 = 不限）。 */
+    dailyQuota?: number;
   }
 }
 

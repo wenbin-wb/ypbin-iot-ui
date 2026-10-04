@@ -113,3 +113,47 @@ export function openApiKeyTimeLabel(value?: null | string): string {
 export function openApiKeyScopesLabel(scopes?: null | string[]): string {
   return scopes && scopes.length > 0 ? scopes.join(', ') : '-';
 }
+
+/** 用量进度（0–100 clamp；配额不限/未知时回 0，调用方按不限/未知展示，不画进度）。 */
+export function openApiKeyUsagePercent(
+  usedToday?: null | number,
+  dailyQuota?: null | number,
+): number {
+  if (
+    usedToday === undefined ||
+    usedToday === null ||
+    dailyQuota === undefined ||
+    dailyQuota === null ||
+    dailyQuota <= 0
+  ) {
+    return 0;
+  }
+  if (usedToday <= 0) {
+    return 0;
+  }
+  return Math.min(100, Math.round((usedToday / dailyQuota) * 100));
+}
+
+/** 用量展示形态（limited 才画进度条）。 */
+export type OpenApiKeyUsageKind = 'limited' | 'unknown' | 'unlimited';
+
+/** 用量展示形态判定（与 percent 配套：limited 才画进度条）。 */
+export function openApiKeyUsageKind(
+  usedToday?: null | number,
+  dailyQuota?: null | number,
+): OpenApiKeyUsageKind {
+  if (dailyQuota === undefined || dailyQuota === null || dailyQuota <= 0) {
+    return 'unlimited';
+  }
+  if (usedToday === undefined || usedToday === null) {
+    return 'unknown';
+  }
+  return 'limited';
+}
+
+/** 用量文本（`12`；调用方按 kind 决定是否展示，缺席显示 '-'）。 */
+export function openApiKeyUsageLabel(usedToday?: null | number): string {
+  return usedToday === undefined || usedToday === null
+    ? '-'
+    : String(usedToday);
+}

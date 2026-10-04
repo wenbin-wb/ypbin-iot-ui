@@ -9,6 +9,9 @@ import {
   openApiKeyStatusColor,
   openApiKeyStatusLabelKey,
   openApiKeyTimeLabel,
+  openApiKeyUsageKind,
+  openApiKeyUsageLabel,
+  openApiKeyUsagePercent,
   resolveOpenApiKeyListState,
 } from './open-api-key-state';
 
@@ -110,5 +113,38 @@ describe('label helpers', () => {
   it('空作用域显示 -', () => {
     expect(openApiKeyScopesLabel([])).toBe('-');
     expect(openApiKeyScopesLabel(['iot:series:get'])).toBe('iot:series:get');
+  });
+});
+
+describe('usage helpers', () => {
+  it('正常配额按比例（12/100 → 12）', () => {
+    expect(openApiKeyUsagePercent(12, 100)).toBe(12);
+    expect(openApiKeyUsagePercent(0, 100)).toBe(0);
+    expect(openApiKeyUsageKind(12, 100)).toBe('limited');
+    expect(openApiKeyUsageLabel(12)).toBe('12');
+  });
+
+  it('超配额钳制到 100（不溢出进度条）', () => {
+    expect(openApiKeyUsagePercent(150, 100)).toBe(100);
+    expect(openApiKeyUsageKind(150, 100)).toBe('limited');
+  });
+
+  it('配额不限（0/负/缺席）⇒ unlimited，不画进度', () => {
+    for (const quota of [0, -1, undefined, null]) {
+      expect(openApiKeyUsageKind(12, quota)).toBe('unlimited');
+      expect(openApiKeyUsagePercent(12, quota)).toBe(0);
+    }
+  });
+
+  it('用量未知（null/缺席）⇒ unknown，文本显示 -', () => {
+    expect(openApiKeyUsageKind(null, 100)).toBe('unknown');
+    expect(openApiKeyUsageKind(undefined, 100)).toBe('unknown');
+    expect(openApiKeyUsageLabel(null)).toBe('-');
+    expect(openApiKeyUsageLabel(undefined)).toBe('-');
+  });
+
+  it('配额缺席时用量未知也判 unlimited（不限优先于未知）', () => {
+    expect(openApiKeyUsageKind(null, 0)).toBe('unlimited');
+    expect(openApiKeyUsageKind(undefined, undefined)).toBe('unlimited');
   });
 });
