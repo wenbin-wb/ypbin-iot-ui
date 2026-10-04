@@ -18,6 +18,7 @@ import {
   message,
   Modal,
   Popconfirm,
+  Progress,
   Tag,
 } from 'ant-design-vue';
 
@@ -35,6 +36,9 @@ import {
   openApiKeyStatusColor,
   openApiKeyStatusLabelKey,
   openApiKeyTimeLabel,
+  openApiKeyUsageKind,
+  openApiKeyUsageLabel,
+  openApiKeyUsagePercent,
 } from './open-api-key-state';
 
 /**
@@ -80,6 +84,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
         title: $t('page.iot.openApiKey.scopes'),
         minWidth: 200,
         slots: { default: 'scopes' },
+      },
+      {
+        field: 'usedToday',
+        title: $t('page.iot.openApiKey.usage'),
+        minWidth: 170,
+        slots: { default: 'usage' },
       },
       {
         field: 'status',
@@ -245,6 +255,35 @@ async function copyText(text: string) {
       <template #scopes="{ row }">
         <span class="font-mono text-xs">
           {{ openApiKeyScopesLabel(row.scopes) }}
+        </span>
+      </template>
+      <template #usage="{ row }">
+        <div
+          v-if="
+            openApiKeyUsageKind(row.usedToday, row.dailyQuota) === 'limited'
+          "
+          class="flex items-center gap-2 px-1"
+        >
+          <Progress
+            :percent="openApiKeyUsagePercent(row.usedToday, row.dailyQuota)"
+            :show-info="false"
+            class="flex-1"
+            size="small"
+          />
+          <span class="font-mono text-xs">
+            {{ openApiKeyUsageLabel(row.usedToday) }} / {{ row.dailyQuota }}
+          </span>
+        </div>
+        <span
+          v-else-if="
+            openApiKeyUsageKind(row.usedToday, row.dailyQuota) === 'unlimited'
+          "
+          class="text-xs"
+        >
+          {{ $t('page.iot.openApiKey.unlimited') }}
+        </span>
+        <span v-else class="text-xs">
+          {{ $t('page.iot.openApiKey.unknown') }}
         </span>
       </template>
       <template #status="{ row }">
