@@ -106,7 +106,7 @@ jobs:
       # 产物与 CI 是否一致无法证明。这里只补上传，**不新增任何失败门禁**（不影响既有的绿/红判定）。
       # `if-no-files-found: error`：宁可报红也不要一个空 artifact（否则"产物一致"会变成假绿）。
       - name: 上传构建产物（部署用）
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: web-antd-dist
           path: apps/web-antd/dist
