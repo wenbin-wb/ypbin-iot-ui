@@ -52,8 +52,8 @@ catalogs:
       specifier: ^2.16.3
       version: 2.16.3
     '@lucide/vue':
-      specifier: ^1.44.0
-      version: 1.44.0
+      specifier: ^1.49.0
+      version: 1.49.0
     '@manypkg/get-packages':
       specifier: ^3.1.0
       version: 3.1.0
@@ -999,7 +999,7 @@ importers:
     dependencies:
       '@lucide/vue':
         specifier: 'catalog:'
-        version: 1.44.0(vue@3.5.43(typescript@6.0.3))
+        version: 1.49.0(vue@3.5.43(typescript@6.0.3))
       '@vben-core/shadcn-ui':
         specifier: workspace:*
         version: link:../packages/@core/ui-kit/shadcn-ui
@@ -1329,7 +1329,7 @@ importers:
         version: 5.0.1(vue@3.5.43(typescript@6.0.3))
       '@lucide/vue':
         specifier: 'catalog:'
-        version: 1.44.0(vue@3.5.43(typescript@6.0.3))
+        version: 1.49.0(vue@3.5.43(typescript@6.0.3))
       vue:
         specifier: ^3.5.43
         version: 3.5.43(typescript@6.0.3)
@@ -1566,7 +1566,7 @@ importers:
     dependencies:
       '@lucide/vue':
         specifier: 'catalog:'
-        version: 1.44.0(vue@3.5.43(typescript@6.0.3))
+        version: 1.49.0(vue@3.5.43(typescript@6.0.3))
       '@vben-core/composables':
         specifier: workspace:*
         version: link:../../composables
@@ -3885,8 +3885,8 @@ packages:
   '@keyv/serialize@1.1.1':
     resolution: {integrity: sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA==}
 
-  '@lucide/vue@1.44.0':
-    resolution: {integrity: sha512-zPCTWyJnlhLPBqBSQ2EUQH03nmsJ/CVXb5Ht6k4Jk0Jn4+ojCqeRau86hGJt2Wv4FQmeoRHpIl1nadNGj7D6eA==}
+  '@lucide/vue@1.49.0':
+    resolution: {integrity: sha512-7xS5gYnLoIx0jlmlRE3Rb71fIHaNqhVBiKMpOlqrYt6nMPy3C/62HJHo5XNsV3HTK+9l3M0hXICrIA7S5v6y5Q==}
     peerDependencies:
       vue: ^3.5.43
 
@@ -13355,7 +13355,7 @@ snapshots:
 
   '@keyv/serialize@1.1.1': {}
 
-  '@lucide/vue@1.44.0(vue@3.5.43(typescript@6.0.3))':
+  '@lucide/vue@1.49.0(vue@3.5.43(typescript@6.0.3))':
     dependencies:
       vue: 3.5.43(typescript@6.0.3)
 
