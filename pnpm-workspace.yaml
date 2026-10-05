@@ -61,7 +61,7 @@ catalog:
   '@lucide/vue': ^1.44.0
   '@manypkg/get-packages': ^3.1.0
   '@nolebase/vitepress-plugin-git-changelog': ^2.18.2
-  '@playwright/test': ^1.61.1
+  '@playwright/test': ^1.63.0
   '@pnpm/workspace.read-manifest': ^1000.3.1
   '@stylistic/stylelint-plugin': ^5.2.1
   '@tailwindcss/typography': ^0.5.20
