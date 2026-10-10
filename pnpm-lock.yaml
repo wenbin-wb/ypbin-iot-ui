@@ -433,8 +433,8 @@ catalogs:
       specifier: ^4.3.3
       version: 4.3.3
     tdesign-vue-next:
-      specifier: ^1.20.3
-      version: 1.20.3
+      specifier: ^1.20.9
+      version: 1.20.9
     theme-colors:
       specifier: ^0.1.0
       version: 0.1.0
@@ -987,7 +987,7 @@ importers:
         version: 4.0.2(@vue/devtools-api@8.1.5)(typescript@6.0.3)(vue@3.5.43(typescript@6.0.3))
       tdesign-vue-next:
         specifier: 'catalog:'
-        version: 1.20.3(vue@3.5.43(typescript@6.0.3))
+        version: 1.20.9(vue@3.5.43(typescript@6.0.3))
       vue:
         specifier: ^3.5.43
         version: 3.5.43(typescript@6.0.3)
@@ -10367,13 +10367,13 @@ packages:
     resolution: {integrity: sha512-XdhtCvlMywwxpCW8YEq3lOXBJpUPTR2OHHcwLPO3HwsJqOHa2Ok/oJ7ruGzp+JrKoRPVCzJwAdEjqLW/vNRPHA==}
     engines: {node: '>=18'}
 
-  tdesign-icons-vue-next@0.4.7:
-    resolution: {integrity: sha512-0TRVH0L9O7vAMQ7j2vU/VYBMzS5FI+OVf7bWjwAVMmWXArsAyJI8mzpNWThZok96B6hsRY+2hK/NSOFZy8hMqA==}
+  tdesign-icons-vue-next@0.4.11:
+    resolution: {integrity: sha512-lBkRUy8bdb6lQLFOOkSb1LPdl4CmZRewrc8SOUlmWkDD/DG3BTsSd/ZQ4Z767pPSlypyvxwSwcJgRv6+zjubAQ==}
     peerDependencies:
       vue: ^3.5.43
 
-  tdesign-vue-next@1.20.3:
-    resolution: {integrity: sha512-DYcZN1d1zSiwSIimgU63rTjBgaxPF3fVgBEN/X3M5R3OStnAnXh+DG6RfrENGJPKXVD3oUcYk37c7uE+hKdJEw==}
+  tdesign-vue-next@1.20.9:
+    resolution: {integrity: sha512-Yj0RFp1k/MioFvNrWdsWEubbXwunqBvG2ItNU+stenH9loaCZFt58UeOnhwZBkobGwjzgsE3Zl9SczfFUCf4mg==}
     engines: {node: '>= 18'}
     peerDependencies:
       vue: ^3.5.43
@@ -13778,7 +13778,7 @@ snapshots:
       detect-libc: 2.1.2
       is-glob: 4.0.3
       node-addon-api: 7.1.1
-      picomatch: 4.0.5
+      picomatch: 4.0.7
     optionalDependencies:
       '@parcel/watcher-android-arm64': 2.6.0
       '@parcel/watcher-darwin-arm64': 2.6.0
@@ -15320,7 +15320,7 @@ snapshots:
       alien-signals: 3.2.1
       muggle-string: 0.4.1
       path-browserify: 1.0.1
-      picomatch: 4.0.5
+      picomatch: 4.0.7
 
   '@vue/reactivity@3.5.40':
     dependencies:
@@ -20180,12 +20180,12 @@ snapshots:
       minizlib: 3.1.0
       yallist: 5.0.0
 
-  tdesign-icons-vue-next@0.4.7(vue@3.5.43(typescript@6.0.3)):
+  tdesign-icons-vue-next@0.4.11(vue@3.5.43(typescript@6.0.3)):
     dependencies:
       '@babel/runtime': 7.29.7
       vue: 3.5.43(typescript@6.0.3)
 
-  tdesign-vue-next@1.20.3(vue@3.5.43(typescript@6.0.3)):
+  tdesign-vue-next@1.20.9(vue@3.5.43(typescript@6.0.3)):
     dependencies:
       '@babel/runtime': 7.29.7
       '@popperjs/core': 2.11.8
@@ -20193,11 +20193,11 @@ snapshots:
       '@types/sortablejs': 1.15.9
       '@types/tinycolor2': 1.4.6
       '@types/validator': 13.15.10
-      dayjs: 1.11.21
+      dayjs: 1.11.23
       lodash-es: 4.18.1
       mitt: 3.0.1
       sortablejs: 1.15.7
-      tdesign-icons-vue-next: 0.4.7(vue@3.5.43(typescript@6.0.3))
+      tdesign-icons-vue-next: 0.4.11(vue@3.5.43(typescript@6.0.3))
       tinycolor2: 1.6.0
       validator: 13.15.35
       vue: 3.5.43(typescript@6.0.3)
@@ -20653,7 +20653,7 @@ snapshots:
   unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.0)(rollup@4.62.2)(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.101.6)(terser@5.49.0)(yaml@2.9.0)):
     dependencies:
       '@jridgewell/remapping': 2.3.5
-      picomatch: 4.0.5
+      picomatch: 4.0.7
       webpack-virtual-modules: 0.6.2
     optionalDependencies:
       esbuild: 0.28.1
@@ -20664,7 +20664,7 @@ snapshots:
   unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.0)(rollup@4.62.2)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.101.6)(terser@5.49.0)(yaml@2.9.0)):
     dependencies:
       '@jridgewell/remapping': 2.3.5
-      picomatch: 4.0.5
+      picomatch: 4.0.7
       webpack-virtual-modules: 0.6.2
     optionalDependencies:
       esbuild: 0.28.1
@@ -20675,7 +20675,7 @@ snapshots:
   unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.0)(rollup@4.62.2)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.104.0)(terser@5.49.0)(yaml@2.9.0)):
     dependencies:
       '@jridgewell/remapping': 2.3.5
-      picomatch: 4.0.5
+      picomatch: 4.0.7
       webpack-virtual-modules: 0.6.2
     optionalDependencies:
       esbuild: 0.28.1
