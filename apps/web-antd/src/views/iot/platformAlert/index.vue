@@ -5,6 +5,7 @@ import type { IotPlatformAlertApi } from '#/api/iot';
 import { computed, ref } from 'vue';
 
 import { useAccess } from '@vben/access';
+import { Page } from '@vben/common-ui';
 
 import { Select, Tag } from 'ant-design-vue';
 
@@ -129,7 +130,8 @@ function reloadOnFilter() {
 </script>
 
 <template>
-  <div v-if="canView" class="p-3">
+  <!-- 架构对齐：补上 auto-content-height（此前高度链与其它页不一致） -->
+  <Page v-if="canView" auto-content-height>
     <div class="mb-3 flex items-center gap-3">
       <div class="font-semibold">
         {{ $t('page.iot.platformAlert.title') }}
@@ -194,5 +196,5 @@ function reloadOnFilter() {
     <div v-if="!canView" class="p-4 text-sm text-muted-foreground">
       {{ $t('page.iot.platformAlert.noPermission') }}
     </div>
-  </div>
+  </Page>
 </template>
