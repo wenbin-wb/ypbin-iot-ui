@@ -954,7 +954,13 @@
       "egressPending": "Pending readings",
       "unlimited": "Unlimited",
       "refresh": "Refresh",
-      "listLoadFailed": "Failed to load access overview"
+      "listLoadFailed": "Failed to load access overview",
+      "lastRegistered": "Registered at",
+      "leaseAlive": "Lease alive",
+      "leaseRemaining": "Lease remaining (s)",
+      "leaseAliveYes": "Renewing",
+      "leaseExpired": "Expired",
+      "noLease": "No lease"
     }
   },
   "auth": {

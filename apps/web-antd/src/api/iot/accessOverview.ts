@@ -18,8 +18,16 @@ export interface AccessNodeOverview {
   accessNode: string;
   maxTenants?: Nullable<Num>;
   holdingCount?: Nullable<Num>;
-  lastHeartbeatAt?: Nullable<string>;
+  /**
+   * ⚠️ 不是心跳：只在 access 注册/复活时写，续约（20s）不更新它。
+   * 节点是否活着请看 `leaseAlive` / `leaseRemainingSec`（由租约到期时刻推导）。
+   */
+  lastRegisteredAt?: Nullable<string>;
   leaseExpireMin?: Nullable<string>;
+  /** 租约是否仍有效（还在续约 ⇒ 活着）；`null` = 无租约。 */
+  leaseAlive?: Nullable<boolean>;
+  /** 距最早租约到期的秒数（负 = 已过期）。 */
+  leaseRemainingSec?: Nullable<Num>;
 }
 
 export interface AccessOverview {
