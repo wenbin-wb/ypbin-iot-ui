@@ -45,6 +45,16 @@ function toText(value: null | number | string | undefined): string {
   return String(value);
 }
 
+/** 租约存活文案：null/undefined ⇒ 无租约；true ⇒ 续约中；false ⇒ 已过期（**不用嵌套三元**，可读性优先）。 */
+function leaseAliveText(value: boolean | null | undefined): string {
+  if (value === null || value === undefined) {
+    return $t('page.iot.overview.noLease');
+  }
+  return value
+    ? $t('page.iot.overview.leaseAliveYes')
+    : $t('page.iot.overview.leaseExpired');
+}
+
 /** 心跳阈值 45s（与后端 PlatformHealthRule.REPORT_STALLED_THRESHOLD_MS 一致）。 */
 const REPORT_LAG_THRESHOLD_MS = 45_000;
 
@@ -64,12 +74,7 @@ async function load() {
       holding: toText(node.holdingCount),
       earliestExpire: toText(node.leaseExpireMin),
       lastRegistered: toText(node.lastRegisteredAt),
-      leaseAlive:
-        node.leaseAlive === null || node.leaseAlive === undefined
-          ? $t('page.iot.overview.noLease')
-          : node.leaseAlive
-            ? $t('page.iot.overview.leaseAliveYes')
-            : $t('page.iot.overview.leaseExpired'),
+      leaseAlive: leaseAliveText(node.leaseAlive),
       leaseRemaining: toText(node.leaseRemainingSec),
     }));
     const m = data.metrics;
@@ -187,9 +192,19 @@ onMounted(load);
             key: 'earliestExpire',
           },
           {
-            title: $t('page.iot.overview.lastHeartbeat'),
-            dataIndex: 'lastHeartbeat',
-            key: 'lastHeartbeat',
+            title: $t('page.iot.overview.lastRegistered'),
+            dataIndex: 'lastRegistered',
+            key: 'lastRegistered',
+          },
+          {
+            title: $t('page.iot.overview.leaseAlive'),
+            dataIndex: 'leaseAlive',
+            key: 'leaseAlive',
+          },
+          {
+            title: $t('page.iot.overview.leaseRemaining'),
+            dataIndex: 'leaseRemaining',
+            key: 'leaseRemaining',
           },
         ]"
         :data-source="rows"
