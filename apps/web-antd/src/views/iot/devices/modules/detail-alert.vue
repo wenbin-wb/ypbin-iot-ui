@@ -35,7 +35,7 @@ import {
 import InstanceCurve from '../../alerts/modules/instance-curve.vue';
 
 /**
- * 设备详情抽屉的**第 6 个「告警」页签**（设计 §2.5.1）。
+ * 设备详情抽屉的**第 6 个「告警」页签**。
  *
  * 两块内容：**活动告警区**（FIRING/ACKED，可一键确认/静默）与**历史告警区**（RESOLVED，分页）。
  * 三态与其它页签同口径：失败（Alert 原样展示后端 message）→ 空（Empty）→ 内容；

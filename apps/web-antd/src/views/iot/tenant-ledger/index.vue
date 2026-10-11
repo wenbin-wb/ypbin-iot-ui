@@ -11,7 +11,7 @@ import AccessOverview from './modules/access-overview.vue';
 import TenantLedger from './modules/ledger.vue';
 
 /**
- * 租户接入台账（F5）页面壳。
+ * 租户接入台账页面壳。
  *
  * 只做两件事：套一层 `Page`（提供 `auto-content-height` 的确定高度），
  * 再把真正的内容组件 `modules/ledger.vue` 放进来 —— 内容组件本身不含 `Page`，

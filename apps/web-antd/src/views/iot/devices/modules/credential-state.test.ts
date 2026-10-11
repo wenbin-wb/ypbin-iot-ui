@@ -10,7 +10,7 @@ import {
   versionLabel,
 } from './credential-state';
 
-/** 设备凭据纯逻辑用例（看板 #13）。 */
+/** 设备凭据纯逻辑用例。 */
 
 /** 构造最小连接对象（double-assert，避免 as never）。 */
 function conn(

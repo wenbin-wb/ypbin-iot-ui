@@ -9,7 +9,7 @@ import {
 } from './notify-targets';
 
 /**
- * `notifyTargets` 拆合逻辑用例（看板 #10/#13 收件人改造）。
+ * `notifyTargets` 拆合逻辑用例（平台自告警与设备凭据的收件人改造）。
  *
  * 判据必须与**后端** `AlertNotifyPlanner#resolveTargets` 同口径：
  * 含 `@` ⇒ 邮件；纯数字且非 0 ⇒ 站内信用户 ID。

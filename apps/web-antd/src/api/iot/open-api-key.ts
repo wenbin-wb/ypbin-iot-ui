@@ -1,7 +1,7 @@
 import { requestClient } from '#/api/request';
 
 /**
- * 开放 API Key 管理 API（看板 #11 第 3 批）。
+ * 开放 API Key 管理 API。
  *
  * 后端（OpenApiKeyController，权限 iot:openapi:key-*）：
  *   POST /iot/open-api-keys            创建（明文 secret 仅本响应返回一次）

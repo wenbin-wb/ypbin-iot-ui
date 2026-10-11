@@ -1,7 +1,7 @@
 import { requestClient } from '#/api/request';
 
 /**
- * IoT 设备标签 API（看板 #13 前端死能力接线）。
+ * IoT 设备标签 API（前端「死能力接线」：后端能力已存在，此前无页面入口）。
  *
  * 后端契约（ypbin-iot IotDeviceTagController）：
  * GET    /iot/devices/{deviceId}/tags          (iot:tag:list)

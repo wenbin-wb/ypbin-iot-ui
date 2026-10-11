@@ -1,7 +1,7 @@
 import { requestClient } from '#/api/request';
 
 /**
- * 租户接入台账 API（F5：把后端已就绪的 `iot:ledger:*` 权限码接上页面）。
+ * 租户接入台账 API（把后端已就绪的 `iot:ledger:*` 权限码接上页面）。
  *
  * 后端契约（已实测，唯一事实来源；本模块**只有这两个端点**）：
  * - `GET  /iot/tenant-ledger`                       权限 `iot:ledger:list`   → `TenantLedgerResp[]`

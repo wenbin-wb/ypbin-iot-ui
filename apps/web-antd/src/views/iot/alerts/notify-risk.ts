@@ -1,5 +1,5 @@
 /**
- * 告警规则「通知对象」风险的**纯逻辑**（看板 #14「前端可见提示」）。
+ * 告警规则「通知对象」风险的**纯逻辑**（前端可见提示）。
  *
  * 与后端 AlertNotifyPlanner.resolveTargets 语义对齐：notifyTargets 是逗号分隔 token，
  * 含 @ 视为 EMAIL、纯数字视为 INBOX userId、其余被后端忽略；

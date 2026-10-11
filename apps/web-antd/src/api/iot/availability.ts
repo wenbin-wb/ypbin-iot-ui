@@ -1,7 +1,7 @@
 import { requestClient } from '#/api/request';
 
 /**
- * 可用率与断档 API（M-2）。
+ * 可用率与断档 API。
  *
  * 注意：后端 Long/BigDecimal 全局按**字符串**序列化 ⇒ 秒数与可用率在 JSON 里是字符串，
  * 页面显示时必须 `Number(...)` 转换（见 `views/iot/device/modules/availability.vue`）。

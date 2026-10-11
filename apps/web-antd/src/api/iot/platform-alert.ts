@@ -1,7 +1,7 @@
 import { requestClient } from '#/api/request';
 
 /**
- * 平台告警 API（看板 #10 二批；后端 GET /iot/platform-alerts，权限 iot:alert:list）。
+ * 平台告警 API（后端 GET /iot/platform-alerts，权限 iot:alert:list）。
  */
 export namespace IotPlatformAlertApi {
   /** 平台告警条目（读模型，不含敏感字段）。 */

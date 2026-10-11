@@ -5,7 +5,7 @@ import type { IotDeviceApi } from '#/api/iot';
 import { getPublishedProductOptions } from '#/api/iot';
 import { $t } from '#/locales';
 
-/** 设备台账列表列（可用率/历史曲线入口放在操作列：逐台设备的数据面查询是 M-2 的核心观感）。 */
+/** 设备台账列表列（可用率/历史曲线入口放在操作列：逐台设备的数据面查询是「可用率与断档」能力的核心观感）。 */
 export function useColumns(): VxeTableGridColumns {
   return [
     { field: 'deviceCode', title: $t('page.iot.device.code'), minWidth: 140 },
@@ -19,7 +19,7 @@ export function useColumns(): VxeTableGridColumns {
       cellRender: { name: 'CellTag' },
     },
     {
-      // 启停开关（G7′）：此前设备没有停用写入口，用户要停采只能**删设备**或**删映射**，
+      // 启停开关：此前设备没有停用写入口，用户要停采只能**删设备**或**删映射**，
       // 两者都会丢台账信息（且删设备是逻辑删除，编码按唯一键不可复用）。
       // 这是「运维意图」，与在线状态（观测值）分列展示，避免被读成同一件事。
       field: 'status',
@@ -33,7 +33,7 @@ export function useColumns(): VxeTableGridColumns {
       width: 170,
     },
     {
-      // 活动告警标记（设计 §2.5.1「设备台账列表加一列/一个标记」）：
+      // 活动告警标记（设备台账列表加一列/一个标记）：
       // 计数由**一次批量查询**给出（`/iot/alerts/active-counts`），不按行发请求
       field: 'alertActive',
       title: $t('page.iot.alert.activeCount'),
@@ -62,7 +62,7 @@ export function useFormSchema(): FormSchema[] {
   return [
     {
       component: 'ApiSelect',
-      // G9：此前 `productId` 只出现在 `api/iot/device.ts` 的类型声明里（0 处视图使用），
+      // 此前 `productId` 只出现在 `api/iot/device.ts` 的类型声明里（0 处视图使用），
       // 于是「产品 → 设备」这条线在界面上完全断掉（设备台账看不出归属哪个产品）。
       // 只列**已发布**产品：设备要绑定物模型版本，草稿态结构随时会变，绑上去无从校验。
       componentProps: {

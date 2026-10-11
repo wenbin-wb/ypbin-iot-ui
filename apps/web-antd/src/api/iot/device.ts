@@ -132,7 +132,7 @@ export async function getDeviceNameMap(ids: string[]) {
   return names;
 }
 
-/** 查询某设备全部点位的最新值（后端 G1 端点；无数据或最新值存储不可用时为空数组）。 */
+/** 查询某设备全部点位的最新值（无数据或最新值存储不可用时为空数组）。 */
 export async function getDeviceLatest(deviceId: string) {
   return requestClient.get<IotDeviceApi.LatestValueResp[]>(
     `/iot/devices/${deviceId}/latest`,

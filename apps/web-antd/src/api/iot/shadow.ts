@@ -3,7 +3,7 @@ import { requestClient } from '#/api/request';
 /**
  * IoT 设备影子 API（后端 GET|PUT /iot/devices/{deviceId}/shadow）。
  *
- * ⚠️ 已知半实现（方案 G2）：reported 在生产代码里**没有写入方** ⇒ 恒为空，
+ * ⚠️ 已知半实现：reported 在生产代码里**没有写入方** ⇒ 恒为空，
  * merged 实际等于 desired。页面必须显式说明，不能把空 reported 显示成「设备没上报」。
  */
 export namespace IotShadowApi {

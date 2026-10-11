@@ -1,7 +1,7 @@
 import { requestClient } from '#/api/request';
 
 /**
- * 设备运行期事件 API（G6）。
+ * 设备运行期事件 API。
  *
  * 物模型 `iot_event` 是事件的**定义**（挂服务），本模块读的是运行期**实例**：
  * `GET /iot/devices/{deviceId}/events`（后端 `IotDeviceEventController`，权限沿用 `iot:device:list`）。

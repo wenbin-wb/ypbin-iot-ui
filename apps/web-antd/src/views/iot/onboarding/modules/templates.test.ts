@@ -5,7 +5,7 @@ import { useOnboardingTemplates } from './templates';
 vi.mock('#/locales', () => ({ $t: (key: string) => key }));
 
 /**
- * 内置品类模板用例（看板 #12「品类模板+必选功能」）。
+ * 内置品类模板用例（品类模板+必选功能）。
  *
  * 重点：**必选功能语义** —— 温湿度模板的温度/湿度、继电器模板的电源开关是核心量测/
  * 控制对象 ⇒ required=true（创建物模型时写入、UI 标「必选」）；次要量测（电压）不强制。

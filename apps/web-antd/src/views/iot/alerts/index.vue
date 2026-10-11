@@ -156,7 +156,7 @@ const selectedIds = ref<string[]>([]);
  */
 let instanceGuard: RefreshGuard;
 
-// 看板 #12「筛选持久化」：首次进入回填上次筛选（loadFilter 已净化，不信任存储）
+// 筛选持久化：首次进入回填上次筛选（loadFilter 已净化，不信任存储）
 const savedInstanceFilter = loadFilter(
   ALERT_INSTANCE_FILTER_PAGE,
   ALERT_INSTANCE_FILTER_VERSION,
@@ -181,7 +181,7 @@ const [InstanceGrid, instanceGridApi] = useVbenVxeGrid({
         query: async ({ page }, formValues: IotAlertApi.InstanceQuery) => {
           // 查询真正启动 ⇒ 任何刷新意图都被执行了（没被 vxe 丢弃），消费掉
           instanceGuard.consumeIntent();
-          // 看板 #12：查询启动即持久化当前筛选（幂等：值无变化不写）
+          // 筛选持久化：查询启动即持久化当前筛选（幂等：值无变化不写）
           saveFilterIfChanged(
             ALERT_INSTANCE_FILTER_PAGE,
             ALERT_INSTANCE_FILTER_VERSION,

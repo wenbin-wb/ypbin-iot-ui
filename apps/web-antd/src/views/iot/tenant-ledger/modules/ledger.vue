@@ -15,7 +15,7 @@ import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
 
 /**
- * 租户接入台账（F5）——**纯内容组件**：不含 `Page` 包裹、不自带固定高度/最大宽度，
+ * 租户接入台账——**纯内容组件**：不含 `Page` 包裹、不自带固定高度/最大宽度，
  * 因此同一个组件既能当页面主体、也能当抽屉内容：
  * - 页面宿主：`<Page auto-content-height><TenantLedger /></Page>`（见同目录 `index.vue`）
  * - 抽屉宿主：`const [TenantLedgerDrawer] = useVbenDrawer();`

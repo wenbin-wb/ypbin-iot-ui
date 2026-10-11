@@ -1,7 +1,7 @@
 import { requestClient } from '#/api/request';
 
 /**
- * 维护窗口 API（spec §12.5：统计总时长排除计划停机）。
+ * 维护窗口 API（统计总时长时排除计划停机）。
  */
 export namespace IotMaintenanceApi {
   export interface MaintenanceWindowDto {

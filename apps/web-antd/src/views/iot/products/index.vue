@@ -26,7 +26,7 @@ const [FormDrawer, FormDrawerApi] = useVbenDrawer({ connectedComponent: Form });
 const [DetailDrawer, DetailDrawerApi] = useVbenDrawer({
   connectedComponent: Detail,
 });
-/** 接入向导（F6）抽屉：内容组件不自带抽屉容器（它还要被独立页面复用）⇒ 用默认插槽挂进来。 */
+/** 接入向导抽屉：内容组件不自带抽屉容器（它还要被独立页面复用）⇒ 用默认插槽挂进来。 */
 const [GuideDrawer, GuideDrawerApi] = useVbenDrawer();
 
 /**
@@ -76,7 +76,7 @@ function onEdit(row: IotProductApi.ProductResp) {
   FormDrawerApi.setData(row).open();
 }
 
-/** 产品详情（F2）：5 页签 + 物模型编辑器 + 添加设备入口，全部走已存在的物模型接口。 */
+/** 产品详情：5 页签 + 物模型编辑器 + 添加设备入口，全部走已存在的物模型接口。 */
 function onDetail(row: IotProductApi.ProductResp) {
   DetailDrawerApi.setData(row).open();
 }

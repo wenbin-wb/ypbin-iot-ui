@@ -21,10 +21,10 @@ import { extractErrorMessage } from '#/utils/error';
 import { useOnboardingTemplates } from './templates';
 
 /**
- * 接入向导（F6）：三步引导 + 内置模板一键创建 + 空态引导。
+ * 接入向导：三步引导 + 内置模板一键创建 + 空态引导。
  *
  * **为什么需要它**：新租户打开 IoT 平台看到的是四个并列的列表页，没有入口顺序、没有空态引导、
- * 没有「下一步」——普通用户不知道从哪下手（方案 §5 的症状描述）。
+ * 没有「下一步」——普通用户不知道从哪下手（这是空态引导要解决的核心症状）。
  *
  * **只用既有接口**：模板创建 = `POST /iot/products` → `POST /iot/products/{id}/services` →
  * `POST .../properties`；发布 = `POST /iot/products/{id}/publish`；设备侧跳到设备台账的既有

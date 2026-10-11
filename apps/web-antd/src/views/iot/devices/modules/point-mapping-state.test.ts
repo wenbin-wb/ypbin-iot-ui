@@ -10,7 +10,7 @@ import {
 } from './point-mapping-state';
 
 /**
- * 点位映射表单纯逻辑用例（看板 #13）。
+ * 点位映射表单纯逻辑用例。
  *
  * 重点：校验与后端 IotPointMappingReq 约束同口径（propertyId NotNull /
  * refType|addressType|rawAddress|rw NotBlank / rawAddress <=128 / pollIntervalMs >=0 整数 /

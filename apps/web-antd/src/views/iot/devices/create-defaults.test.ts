@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { buildCreateDeviceValues, resolveDeviceName } from './create-defaults';
 
 /**
- * 创建设备默认值闭环纯逻辑用例（看板 #12）。
+ * 创建设备默认值闭环纯逻辑用例。
  */
 
 describe('resolveDeviceName（设备名默认跟随编码）', () => {
