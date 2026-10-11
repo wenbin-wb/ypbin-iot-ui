@@ -930,6 +930,31 @@
       "issueResult": "Issue result (plaintext shown once)",
       "oneTime": "The plaintext secret is shown only once. Copy it now",
       "secretHint": "List shows only the prefix; full secret is never shown again"
+    },
+    "overview": {
+      "overview": "Access Nodes & Metrics",
+      "overviewDesc": "Read-only: node liveness, tenant ownership and access-side metrics (pushed every 15s)",
+      "node": "Access node",
+      "maxTenants": "Capacity",
+      "holding": "Tenants collecting",
+      "earliestExpire": "Earliest lease expiry",
+      "lastHeartbeat": "Last heartbeat",
+      "noData": "No data",
+      "noReport": "No metrics reported by access yet",
+      "reported": "Reported",
+      "normal": "Healthy",
+      "interrupted": "Interrupted",
+      "reportLag": "Since last report",
+      "reconcileDeferred": "Reconcile deferred",
+      "tickMax": "Max tick duration",
+      "specLoadMax": "Max spec load",
+      "selfFenced": "Self-fenced",
+      "nodeFenced": "Node fenced",
+      "renewFailure": "Renew failures",
+      "egressPending": "Pending readings",
+      "unlimited": "Unlimited",
+      "refresh": "Refresh",
+      "listLoadFailed": "Failed to load access overview"
     }
   },
   "auth": {

@@ -930,6 +930,31 @@
       "issueResult": "签发结果（明文仅此一次）",
       "oneTime": "Secret 明文只显示一次，关闭后无法再查看，请立即复制保存",
       "secretHint": "列表页仅展示前缀，完整 Secret 不会二次回显"
+    },
+    "overview": {
+      "overview": "接入节点与指标",
+      "overviewDesc": "只读：节点在不在、谁在采谁、access 侧关键指标（由 access 每 15 秒推送）",
+      "node": "接入节点",
+      "maxTenants": "容量上限",
+      "holding": "采集中租户",
+      "earliestExpire": "最早租约到期",
+      "lastHeartbeat": "最近心跳",
+      "noData": "暂无数据",
+      "noReport": "access 尚未上报指标",
+      "reported": "上报",
+      "normal": "正常",
+      "interrupted": "中断",
+      "reportLag": "距上次上报",
+      "reconcileDeferred": "对账被推迟",
+      "tickMax": "tick 最大耗时",
+      "specLoadMax": "单租户取数最大耗时",
+      "selfFenced": "自我停采",
+      "nodeFenced": "节点失效停采",
+      "renewFailure": "续约失败",
+      "egressPending": "待上报读数",
+      "unlimited": "不限",
+      "refresh": "刷新",
+      "listLoadFailed": "加载接入概览失败"
     }
   },
   "ai": {
