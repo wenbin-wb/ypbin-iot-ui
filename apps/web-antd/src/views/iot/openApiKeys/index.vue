@@ -7,6 +7,7 @@ import type { IotOpenApiKeyApi } from '#/api/iot';
 import { computed, ref } from 'vue';
 
 import { useAccess } from '@vben/access';
+import { Page } from '@vben/common-ui';
 
 import {
   Alert,
@@ -53,9 +54,8 @@ import {
  *   ④ 入口分别按 key-list/key-create/key-revoke 显示。
  */
 const { hasAccessByCodes } = useAccess();
+// 页面级只保留整页守卫；按钮权限一律用 v-access:code 指令
 const canList = computed(() => hasAccessByCodes(['iot:openapi:key-list']));
-const canCreate = computed(() => hasAccessByCodes(['iot:openapi:key-create']));
-const canRevoke = computed(() => hasAccessByCodes(['iot:openapi:key-revoke']));
 
 const listError = ref('');
 
@@ -226,12 +226,18 @@ async function copyText(text: string) {
 </script>
 
 <template>
-  <div v-if="canList" class="p-3">
+  <!-- 架构对齐：根节点用 Page auto-content-height（其余 8 个 IoT 列表页的范式） -->
+  <Page v-if="canList" auto-content-height>
     <div class="mb-3 flex items-center gap-3">
       <div class="font-semibold">
         {{ $t('page.iot.openApiKey.title') }}
       </div>
-      <Button v-if="canCreate" type="primary" size="small" @click="openCreate">
+      <Button
+        v-access:code="['iot:openapi:key-create']"
+        type="primary"
+        size="small"
+        @click="openCreate"
+      >
         {{ $t('page.iot.openApiKey.create') }}
       </Button>
     </div>
@@ -299,7 +305,8 @@ async function copyText(text: string) {
       </template>
       <template #action="{ row }">
         <Popconfirm
-          v-if="canRevoke && row.status === 1"
+          v-access:code="['iot:openapi:key-revoke']"
+          v-if="row.status === 1"
           :title="$t('page.iot.openApiKey.revokeConfirm')"
           :ok-text="$t('page.iot.openApiKey.revoke')"
           :cancel-text="$t('page.iot.openApiKey.cancel')"
@@ -316,7 +323,7 @@ async function copyText(text: string) {
     <div v-if="!canList" class="p-4 text-sm text-muted-foreground">
       {{ $t('page.iot.openApiKey.noPermission') }}
     </div>
-  </div>
+  </Page>
 
   <!-- 创建 Modal -->
   <Modal
