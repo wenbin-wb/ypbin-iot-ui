@@ -1,7 +1,7 @@
 import { requestClient } from '#/api/request';
 
 /**
- * 设备「消息跟踪」API（看板 #8，设计 `docs/MESSAGE-TRACE-DESIGN.md` §5）。
+ * 设备「消息跟踪」API（设计见后端 ypbin-iot 的 `docs/MESSAGE-TRACE-DESIGN.md`）。
  *
  * 网关路由 `/iot/**`（StripPrefix=1），服务内路径是 `/devices/{deviceId}/messages`。
  *

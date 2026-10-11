@@ -12,7 +12,7 @@ import { extractErrorMessage } from '#/utils/error';
 import { desiredToEditableText, parseDesiredJson } from './shadow-state';
 
 /**
- * 设备影子「期望值」编辑器（看板 #13：影子写入接线）。
+ * 设备影子「期望值」编辑器（影子写入接线）。
  *
  * 后端 PUT /devices/{deviceId}/shadow（iot:shadow:update）整体替换 desired；
  * 输入为 JSON 文本，保存前由 parseDesiredJson 校验（必须对象，空文本 = 清空）。

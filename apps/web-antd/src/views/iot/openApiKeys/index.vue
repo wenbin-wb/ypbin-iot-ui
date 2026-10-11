@@ -43,7 +43,7 @@ import {
 } from './open-api-key-state';
 
 /**
- * 开放 API Key 管理页（看板 #11 第 3 批；菜单 /iot/open-api-keys，权限 iot:openapi:key-*）。
+ * 开放 API Key 管理页（菜单 /iot/open-api-keys，权限 iot:openapi:key-*）。
  *
  * 后端契约（OpenApiKeyController）只有三端点：创建/列表/吊销（无更新）。
  * 本页一次做到位：

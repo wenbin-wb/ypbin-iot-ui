@@ -1,7 +1,7 @@
 import { requestClient } from '#/api/request';
 
 /**
- * IoT 设备批量导入（CSV）+ 批次管理 API（看板 #7）。
+ * IoT 设备批量导入（CSV）+ 批次管理 API。
  *
  * 网关路由 `/iot/**`（StripPrefix=1），服务内路径是 `/devices/import`。
  *

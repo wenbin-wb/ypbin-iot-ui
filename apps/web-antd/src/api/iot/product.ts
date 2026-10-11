@@ -85,7 +85,7 @@ export async function getProductOptions() {
  *
  * 为什么只列已发布：设备要绑定物模型版本，草稿态产品的结构随时会变，
  * 绑上去的设备无从校验（`IotDeviceReq.productId` 的语义是「绑定已发布版本」）。
- * 页面必须把这条原因写在字段说明里，否则用户会以为下拉「少数据」（方案 §10 风险 R11）。
+ * 页面必须把这条原因写在字段说明里，否则用户会以为下拉「少数据」（产品未发布/非已发布态时不可选）。
  */
 export async function getPublishedProductOptions() {
   const products = await getProductOptions();

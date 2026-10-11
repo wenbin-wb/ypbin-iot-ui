@@ -33,11 +33,11 @@ type MaintenanceWindowRow = IotMaintenanceApi.MaintenanceWindowDto & {
 };
 
 const [FormDrawer, FormDrawerApi] = useVbenDrawer({ connectedComponent: Form });
-/** 接入向导（F6）抽屉：空态引导的「下一步」入口（保持与设备/产品页同一处）。 */
+/** 接入向导抽屉：空态引导的「下一步」入口（保持与设备/产品页同一处）。 */
 const [GuideDrawer, GuideDrawerApi] = useVbenDrawer();
 
 /**
- * 拉取窗口列表并把 `deviceId` 换成设备名（F3：解决「看不出关联」最直观的一处）。
+ * 拉取窗口列表并把 `deviceId` 换成设备名（解决「看不出关联」最直观的一处）。
  *
  * N+1 规避：先收齐本页所有 deviceId，**一次批量**解析（内部按页拉取、命中即停），
  * 绝不按行发请求；没有 deviceId 的窗口直接短路成「租户全部设备」，也不发多余请求。
@@ -52,7 +52,7 @@ async function loadWindowRows(): Promise<MaintenanceWindowRow[]> {
     names = await getDeviceNameMap(deviceIds);
   } catch (error) {
     // 设备名是**展示增强**，不是这条列表的前提：该角色可能只有维护窗口权限、没有设备列表权限
-    // ⇒ 解析失败时回落显示裸 deviceId，绝不让整页窗口列表跟着失败（F3 不引入新的权限依赖）
+    // ⇒ 解析失败时回落显示裸 deviceId，绝不让整页窗口列表跟着失败（设备名解析不引入新的权限依赖）
     console.warn('[iot] 设备名解析失败，维护窗口列表回落显示设备 ID', error);
   }
   return rows.map((row) => ({

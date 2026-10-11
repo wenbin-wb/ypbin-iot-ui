@@ -15,7 +15,7 @@ import {
 import DevicesPage from '../index.vue';
 
 /**
- * 设备台账「启停开关」（G7′）的用例。
+ * 设备台账「启停开关」的用例。
  *
  * ## 为什么必须有
  *
@@ -25,7 +25,7 @@ import DevicesPage from '../index.vue';
  * 前端这一侧要守住的是**另外三件事**：
  *
  * 1. **槽真的挂上了**：`status` 列没有 `slots.default` 的话，开关在页面上根本不存在，
- *    用户依然只能用删除设备来停采（正是 G7′ 要消灭的现状）。
+ *    用户依然只能用删除设备来停采（正是「设备启停」要消灭的现状）。
  * 2. **码值口径正确**：只有显式 `1` 才算启用（与后端 `EntityStatus` 一致，
  *    `null/undefined` 按启用处理，对齐 DB 默认值）。口径反了会让「已停用」标记画错行。
  * 3. **开关受控**：`checked` 由行的 `status` 决定，不做乐观翻转——
@@ -141,7 +141,7 @@ async function renderStatusCell(status: null | number | undefined) {
   return cell as HTMLElement;
 }
 
-describe('设备台账启停开关（G7′）', () => {
+describe('设备台账启停开关', () => {
   it('★ `status` 列挂着 default 槽（没有它，页面上就没有启停写入口）', () => {
     // 先挂一次让页面把 gridOptions 交给表格桩
     return renderStatusCell(1).then(() => {

@@ -1,7 +1,7 @@
 import { requestClient } from '#/api/request';
 
 /**
- * IoT 设备凭据与连接信息 API（看板 #13 死能力接线）。
+ * IoT 设备凭据与连接信息 API（设备凭据「死能力接线」，MQTT 接入）。
  *
  * 后端（DeviceCredentialController，权限 iot:credential:issue/get/revoke）：
  *   POST /devices/{id}/credential    签发（明文 password 仅本响应返回一次）

@@ -59,7 +59,7 @@ const { captured, gridStub, mockApi } = vi.hoisted(() => ({
     setAlertRulesEnabled: vi.fn(),
     silenceAlerts: vi.fn(),
     updateAlertRule: vi.fn(),
-    // 设备启停（G7′）：`PUT /iot/devices/{id}/status/{status}`
+    // 设备启停：`PUT /iot/devices/{id}/status/{status}`
     updateDeviceStatus: vi.fn(),
   },
 }));

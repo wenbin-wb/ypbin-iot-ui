@@ -50,12 +50,12 @@ import DeviceTags from './tags.vue';
 import Trace from './trace.vue';
 
 /**
- * 设备详情（F1）：5 个可落地区块 = 概览 / 属性与点位 / 历史曲线 / 事件与断档 / 在线调试（+ 影子状态）。
+ * 设备详情：5 个可落地区块 = 概览 / 属性与点位 / 历史曲线 / 事件与断档 / 在线调试（+ 影子状态）。
  *
  * 为什么是抽屉而不是新路由页：路由由后端 `sys_menu.component` 决定（本仓不另立一套路由），
  * 加一个详情页就要加一个「点不开的菜单项」；抽屉从设备台账行点进去即可，且不改菜单与权限。
  *
- * **数据来源全部是既有接口**：最新值 = G1 新端点、可用率/断档 =
+ * **数据来源全部是既有接口**：最新值 = 新增的最新值端点、可用率/断档 =
  * `GET /devices/{id}/availability`、影子 = `GET /devices/{id}/shadow`、
  * 点位与物模型属性 = `/devices/{id}/points` + `/products/{id}/services`。
  * 「历史曲线」与「可用率」两块**直接复用台账已有的抽屉组件**，不重画一套图表逻辑。
@@ -67,7 +67,7 @@ const deviceId = ref('');
 const device = ref<IotDeviceApi.DeviceResp>();
 
 /**
- * 启停位是否为「启用」（G7′）。
+ * 启停位是否为「启用」。
  *
  * 判据与列表页一致：只有显式等于 1 才算启用，`null/undefined` 按启用处理（与 DB 默认值对齐）。
  * 口径写在一处（这里是详情页的唯一入口），不要在模板里内联比较裸数字。
@@ -76,7 +76,7 @@ const isDeviceEnabled = computed(
   () => toBackendNumber(device.value?.status ?? 1) === 1,
 );
 
-/** 最新值（G1）：命中 / 空 / 失败三态分别展示，禁把失败显示成「没有数据」。 */
+/** 最新值：命中 / 空 / 失败三态分别展示，禁把失败显示成「没有数据」。 */
 const latest = ref<IotDeviceApi.LatestValueResp[]>([]);
 
 const latestError = ref('');
@@ -89,7 +89,7 @@ const shadow = ref<IotShadowApi.ShadowResp>();
 
 const shadowError = ref('');
 
-/** 运行期事件（G6）：命中 / 空 / 失败三态分别展示，禁把失败显示成「没有事件」。 */
+/** 运行期事件：命中 / 空 / 失败三态分别展示，禁把失败显示成「没有事件」。 */
 const events = ref<IotEventApi.EventLogResp[]>([]);
 
 /** 事件总数（可能大于本页条数：抽屉只取一页，事件页签据此提示收窄条件）。 */
@@ -391,7 +391,7 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
               {{ device?.lastSeenAt ?? '-' }}
             </DescriptionsItem>
             <!--
-              启停位（G7′）：与在线状态分两行展示，避免被读成同一件事——
+              启停位：与在线状态分两行展示，避免被读成同一件事——
               「在线状态」是设备现在连没连上的**观测值**，本行是运维**意图**。
               停用后接入侧会解绑并撤销点位订阅 ⇒ 采集停止，故这里同时给出后果说明。
             -->
@@ -517,7 +517,7 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
             </div>
           </div>
 
-          <!-- 最近事件（G6）：有数据给时间线，无数据给空态，查询失败单独报错 -->
+          <!-- 最近事件：有数据给时间线，无数据给空态，查询失败单独报错 -->
           <div class="mt-4">
             <div class="mb-2 font-semibold">
               {{ $t('page.iot.device.recentEvents') }}
@@ -631,12 +631,12 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
             </div>
           </div>
 
-          <!-- 标签（看板 #13）：设备描述性元数据，展示 + 增删改；权限按 iot:tag:* -->
+          <!-- 标签：设备描述性元数据，展示 + 增删改；权限按 iot:tag:* -->
           <div class="rounded border p-3">
             <DeviceTags :device-id="deviceId" />
           </div>
 
-          <!-- 设备凭据（看板 #13）：MQTT 接入所需；密码仅签发时刻展示一次 -->
+          <!-- 设备凭据：MQTT 接入所需；密码仅签发时刻展示一次 -->
           <div class="rounded border p-3">
             <Credential :device-id="deviceId" />
           </div>
@@ -802,7 +802,7 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
             />
           </PanelErrorBoundary>
         </Tabs.TabPane>
-        <!-- ===== 消息跟踪（看板 #8）：设备消息时序 + 失败项的「定位建议」 ===== -->
+        <!-- ===== 消息跟踪：设备消息时序 + 失败项的「定位建议」 ===== -->
         <Tabs.TabPane
           v-if="canViewTrace"
           key="trace"

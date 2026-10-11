@@ -52,7 +52,7 @@ const [SeriesDrawer, SeriesDrawerApi] = useVbenDrawer({
   connectedComponent: Series,
 });
 /**
- * 接入向导（F6）抽屉。
+ * 接入向导抽屉。
  *
  * 用**默认插槽**而不是 `connectedComponent`：向导内容组件（`onboarding/modules/guide.vue`）
  * 同时要被独立页面复用，因此它不自带抽屉容器；`connectedComponent` 形态要求子组件自己渲染
@@ -60,7 +60,7 @@ const [SeriesDrawer, SeriesDrawerApi] = useVbenDrawer({
  */
 const [GuideDrawer, GuideDrawerApi] = useVbenDrawer();
 /**
- * 租户接入台账（F5）抽屉。
+ * 租户接入台账抽屉。
  *
  * **为什么挂在设备台账页**：平台级权限码 `iot:ledger:list/update` 本来就挂在设备菜单（`sys_menu`
  * 320014/320015，`platform_only=1`，见 `deploy/sql/007-iot-data.sql`）。
@@ -72,7 +72,7 @@ const [GuideDrawer, GuideDrawerApi] = useVbenDrawer();
  */
 const [LedgerDrawer, LedgerDrawerApi] = useVbenDrawer();
 /**
- * 批量导入（CSV）抽屉（看板 #7）——「下载模板 → 上传 → 看结果」三步闭环。
+ * 批量导入（CSV）抽屉——「下载模板 → 上传 → 看结果」三步闭环。
  *
  * 抽屉打开时拉一次批次列表：用户点开这个入口时想看的就是「我以前传过什么、结果如何」，
  * 而不是一个空面板等着他去上传。
@@ -168,7 +168,7 @@ async function loadAlertCounts(items: IotDeviceApi.DeviceResp[]) {
 }
 
 /**
- * 「从产品一键添加设备」（F2 的入口）落地处：产品详情点「添加设备」时带
+ * 「从产品一键添加设备」落地处：产品详情点「添加设备」时带
  * `?productId=xxx&action=create` 跳到这里，设备表单打开并预选该产品。
  *
  * 用 `?action=create` 显式表达意图（只在带它时自动开表单）：单纯带 `productId` 浏览台账
@@ -248,7 +248,7 @@ function isDeviceEnabled(row: IotDeviceApi.DeviceResp) {
 }
 
 /**
- * 切换设备启停（G7′）。
+ * 切换设备启停。
  *
  * 🔴 为什么要二次确认：停用是**破坏性**动作——接入侧会解绑该设备并撤销其全部点位订阅，
  * 采集立刻停止。确认文案必须把这个后果说清楚，而不是干巴巴一句「确定吗」。
@@ -300,7 +300,7 @@ function openLedger() {
 }
 
 /**
- * 打开批量导入抽屉（G7/#7）。
+ * 打开批量导入抽屉。
  *
  * 入口按 `iot:device:import` 门禁（**新造的权限码**，不复用 `iot:device:create`）：
  * 批量导入一次能建上万台设备，比单条创建高危得多；复用 create 会让「只想让某角色逐台建」
@@ -364,7 +364,7 @@ function openImport() {
     />
     <Grid>
       <template #toolbar-tools>
-        <!-- 接入向导入口：不带权限码（方案 §6.1：所有角色可见，先知道下一步做什么）； -->
+        <!-- 接入向导入口：不带权限码（所有角色可见，先知道下一步做什么）； -->
         <!-- 向导里的写动作各自沿用 iot:product:create / iot:product:publish / iot:device:create。 -->
         <Button class="mr-2" @click="openGuide">
           {{ $t('page.iot.onboarding.openGuide') }}
@@ -413,7 +413,7 @@ function openImport() {
       </template>
 
       <!--
-        启停开关（G7′）。
+        启停开关。
         🔴 这里用 `Popconfirm` **包住** `Switch`，而不是给 Switch 传 `popconfirm` 属性：
         ant-design-vue 4.2.6 的 Switch **没有** `popconfirm` 这个 prop（只有 React antd 有），
         传进去会被静默忽略 ⇒ 「停用会停止采集」这道确认**根本不会弹**。

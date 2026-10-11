@@ -55,7 +55,7 @@ const emit = defineEmits<{ saved: [] }>();
  * （提交失败**原样展示后端 message**，不弹原始码）。
  *
  * 默认值全部来自后端预设（`GET /iot/alerts/presets`）而不是前端写死：同一套模板在任何端侧/语言下
- * 行为一致（口径见 `docs/ALERTING-DESIGN.md` §7）。
+ * 行为一致（告警设计见后端 ypbin-iot 的 `docs/ALERTING-DESIGN.md`）。
  */
 const [Drawer, drawerApi] = useVbenDrawer({
   async onOpenChange(isOpen: boolean) {
@@ -451,7 +451,7 @@ async function onSubmit() {
     await (editingId.value
       ? updateAlertRule(editingId.value, request)
       : createAlertRule(request));
-    // 看板 #14：EMAIL 渠道无收件邮箱时，后端投递必失败（无兜底则 GIVEN_UP）——保存虽成功，但要当场提示
+    // 通知对象风险提示：EMAIL 渠道无收件邮箱时，后端投递必失败（无兜底则 GIVEN_UP）——保存虽成功，但要当场提示
     if (
       resolveNotifyRisk(request.notifyChannels, request.notifyTargets) ===
       'emailBroken'

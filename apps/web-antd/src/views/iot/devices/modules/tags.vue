@@ -33,7 +33,7 @@ import {
 } from './tag-state';
 
 /**
- * 设备详情「标签」区块（看板 #13 前端死能力接线）。
+ * 设备详情「标签」区块（前端死能力接线）。
  *
  * 后端契约已就绪（IotDeviceTagController：list/create/update/delete），此前前端零接线。
  * 本区块放在设备详情「概览」页签内（标签是设备的描述性元数据，不是独立工作流）。

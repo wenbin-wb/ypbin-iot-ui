@@ -25,7 +25,7 @@ import {
 } from './platform-alert-state';
 
 /**
- * 平台自告警列表（看板 #10 二批；菜单 /iot/platform-alerts，权限 iot:alert:list）。
+ * 平台自告警列表（菜单 /iot/platform-alerts，权限 iot:alert:list）。
  *
  * 平台健康问题（评估器停摆/通知投递失败/入站丢弃）的**只读视图**；
  * 数据来自后端判定器落库结果，本页不产告警。

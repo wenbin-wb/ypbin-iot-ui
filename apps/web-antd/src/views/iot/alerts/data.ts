@@ -242,7 +242,7 @@ export type InstanceFilterInitial = {
   state?: string;
 };
 
-/** 告警实例搜索表单 schema（看板 #12「筛选持久化」）：接受持久化初始值（defaultValue 注入），首次进入即回填上次筛选；值已过 sanitizeFilter「不信任存储」校验（见 shared/list-filter.ts）。 */
+/** 告警实例搜索表单 schema（筛选持久化）：接受持久化初始值（defaultValue 注入），首次进入即回填上次筛选；值已过 sanitizeFilter「不信任存储」校验（见 shared/list-filter.ts）。 */
 export function useInstanceFormSchema(initial?: InstanceFilterInitial) {
   const init = initial ?? {};
   return [

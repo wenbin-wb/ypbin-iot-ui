@@ -40,7 +40,7 @@ import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
 
 /**
- * 「在线调试」页签（段 C，设计 §7.5）：选动作 → 填参数 → 下发 → 轮询看状态与回执。
+ * 「在线调试」页签：选动作 → 填参数 → 下发 → 轮询看状态与回执。
  *
  * **只用后端既有的三个端点**（`POST/GET /iot/devices/{id}/commands`、
  * `POST /iot/devices/{id}/commands/{requestId}/resend`），不为写页面新增任何后端字段。
@@ -58,9 +58,9 @@ import { extractErrorMessage } from '#/utils/error';
  * **契约限制（写死在页面文案里，不假装支持）**：后端单条指令只接受**一个** `identifier`
  * （`CommandPayloads` 对 `property_get` 只放一个元素）⇒ 多行/多选**由前端拆成 N 条独立指令**
  * （各自 `requestId`、各自可重发），并给出**同一批次**的汇总与高亮；上限见 {@link MAX_FANOUT}。
- * 「点位留空 = 读取全部可读属性」是后端 B1 的既定语义，**原样支持**。
+ * 「点位留空 = 读取全部可读属性」是后端既定语义，**原样支持**。
  *
- * `writeDesired`（下发同时写影子 desired）后端 U-B1 **显式拒绝** ⇒ 页面**不做**那个复选框
+ * `writeDesired`（下发同时写影子 desired）后端**显式拒绝** ⇒ 页面**不做**那个复选框
  * （避免做成假按钮），只放一行说明把用户指向既有的影子接口。
  */
 const props = defineProps<{
@@ -77,7 +77,7 @@ const MAX_TIMEOUT_MS = 60 * 60 * 1000;
 /** 历史列表单页条数（后端单页上限 100，这里取一屏能看全的数）。 */
 const HISTORY_PAGE_SIZE = 10;
 
-/** 轮询间隔：P0 只用轮询，**不引入 ws/SSE**（设计 §7.5 第 3 条）。 */
+/** 轮询间隔：只用轮询，**不引入 ws/SSE**。 */
 const POLL_INTERVAL_MS = 2000;
 
 /** 状态下拉的顺序（与后端状态机同序；空 = 全部）。 */
@@ -691,7 +691,7 @@ function buildTargets(): SendTarget[] | undefined {
     }));
   }
   if (kind.value === 'property_get') {
-    // 空选 = 全部可读属性（后端 B1：properties 空数组 = 全部可读）
+    // 空选 = 全部可读属性（后端既定语义：properties 空数组 = 全部可读）
     if (getSelection.value.length === 0) {
       return [
         {

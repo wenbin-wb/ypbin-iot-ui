@@ -29,7 +29,7 @@ import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
 
 /**
- * 分组成员管理（F4）：查看 / 加入 / 移出，入口在「设备分组」页。
+ * 分组成员管理：查看 / 加入 / 移出，入口在「设备分组」页。
  *
  * 接口全部是**既有** members 接口：
  * `GET /groups/{id}/members`、`POST /groups/{id}/members`、`DELETE /groups/{id}/members/{memberId}`。

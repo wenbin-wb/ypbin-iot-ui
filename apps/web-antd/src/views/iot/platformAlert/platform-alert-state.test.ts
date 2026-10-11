@@ -10,7 +10,7 @@ import {
   tsLabel,
 } from './platform-alert-state';
 
-/** 平台告警纯逻辑用例（看板 #10 二批）。 */
+/** 平台告警纯逻辑用例。 */
 
 describe('状态 label/color（与后端枚举对齐）', () => {
   it('三种状态与未知回落', () => {

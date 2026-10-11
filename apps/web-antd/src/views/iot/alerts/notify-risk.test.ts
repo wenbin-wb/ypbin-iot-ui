@@ -6,7 +6,7 @@ import {
   splitTargetKinds,
 } from './notify-risk';
 
-/** 通知风险纯逻辑用例（看板 #14 前端提示；与后端 resolveTargets 语义对齐）。 */
+/** 通知风险纯逻辑用例（前端提示；与后端 resolveTargets 语义对齐）。 */
 
 describe('splitChannels / splitTargetKinds', () => {
   it('渠道拆分 trim 去空', () => {
@@ -29,7 +29,7 @@ describe('splitChannels / splitTargetKinds', () => {
   });
 });
 
-describe('resolveNotifyRisk（看板 #14 风险三态）', () => {
+describe('resolveNotifyRisk（通知对象风险三态）', () => {
   it('🔴 EMAIL 渠道开着但无邮箱收件人 ⇒ emailBroken（投递必败/GIVEN_UP）', () => {
     expect(resolveNotifyRisk('EMAIL', '2')).toBe('emailBroken');
     expect(resolveNotifyRisk('EMAIL,INBOX', '2')).toBe('emailBroken');

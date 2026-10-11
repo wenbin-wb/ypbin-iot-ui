@@ -5,9 +5,9 @@ import { $t } from '#/locales';
 
 import Guide from './modules/guide.vue';
 
-// 接入向导页面（F6）：页面级落点，供菜单接线使用。
+// 接入向导页面：页面级落点，供菜单接线使用。
 //
-// 方案 §6.1 把它放在「起步 → 接入向导」，新租户落地即可见、无需权限码。
+// 它放在「起步 → 接入向导」，新租户落地即可见、无需权限码。
 // **菜单已由迁移补齐**（2026-09-29 更正，此前写的是「暂无菜单」）：
 // `ypbin-iot` 的 `deploy/sql/migration/2026-09-29-iot-menu-onboarding-ledger.sql` 新增了
 // `sys_menu` **3205**（`type='menu'`，`component=/iot/onboarding/index`，标题键

@@ -3,7 +3,7 @@ import { requestClient } from '#/api/request';
 /**
  * IoT 在线调试（下行命令实例）API。
  *
- * 后端 `IotCommandController`（`ypbin-iot`，设计 §7.4 / §7.6）：
+ * 后端 `IotCommandController`（见 ypbin-iot 的在线调试设计）：
  * - `POST /iot/devices/{deviceId}/commands` —— 下发（权限 `iot:debug:send`）；
  * - `GET  /iot/devices/{deviceId}/commands` —— 分页查询下发/回执记录（权限 `iot:debug:get`）；
  * - `POST /iot/devices/{deviceId}/commands/{requestId}/resend` —— 人工重发（权限 `iot:debug:send`）。
@@ -95,7 +95,7 @@ export namespace IotCommandApi {
     /** 超时（毫秒，1 ~ 3600000）；省略用平台默认。 */
     timeoutMs?: number;
     /**
-     * 本轮**不支持**：置 `true` 会被后端显式拒绝（U-B1）。
+     * 本轮**不支持**：置 `true` 会被后端显式拒绝（后端契约未开放该写入口）。
      * 页面不提供该开关，字段保留仅为对齐后端契约。
      */
     writeDesired?: boolean;

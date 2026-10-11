@@ -1,7 +1,7 @@
 import { requestClient } from '#/api/request';
 
 /**
- * 历史时序查询 API（数据面；后端 §5.2.1 查询路径）。
+ * 历史时序查询 API（数据面）。
  *
  * 契约以后端 `TimeSeriesQueryReq` / `TimeSeriesPointResp` 为准（`ypbin-iot` PR #34）：
  * 点位 `propertyId` 必填；`from`/`to` 为 **epoch 毫秒**（可空）；`limit` 1~5000（后端默认 1000）。

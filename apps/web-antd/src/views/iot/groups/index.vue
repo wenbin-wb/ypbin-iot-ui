@@ -19,7 +19,7 @@ import Form from './modules/form.vue';
 import Members from './modules/members.vue';
 
 const [FormDrawer, FormDrawerApi] = useVbenDrawer({ connectedComponent: Form });
-/** 成员管理（F4）：抽屉而不是新路由页——路由由后端 sys_menu.component 决定，不另立菜单。 */
+/** 成员管理：抽屉而不是新路由页——路由由后端 sys_menu.component 决定，不另立菜单。 */
 const [MembersDrawer, MembersDrawerApi] = useVbenDrawer({
   connectedComponent: Members,
 });
