@@ -954,7 +954,13 @@
       "egressPending": "待上报读数",
       "unlimited": "不限",
       "refresh": "刷新",
-      "listLoadFailed": "加载接入概览失败"
+      "listLoadFailed": "加载接入概览失败",
+      "lastRegistered": "节点注册时间",
+      "leaseAlive": "租约存活",
+      "leaseRemaining": "租约剩余(秒)",
+      "leaseAliveYes": "续约中",
+      "leaseExpired": "已过期",
+      "noLease": "无租约"
     }
   },
   "ai": {

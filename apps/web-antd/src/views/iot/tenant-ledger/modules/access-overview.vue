@@ -21,7 +21,9 @@ interface Row {
   maxTenants: string;
   holding: string;
   earliestExpire: string;
-  lastHeartbeat: string;
+  lastRegistered: string;
+  leaseAlive: string;
+  leaseRemaining: string;
 }
 
 interface Metric {
@@ -61,7 +63,14 @@ async function load() {
           : String(node.maxTenants),
       holding: toText(node.holdingCount),
       earliestExpire: toText(node.leaseExpireMin),
-      lastHeartbeat: toText(node.lastHeartbeatAt),
+      lastRegistered: toText(node.lastRegisteredAt),
+      leaseAlive:
+        node.leaseAlive === null || node.leaseAlive === undefined
+          ? $t('page.iot.overview.noLease')
+          : node.leaseAlive
+            ? $t('page.iot.overview.leaseAliveYes')
+            : $t('page.iot.overview.leaseExpired'),
+      leaseRemaining: toText(node.leaseRemainingSec),
     }));
     const m = data.metrics;
     metrics.value = [

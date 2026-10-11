@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import { ref } from 'vue';
+
 import { Page } from '@vben/common-ui';
 
 import { Tabs } from 'ant-design-vue';
@@ -38,17 +40,53 @@ import TenantLedger from './modules/ledger.vue';
  * （`iot:ledger:list`）⇒ 复用既有菜单/授权面，不新造跨租户可见入口；
  * 后端契约见 `AccessOverviewController`（`GET /iot/access-overview`）。
  */
+
+/** 当前页签（默认「租户台账」）。 */
+const activeKey = ref<'ledger' | 'overview'>('ledger');
 </script>
 
 <template>
   <Page auto-content-height>
-    <Tabs>
-      <Tabs.Tab key="ledger" :tab="$t('page.iot.ledger.pageTitle')">
-        <TenantLedger />
-      </Tabs.Tab>
-      <Tabs.Tab key="overview" :tab="$t('page.iot.overview.overview')">
-        <AccessOverview />
-      </Tabs.Tab>
+    <!--
+      ⚠️ 两个子组件都是 `h-full` 高度链的消费者（vxe 表格没有确定高度就不渲染行），
+      因此 `<Tabs>` 必须把高度**透传**给内容区，不能只靠 TabPane 默认布局。
+      `.ledger-tabs` 的样式见文件底部（content-holder flex:1 + min-height:0 + 逐层 h-full）。
+    -->
+    <Tabs v-model:active-key="activeKey" class="ledger-tabs">
+      <Tabs.TabPane key="ledger" :tab="$t('page.iot.ledger.pageTitle')">
+        <div class="h-full"><TenantLedger /></div>
+      </Tabs.TabPane>
+      <Tabs.TabPane key="overview" :tab="$t('page.iot.overview.overview')">
+        <div class="h-full"><AccessOverview /></div>
+      </Tabs.TabPane>
     </Tabs>
   </Page>
 </template>
+
+<style scoped>
+/* 高度链：Page(auto-content-height) → Tabs → content-holder → tabpane → 子组件(h-full)。
+   缺任何一层，vxe 表格拿到的高度就是 0 ⇒ 有数据也不渲染（实测：接口 200 但页面空白）。 */
+.ledger-tabs {
+  height: 100%;
+}
+
+.ledger-tabs :deep(.ant-tabs-nav) {
+  padding: 0 16px;
+  margin-bottom: 0;
+}
+
+.ledger-tabs :deep(.ant-tabs-content-holder) {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  padding: 12px 16px;
+}
+
+.ledger-tabs :deep(.ant-tabs-content) {
+  height: 100%;
+}
+
+.ledger-tabs :deep(.ant-tabs-tabpane) {
+  height: 100%;
+}
+</style>
