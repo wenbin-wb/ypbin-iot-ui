@@ -1,8 +1,8 @@
+import type { SeriesQueryResult } from './series-utils';
+
 import type { IotPointApi, IotThingModelApi } from '#/api/iot';
 
 import { beforeEach, describe, expect, it } from 'vitest';
-
-import type { SeriesQueryResult } from './series-utils';
 
 import {
   buildChartModel,
@@ -222,9 +222,7 @@ describe('resolveModelHint（物模型不可用要告警，不能让它显示成
   });
 
   it('解析不出标识符的点位个数用于「部分属性被删」这类物模型整体可用时的告警', () => {
-    const properties = [
-      property({ id: '9130001', identifier: 'temperature' }),
-    ];
+    const properties = [property({ id: '9130001', identifier: 'temperature' })];
     const options = buildPointOptions(
       [
         mapping({ id: '1', propertyId: '9130001' }),
@@ -367,13 +365,13 @@ describe('csvCell / buildCsv / buildCsvRows', () => {
     expect(csvCell('+3')).toBe('+3');
   });
 
-  it('RFC 4180 转义：逗号 / 引号 / 换行', () => {
+  it('rfc 4180 转义：逗号 / 引号 / 换行', () => {
     expect(csvCell('a,b')).toBe('"a,b"');
     expect(csvCell('a"b')).toBe('"a""b"');
     expect(csvCell('a\nb')).toBe('"a\nb"');
   });
 
-  it('CRLF 换行 + 表头', () => {
+  it('crlf 换行 + 表头', () => {
     expect(buildCsv(['t', 'v'], [['1', '2']])).toBe('t,v\r\n1,2');
   });
 

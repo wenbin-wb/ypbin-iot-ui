@@ -121,6 +121,8 @@ pnpm -F @vben/web-antd build
 
 前端 API 地址在 `apps/web-antd/.env.production` 的 `VITE_GLOB_API_URL`（默认 `/api`，同源经 nginx 代理到后端）。
 
+> 🔐 `VITE_APP_STORE_SECURE_KEY` 是 pinia 持久化加密密钥：开发默认值在 `apps/web-antd/.env.development`；**生产必须由部署环境注入**。缺失或仍是占位符时，应用启动会被 `packages/stores` 的守卫直接拒绝——不允许「假加密」静默运行。
+
 ## 📁 目录结构
 
 ```

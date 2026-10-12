@@ -37,7 +37,7 @@ import { $t } from '#/locales';
 interface ThingModelFormData {
   kind: 'command' | 'event' | 'property' | 'service';
   productId: string;
-  row?: Record<string, any> | null;
+  row?: null | Record<string, any>;
   /** 属性/命令/事件必填：它们所属的服务主键。 */
   serviceId?: string;
 }
@@ -321,12 +321,11 @@ async function submitService(data: ThingModelFormData, isUpdate: boolean) {
   if (!valid) {
     return;
   }
-  const values = await serviceFormApi.getValues<IotThingModelApi.ServiceSaveReq>();
-  if (isUpdate) {
-    await updateService(data.productId, String(data.row?.id ?? ''), values);
-  } else {
-    await createService(data.productId, values);
-  }
+  const values =
+    await serviceFormApi.getValues<IotThingModelApi.ServiceSaveReq>();
+  await (isUpdate
+    ? updateService(data.productId, String(data.row?.id ?? ''), values)
+    : createService(data.productId, values));
 }
 
 async function submitProperty(data: ThingModelFormData, isUpdate: boolean) {
@@ -334,13 +333,17 @@ async function submitProperty(data: ThingModelFormData, isUpdate: boolean) {
   if (!valid) {
     return;
   }
-  const values = await propertyFormApi.getValues<IotThingModelApi.PropertySaveReq>();
+  const values =
+    await propertyFormApi.getValues<IotThingModelApi.PropertySaveReq>();
   const serviceId = data.serviceId ?? '';
-  if (isUpdate) {
-    await updateProperty(data.productId, serviceId, String(data.row?.id ?? ''), values);
-  } else {
-    await createProperty(data.productId, serviceId, values);
-  }
+  await (isUpdate
+    ? updateProperty(
+        data.productId,
+        serviceId,
+        String(data.row?.id ?? ''),
+        values,
+      )
+    : createProperty(data.productId, serviceId, values));
 }
 
 async function submitCommand(data: ThingModelFormData, isUpdate: boolean) {
@@ -348,13 +351,17 @@ async function submitCommand(data: ThingModelFormData, isUpdate: boolean) {
   if (!valid) {
     return;
   }
-  const values = await commandFormApi.getValues<IotThingModelApi.CommandSaveReq>();
+  const values =
+    await commandFormApi.getValues<IotThingModelApi.CommandSaveReq>();
   const serviceId = data.serviceId ?? '';
-  if (isUpdate) {
-    await updateCommand(data.productId, serviceId, String(data.row?.id ?? ''), values);
-  } else {
-    await createCommand(data.productId, serviceId, values);
-  }
+  await (isUpdate
+    ? updateCommand(
+        data.productId,
+        serviceId,
+        String(data.row?.id ?? ''),
+        values,
+      )
+    : createCommand(data.productId, serviceId, values));
 }
 
 async function submitEvent(data: ThingModelFormData, isUpdate: boolean) {
@@ -364,11 +371,9 @@ async function submitEvent(data: ThingModelFormData, isUpdate: boolean) {
   }
   const values = await eventFormApi.getValues<IotThingModelApi.EventSaveReq>();
   const serviceId = data.serviceId ?? '';
-  if (isUpdate) {
-    await updateEvent(data.productId, serviceId, String(data.row?.id ?? ''), values);
-  } else {
-    await createEvent(data.productId, serviceId, values);
-  }
+  await (isUpdate
+    ? updateEvent(data.productId, serviceId, String(data.row?.id ?? ''), values)
+    : createEvent(data.productId, serviceId, values));
 }
 
 const [Modal, modalApi] = useVbenModal<ThingModelFormData>({

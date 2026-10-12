@@ -29,6 +29,29 @@ jobs:
       - name: 安装依赖
         run: pnpm install --frozen-lockfile
 
+      # 🔴 本仓 CI 原先没有 lint（SYNC.md 第 4 条曾如实登记）。这里补上 oxlint（类型感知）
+      # 与 stylelint，参数与 lefthook 的 pre-commit 保持同一套：--type-aware --threads=4。
+      # 作用域先只覆盖 apps/web-antd/src（自有 IoT 代码），与本次修完的 18 处报错范围一致；
+      # 全仓其它包由各自 lint 通道负责，避免把既存历史问题一次性染红。
+      - name: Lint（oxlint，类型感知）
+        run: pnpm exec oxlint -c oxlint.config.ts --type-aware --threads=4 apps/web-antd/src
+
+      # stylelint 只覆盖 IoT 视图：仓库已有 stylelint 配置，但此前 CI 从未执行。
+      - name: Stylelint（IoT 视图）
+        run: pnpm exec stylelint "apps/web-antd/src/views/iot/**/*.{vue,css}" --config stylelint.config.mjs
+
+      # 🔴 假加密守卫：.env 里的默认值只服务本地开发；生产构建若仍用占位符/空值，
+      # pinia 持久化等于混淆。这里 grep 生产环境文件，门禁拦截；运行时还有 packages/stores 的硬校验。
+      - name: 生产 store 加密密钥门禁（禁止占位符/空值）
+        run: |
+          set -euo pipefail
+          if grep -RInE '^[[:space:]]*VITE_APP_STORE_SECURE_KEY=(please-replace-me-with-your-own-key)?[[:space:]]*$' \
+            apps/web-antd/.env apps/web-antd/.env.production; then
+            echo "::error::生产构建环境不能使用空值或占位符 VITE_APP_STORE_SECURE_KEY；请在部署环境注入高强度随机密钥。"
+            exit 1
+          fi
+          echo "未发现生产 env 中的空值/占位符 store 加密密钥（实际值由部署环境注入）"
+
       # ⚠️ 本仓 CI 原本没有 lint，也没有任何 i18n 校验；实测过一次「键少了 page. 前缀」导致
       # IoT 页面 95 处文案渲染成原始 key（CI 全绿也发现不了）。此步骤补上该盲区。
       - name: IoT i18n 键存在性校验

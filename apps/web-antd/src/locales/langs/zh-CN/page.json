@@ -388,6 +388,7 @@
       "tabDevices": "设备",
       "tabVersions": "版本",
       "detail": "产品详情",
+      "renderFailed": "产品详情渲染失败（已捕获，未静默吞掉）：下面是完整错误",
       "service": "服务",
       "serviceId": "服务标识",
       "serviceIdHelp": "大写字母开头，仅含字母与数字（如 BasicMeasure）",

@@ -22,7 +22,7 @@ const [Form, formApi] = useVbenForm({
   showDefaultActions: false,
 });
 
-const [Drawer, drawerApi] = useVbenDrawer<null | IotProductApi.ProductResp>({
+const [Drawer, drawerApi] = useVbenDrawer<IotProductApi.ProductResp | null>({
   onCancel() {
     drawerApi.close();
   },
@@ -34,11 +34,9 @@ const [Drawer, drawerApi] = useVbenDrawer<null | IotProductApi.ProductResp>({
         return;
       }
       const values = await formApi.getValues<IotProductApi.ProductSaveReq>();
-      if (isUpdate.value) {
-        await updateProduct(rowId.value, values);
-      } else {
-        await createProduct(values);
-      }
+      await (isUpdate.value
+        ? updateProduct(rowId.value, values)
+        : createProduct(values));
       message.success($t('common.success'));
       drawerApi.close();
       emit('reload');
