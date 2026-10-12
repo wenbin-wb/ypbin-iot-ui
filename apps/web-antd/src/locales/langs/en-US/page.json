@@ -388,6 +388,7 @@
       "tabDevices": "Devices",
       "tabVersions": "Versions",
       "detail": "Product detail",
+      "renderFailed": "Product detail failed to render (caught, not swallowed): full error below",
       "service": "Service",
       "serviceId": "Service ID",
       "serviceIdHelp": "Starts with an uppercase letter, letters and digits only (e.g. BasicMeasure)",

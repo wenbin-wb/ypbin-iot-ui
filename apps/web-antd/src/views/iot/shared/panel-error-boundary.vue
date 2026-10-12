@@ -6,7 +6,7 @@ import { Alert } from 'ant-design-vue';
 import { $t } from '#/locales';
 
 /**
- * 渲染错误边界（用于「在线调试」与「告警」两个页签）。
+ * 渲染错误边界（IoT 各页签共用：在线调试、告警、产品详情等）。
  *
  * <p>扩展说明：原实现只服务「在线调试」，Alert 标题**硬编码**为在线调试文案。
  * 告警页签复用它之后，标题由 {@code titleKey} prop 指定（默认仍是 `page.iot.debug.renderFailed`），

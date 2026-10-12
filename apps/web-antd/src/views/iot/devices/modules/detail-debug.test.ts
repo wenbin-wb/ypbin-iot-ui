@@ -12,7 +12,7 @@ import { registerAccessDirective } from '@vben/access';
 import { i18n } from '@vben/locales';
 
 import DetailDebug from './detail-debug.vue';
-import PanelErrorBoundary from './panel-error-boundary.vue';
+import PanelErrorBoundary from '../../shared/panel-error-boundary.vue';
 
 /**
  * 「在线调试」页签（`detail-debug.vue`）的**运行时**组件级用例。

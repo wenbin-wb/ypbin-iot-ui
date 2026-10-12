@@ -30,6 +30,8 @@ import {
   silenceAlerts,
 } from '#/api/iot';
 import { $t } from '#/locales';
+
+import PanelErrorBoundary from '../shared/panel-error-boundary.vue';
 import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
 
@@ -503,7 +505,8 @@ onUnmounted(() => {
     `ALERTS_LAYOUT.requiredDeepRules` 与 `alerts-layout.test.ts` 看守这些标记。
   -->
   <Page auto-content-height>
-    <Tabs v-model:active-key="activeTab" :animated="false" class="h-full">
+    <PanelErrorBoundary title-key="page.iot.alert.renderFailed">
+      <Tabs v-model:active-key="activeTab" :animated="false" class="h-full">
       <!-- ===== 告警列表 ===== -->
       <Tabs.TabPane
         v-if="canViewAlert"
@@ -849,7 +852,8 @@ onUnmounted(() => {
           </template>
         </RuleGrid>
       </Tabs.TabPane>
-    </Tabs>
+      </Tabs>
+    </PanelErrorBoundary>
 
     <RuleDrawer @saved="ruleGuard.request()" />
   </Page>

@@ -360,6 +360,39 @@ for (const page of PAGES) {
  * 条件式定义用例会触发 `vitest/no-conditional-tests`；而改成「提前 return」会让非分页页
  * 跑一条**没有任何断言的恒真用例**（比不加更糟）。
  */
+/**
+ * 三态里的「**有数据**」态：查询成功且返回行时，结果必须原样交给表格，
+ * 页面上不得出现失败提示；`gridStub.renderEmpty = false` 也证明失败/空态不是靠槽位硬凑的。
+ *
+ * 这四条目标目录（groups/maintenance/products/tenant-ledger）此前只有失败/空态用例，
+ * 本组把「有数据」补齐，形成完整三态。
+ */
+describe('列表页：查询成功且有数据 ⇒ 有数据态（不误报失败/空态）', () => {
+  for (const page of PAGES) {
+    it(`${page.name}：结果原样交给表格，失败/空态文案都不出现`, async () => {
+      const marker = `sample-${page.name}`;
+      const row = { id: marker, marker };
+      page.fetchMock().mockResolvedValue(
+        page.paged
+          ? { items: [row], page: '1', pageSize: '10', total: '1' }
+          : [row],
+      );
+      gridStub.renderEmpty = false;
+
+      const handle = await mountPage(page.component);
+      mounted = handle;
+      const result = await runQuery();
+      await nextTick();
+
+      // 行数据必须原样回到 vxe（paged 页会被包成 PageResult，非分页页是数组）
+      expect(JSON.stringify(result)).toContain(marker);
+      const html = handle.container.innerHTML;
+      expect(html).not.toContain(page.failedTitle);
+      expect(html).not.toContain(page.emptyFragment);
+    });
+  }
+});
+
 describe('分页页：后端 `total` 是字符串 ⇒ 交给表格的是 number', () => {
   for (const page of PAGES.filter((item) => item.paged)) {
     it(`${page.name}：total 转成 number，page/pageSize 原样透传`, async () => {

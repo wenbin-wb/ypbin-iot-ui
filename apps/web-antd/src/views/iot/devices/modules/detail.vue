@@ -43,7 +43,7 @@ import Credential from './credential.vue';
 import DetailAlert from './detail-alert.vue';
 import DetailDebug from './detail-debug.vue';
 import DetailPoints from './detail-points.vue';
-import PanelErrorBoundary from './panel-error-boundary.vue';
+import PanelErrorBoundary from '../../shared/panel-error-boundary.vue';
 import Series from './series.vue';
 import ShadowEdit from './shadow-edit.vue';
 import DeviceTags from './tags.vue';

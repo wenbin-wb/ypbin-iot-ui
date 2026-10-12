@@ -1,7 +1,7 @@
 <script lang="ts" setup>
-import type { IotPointApi, IotThingModelApi } from '#/api/iot';
-import type { EchartsUIType } from '@vben/plugins/echarts';
 import type { Dayjs } from 'dayjs';
+
+import type { EchartsUIType } from '@vben/plugins/echarts';
 
 import type {
   ModelHint,
@@ -10,6 +10,8 @@ import type {
   SeriesRangeMode,
   SeriesResolvedRange,
 } from './series-utils';
+
+import type { IotPointApi, IotThingModelApi } from '#/api/iot';
 
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 
@@ -523,7 +525,7 @@ function onCustomRangeChange(value: unknown): void {
 /** 多选上限：Select 的 `maxCount` 在 antdv 4.2 上不保证存在，改在 change 里裁剪（行为可控且能给出提示）。 */
 function onPointsChange(values: unknown): void {
   const list = (Array.isArray(values) ? values : [values])
-    .map((item) => String(item))
+    .map(String)
     .filter((item) => item !== '');
   if (list.length > IOT_SERIES_MAX_SELECTED_POINTS) {
     message.warning(
@@ -628,7 +630,9 @@ const failedCount = computed(
 
 const noData = computed(
   () =>
-    results.value.length > 0 && failedCount.value === 0 && totalCount.value === 0,
+    results.value.length > 0 &&
+    failedCount.value === 0 &&
+    totalCount.value === 0,
 );
 
 const multiSeries = computed(() => usedPoints.value.length > 1);
@@ -675,9 +679,10 @@ async function renderChart(): Promise<void> {
     series: model.map((item) => ({
       connectNulls: false,
       // 时间轴 + [时刻, 值]：多个点位的采样时刻不同，用等距类别轴会把它们按索引对齐（假的时间关系）
-      data: item.timestamps.map(
-        (ts, index): [number, null | number] => [ts, item.data[index] ?? null],
-      ),
+      data: item.timestamps.map((ts, index): [number, null | number] => [
+        ts,
+        item.data[index] ?? null,
+      ]),
       itemStyle: { color: item.color },
       lineStyle: { color: item.color, width: 2 },
       name: item.name,
@@ -947,9 +952,7 @@ function onExport(): void {
           <!-- 未限定时间范围：这是「最早的 N 个点」，不是「最近的 N 个点」，必须说清楚 -->
           <Alert
             v-if="usedRange.unbounded"
-            :message="
-              $t('page.iot.series.rangeUnbounded', [String(usedLimit)])
-            "
+            :message="$t('page.iot.series.rangeUnbounded', [String(usedLimit)])"
             class="mb-2"
             show-icon
             type="warning"

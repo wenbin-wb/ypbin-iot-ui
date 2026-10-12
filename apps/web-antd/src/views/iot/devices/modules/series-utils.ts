@@ -53,7 +53,7 @@ export function isValidPropertyId(value: string): boolean {
 // ---------- 时间范围 ----------
 
 /** 时间范围的取值方式：4 个快捷区间 + 自定义。 */
-export type SeriesRangeMode = '1h' | '24h' | '6h' | '7d' | 'custom';
+export type SeriesRangeMode = '1h' | '6h' | '7d' | '24h' | 'custom';
 
 /** 默认时间范围 = 最近 24 小时（不再让后端拿「最早的 N 个点」当默认）。 */
 export const IOT_SERIES_DEFAULT_RANGE_MODE: SeriesRangeMode = '24h';
@@ -102,8 +102,8 @@ export function resolveSeriesRange(
 
 /** 时间范围的可读标签（自定义档给「起始 ~ 结束」，空范围给「未限定」文案由调用方拼）。 */
 export function formatRangeLabel(
-  from: undefined | number,
-  to: undefined | number,
+  from: number | undefined,
+  to: number | undefined,
 ): string {
   if (from === undefined && to === undefined) {
     return '';
@@ -313,7 +313,9 @@ export interface SeriesQueryResult {
 }
 
 /** 该结果里可绘制的数值点个数。 */
-export function numericCount(points: IotSeriesApi.TimeSeriesPointResp[]): number {
+export function numericCount(
+  points: IotSeriesApi.TimeSeriesPointResp[],
+): number {
   return points.filter((point) => toNumeric(point.value) !== null).length;
 }
 
@@ -366,7 +368,9 @@ export const IOT_SERIES_SYMBOL_MAX_POINTS = 200;
  * 用 `timestamps + data` 而不是「等距类别轴」：多个点位的采样时刻各不相同，
  * 类别轴会把它们按索引对齐，画出来的时间关系是假的（两条曲线的峰会被强行对齐到同一 X 位置）。
  */
-export function buildChartModel(results: SeriesQueryResult[]): ChartSeriesModel[] {
+export function buildChartModel(
+  results: SeriesQueryResult[],
+): ChartSeriesModel[] {
   const units = chartUnits(results);
   return chartableResults(results).map((item, index) => ({
     color: IOT_SERIES_COLORS[index % IOT_SERIES_COLORS.length] ?? '#0066f5',
@@ -395,7 +399,11 @@ export interface SeriesDetailRow {
 
 function sortPoints(
   results: SeriesQueryResult[],
-): { name: string; point: IotSeriesApi.TimeSeriesPointResp; propertyId: string }[] {
+): {
+  name: string;
+  point: IotSeriesApi.TimeSeriesPointResp;
+  propertyId: string;
+}[] {
   const rows: {
     name: string;
     point: IotSeriesApi.TimeSeriesPointResp;
@@ -410,7 +418,7 @@ function sortPoints(
     }
   }
   // 多个点位混排时按时刻升序（与后端单点位升序一致，导出文件也就可对比）
-  return rows.sort((left, right) => {
+  return rows.toSorted((left, right) => {
     const delta = Number(left.point.ts) - Number(right.point.ts);
     return delta === 0
       ? left.propertyId.localeCompare(right.propertyId)
@@ -450,7 +458,7 @@ export function buildDetailRows(
 export function csvCell(cell: string): string {
   const guarded = /^[=@]/.test(cell) ? `'${cell}` : cell;
   return /["\r\n,]/.test(guarded)
-    ? `"${guarded.replace(/"/g, '""')}"`
+    ? `"${guarded.replaceAll('"', '""')}"`
     : guarded;
 }
 
@@ -493,10 +501,10 @@ export function seriesCsvFileName(
   propertyIds: string[],
   now: number,
 ): string {
-  const safePoints = propertyIds.join('+').replace(/[^\w.-]+/g, '_').slice(
-    0,
-    80,
-  );
+  const safePoints = propertyIds
+    .join('+')
+    .replaceAll(/[^\w.-]+/g, '_')
+    .slice(0, 80);
   return `iot-series-${deviceId}-${safePoints}-${dayjs(now).format(
     'YYYYMMDD-HHmmss',
   )}.csv`;

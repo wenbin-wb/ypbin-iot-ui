@@ -142,28 +142,24 @@ export namespace IotCommandApi {
 }
 
 /** 终态：自动转换已停止（`failed`/`timeout` 仍可被**人工**重发，故不等于「不可再变」）。 */
-const TERMINAL_STATUSES: string[] = [
-  'succeeded',
-  'failed',
-  'timeout',
+const TERMINAL_STATUSES = new Set<string>([
   'cancelled',
-];
+  'failed',
+  'succeeded',
+  'timeout',
+]);
 
 /** 可人工重发的来源态（后端 `CommandInstanceStatus.RESENDABLE`，与页面按钮文案同源）。 */
-const RESENDABLE_STATUSES: string[] = ['failed', 'timeout'];
+const RESENDABLE_STATUSES = new Set<string>(['failed', 'timeout']);
 
 /** 是否终态（页面据此决定「还要不要继续轮询」）。 */
 export function isTerminalStatus(statusCode?: string): boolean {
-  return (
-    typeof statusCode === 'string' && TERMINAL_STATUSES.includes(statusCode)
-  );
+  return typeof statusCode === 'string' && TERMINAL_STATUSES.has(statusCode);
 }
 
 /** 是否可人工重发（页面据此决定重发按钮是否可用；后端仍会二次校验）。 */
 export function isResendableStatus(statusCode?: string): boolean {
-  return (
-    typeof statusCode === 'string' && RESENDABLE_STATUSES.includes(statusCode)
-  );
+  return typeof statusCode === 'string' && RESENDABLE_STATUSES.has(statusCode);
 }
 
 /** 下发命令/属性设置（返回 `requestId` 与初始状态）。 */
@@ -192,10 +188,7 @@ export async function getDeviceCommands(
  *
  * `requestId` 进 URL 路径，统一 `encodeURIComponent`（后端形态已过白名单，这里只防拼接污染）。
  */
-export async function resendDeviceCommand(
-  deviceId: string,
-  requestId: string,
-) {
+export async function resendDeviceCommand(deviceId: string, requestId: string) {
   return requestClient.post<IotCommandApi.CommandInstanceResp>(
     `/iot/devices/${deviceId}/commands/${encodeURIComponent(requestId)}/resend`,
   );

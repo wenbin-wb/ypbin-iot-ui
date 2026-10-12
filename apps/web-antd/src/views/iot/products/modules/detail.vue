@@ -2,6 +2,7 @@
 import type { IotProductApi, IotThingModelApi } from '#/api/iot';
 
 import { computed, ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 import { useVbenDrawer, useVbenModal } from '@vben/common-ui';
 
@@ -11,13 +12,12 @@ import {
   Descriptions,
   DescriptionsItem,
   Empty,
+  message,
   Popconfirm,
   Spin,
   Tabs,
   Tag,
-  message,
 } from 'ant-design-vue';
-import { useRouter } from 'vue-router';
 
 import {
   deleteCommand,
@@ -36,6 +36,8 @@ import {
   publishProduct,
 } from '#/api/iot';
 import { $t } from '#/locales';
+
+import PanelErrorBoundary from '../../shared/panel-error-boundary.vue';
 import { extractErrorMessage } from '#/utils/error';
 import { downloadByBlob } from '#/utils/file';
 
@@ -134,11 +136,12 @@ async function loadModel() {
   modelError.value = '';
   const servicesResult = await listServices(productId.value);
   services.value = servicesResult ?? [];
+  const firstService = services.value[0];
   if (
-    services.value.length > 0 &&
+    firstService &&
     !services.value.some((service) => service.id === selectedServiceId.value)
   ) {
-    selectedServiceId.value = services.value[0]!.id;
+    selectedServiceId.value = firstService.id;
   }
   await loadServiceElements();
 }
@@ -326,7 +329,8 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
 <template>
   <Drawer class="w-[1100px]">
     <Spin :spinning="loading">
-      <Tabs v-model:active-key="activeTab" :animated="false">
+      <PanelErrorBoundary title-key="page.iot.product.renderFailed">
+        <Tabs v-model:active-key="activeTab" :animated="false">
         <!-- ===== 概览 ===== -->
         <Tabs.TabPane key="overview" :tab="$t('page.iot.product.tabOverview')">
           <Descriptions :column="2" bordered size="small">
@@ -366,7 +370,10 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
           </Descriptions>
 
           <div class="mt-4 flex flex-wrap gap-2">
-            <Button v-access:code="['iot:product:tsl-export']" @click="onExportTsl">
+            <Button
+              v-access:code="['iot:product:tsl-export']"
+              @click="onExportTsl"
+            >
               {{ $t('page.iot.product.tslExport') }}
             </Button>
             <Button
@@ -387,7 +394,11 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
               :title="$t('page.iot.product.publishConfirm')"
               @confirm="onPublish"
             >
-              <Button v-access:code="['iot:product:publish']" type="primary" v-if="isDraft">
+              <Button
+                v-access:code="['iot:product:publish']"
+                type="primary"
+                v-if="isDraft"
+              >
                 {{ $t('page.iot.product.publish') }}
               </Button>
             </Popconfirm>
@@ -488,7 +499,9 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
                     {{ $t('common.edit') }}
                   </Button>
                   <Popconfirm
-                    :title="$t('ui.actionMessage.deleteConfirm', [service.serviceId])"
+                    :title="
+                      $t('ui.actionMessage.deleteConfirm', [service.serviceId])
+                    "
                     @confirm="onDeleteService(service)"
                   >
                     <Button
@@ -509,7 +522,9 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
           <template v-if="selectedService">
             <div class="mt-4 mb-2 text-sm text-muted-foreground">
               {{ $t('page.iot.product.currentService') }}：
-              {{ selectedService.serviceId }}（{{ selectedService.serviceName }}）
+              {{ selectedService.serviceId }}（{{
+                selectedService.serviceName
+              }}）
             </div>
 
             <!-- 属性 -->
@@ -534,7 +549,9 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
               <thead>
                 <tr class="text-left text-gray-500">
                   <th class="py-1">{{ $t('page.iot.point.identifier') }}</th>
-                  <th class="py-1">{{ $t('page.iot.product.propertyName') }}</th>
+                  <th class="py-1">
+                    {{ $t('page.iot.product.propertyName') }}
+                  </th>
                   <th class="py-1">{{ $t('page.iot.point.dataType') }}</th>
                   <th class="py-1">{{ $t('page.iot.point.accessMode') }}</th>
                   <th class="py-1">{{ $t('page.iot.point.unit') }}</th>
@@ -543,11 +560,7 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
                 </tr>
               </thead>
               <tbody>
-                <tr
-                  v-for="row in properties"
-                  :key="row.id"
-                  class="border-t"
-                >
+                <tr v-for="row in properties" :key="row.id" class="border-t">
                   <td class="py-1">{{ row.identifier }}</td>
                   <td class="py-1">{{ row.propertyName }}</td>
                   <td class="py-1">{{ row.dataType }}</td>
@@ -726,7 +739,10 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
             type="info"
           />
           <div class="mb-2 flex gap-2">
-            <Button v-access:code="['iot:product:tsl-export']" @click="onExportTsl">
+            <Button
+              v-access:code="['iot:product:tsl-export']"
+              @click="onExportTsl"
+            >
               {{ $t('page.iot.product.tslExport') }}
             </Button>
             <Button
@@ -804,7 +820,9 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
                 <td class="py-1">{{ row.versionNo }}</td>
                 <td class="py-1">
                   <Tag
-                    :color="row.modelStatus === 'published' ? 'success' : 'default'"
+                    :color="
+                      row.modelStatus === 'published' ? 'success' : 'default'
+                    "
                   >
                     {{ row.modelStatus }}
                   </Tag>
@@ -815,7 +833,8 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
             </tbody>
           </table>
         </Tabs.TabPane>
-      </Tabs>
+        </Tabs>
+      </PanelErrorBoundary>
     </Spin>
 
     <ThingModelModal @reload="reloadAll" />

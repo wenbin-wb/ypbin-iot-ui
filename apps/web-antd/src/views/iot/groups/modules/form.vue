@@ -22,7 +22,7 @@ const [Form, formApi] = useVbenForm({
   showDefaultActions: false,
 });
 
-const [Drawer, drawerApi] = useVbenDrawer<null | IotGroupApi.GroupResp>({
+const [Drawer, drawerApi] = useVbenDrawer<IotGroupApi.GroupResp | null>({
   onCancel() {
     drawerApi.close();
   },
@@ -34,11 +34,9 @@ const [Drawer, drawerApi] = useVbenDrawer<null | IotGroupApi.GroupResp>({
         return;
       }
       const values = await formApi.getValues<IotGroupApi.GroupSaveReq>();
-      if (isUpdate.value) {
-        await updateGroup(rowId.value, values);
-      } else {
-        await createGroup(values);
-      }
+      await (isUpdate.value
+        ? updateGroup(rowId.value, values)
+        : createGroup(values));
       message.success($t('common.success'));
       drawerApi.close();
       emit('reload');

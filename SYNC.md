@@ -15,7 +15,7 @@
    `sys_menu.component` 一致（例如 `/iot/devices/index` ⇄ `apps/web-antd/src/views/iot/devices/index.vue`）；
    权限码一律用后端已登记的（`iot:device:*` / `iot:product:*` / `iot:group:*` / `iot:availability:get` /
    `iot:maintenance:*`），前端不得自造。
-4. **门禁**：PR 必须过 `CI`（typecheck + 单元测试 + 构建；**注意本仓 CI 没有 lint 步骤**）与 `CodeQL`；改菜单/权限的 SQL 由后端仓的门禁兜住。
+4. **门禁**：PR 必须过 `CI`（i18n 三条门禁 + typecheck + oxlint/stylelint + 单元测试 + 构建 + 生产 store 加密密钥 grep 门禁）与 `CodeQL`；改菜单/权限的 SQL 由后端仓的门禁兜住。**本仓 CI 已补 lint**（原先缺失，见下方「最近同步点」）。
 5. **本机不跑全量前端构建**（低配机器约定）⇒ 前端验证以 CI 为准，PR 说明里附 CI 结论。
 6. **IoT 文案键必须过 `node scripts/check-iot-i18n-keys.mjs`**（CI 已接）：`page.json` 的运行期命名空间是 `page.*`
    ⇒ 页面里写 `$t('page.iot.xxx')`。缺键/写错前缀会让界面显示原始 key——实测过一次（95 处），当时 CI 全绿也发现不了。
@@ -29,8 +29,16 @@
    - **写法**：字面花括号必须用 vue-i18n 的字面量插值语法 —— `{'{'}` 与 `{'}'}`（例如 `{'{'}"arg": 1{'}'}`）。
    - **回归门禁**：`apps/web-antd/src/views/iot/devices/modules/detail-debug.test.ts` 用**真实 i18n 实例**
      逐条编译 `page.iot.*` 文案（含 zh/en），并挂载真实组件断言三态；
-     该页签另套 `panel-error-boundary.vue`，任何 setup/render 异常都落成 Alert（原样显示错误栈），**绝不留空白**。
+     该页签另套 `views/iot/shared/panel-error-boundary.vue`（alerts/products 详情页签复用），任何 setup/render 异常都落成 Alert（原样显示错误栈），**绝不留空白**。
    - 教训：**组件级用例里 mock 掉 `#/locales` 会结构性地漏掉这类 bug**——必须用真实 i18n 跑。
+
+## 最近同步点
+
+- **分叉点**：`2aa8e3b`（2026-09-18，admin-ui `main`）。
+- **最近同步**：`9f02bc6`（tracking 会话/事件标识改用 Web Crypto，去掉 `Math.random()`，CodeQL `js/insecure-randomness`）已 cherry-pick 到本仓；本仓 `packages/tracking` 的两个随机源均已切换，测试/typecheck 通过。
+- **仍未同步**：
+  - `7655848`（品牌 logo 换猫图）未合入。其 commit message 声称「目录路由补 redirect」，但 diff 里**没有** redirect —— 本仓的「后端绝对路径首子路由补 redirect」来源是 **`42ac8d1`**（IoT 品牌重塑大 commit 顺带带入），不是 `9265064`，也不是 `7655848`。这类「commit message 与 diff 不符」是同步时必须以代码为准、不能凭 message 记账的实例。
+  - `toBackendNumber`（后端 Long 字符串转 number）是 **iot-ui 自有工具**，admin-ui 不存在；同步上游文件时不要假设上游有同名工具，也不要把它当同步来源。
 
 ## 与后端仓的关系
 

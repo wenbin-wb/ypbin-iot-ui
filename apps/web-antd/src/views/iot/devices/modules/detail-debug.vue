@@ -290,8 +290,7 @@ interface ErrorDetail {
 function describeError(error: unknown, fallback: string): ErrorDetail {
   const envelope = readEnvelope(error);
   const rawCode = envelope?.code;
-  const code =
-    rawCode === null || rawCode === undefined ? '' : String(rawCode);
+  const code = rawCode === null || rawCode === undefined ? '' : String(rawCode);
   const rawMessage = envelope?.message;
   const message =
     typeof rawMessage === 'string' && rawMessage !== ''
@@ -445,7 +444,8 @@ function showTotal(total: number): string {
  * 与设备数无关，不存在按设备循环的 N+1）。
  */
 async function loadModel() {
-  if (!props.productId) {
+  const productId = props.productId;
+  if (!productId) {
     properties.value = [];
     commands.value = [];
     return;
@@ -453,11 +453,11 @@ async function loadModel() {
   modelLoading.value = true;
   modelError.value = '';
   try {
-    const serviceList = (await listServices(props.productId)) ?? [];
+    const serviceList = (await listServices(productId)) ?? [];
     const byService = await Promise.all(
       serviceList.map(async (service) => ({
-        commands: (await listCommands(props.productId!, service.id)) ?? [],
-        properties: (await listProperties(props.productId!, service.id)) ?? [],
+        commands: (await listCommands(productId, service.id)) ?? [],
+        properties: (await listProperties(productId, service.id)) ?? [],
       })),
     );
     properties.value = byService.flatMap((item) => item.properties);
@@ -510,10 +510,7 @@ async function loadHistory(options: { silent?: boolean } = {}) {
     historyError.value = undefined;
     pollError.value = undefined;
   } catch (error) {
-    const detail = describeError(
-      error,
-      $t('page.iot.debug.historyLoadFailed'),
-    );
+    const detail = describeError(error, $t('page.iot.debug.historyLoadFailed'));
     if (options.silent) {
       // 轮询失败：列表原样保留，原始 code/信封一并留下（与 historyError 同口径）
       pollError.value = detail;
@@ -674,14 +671,15 @@ function buildTargets(): SendTarget[] | undefined {
       : undefined;
   if (kind.value === 'property_set') {
     const rows = setRows.value.filter(
-      (row) => (row.identifier ?? '') !== '',
+      (row): row is SetRow & { identifier: string } =>
+        (row.identifier ?? '') !== '',
     );
     if (rows.length === 0) {
       formError.value = $t('page.iot.debug.noTarget');
       return undefined;
     }
     return rows.map((row) => ({
-      identifier: row.identifier!,
+      identifier: row.identifier,
       req: {
         identifier: row.identifier,
         kind: kind.value,
@@ -778,10 +776,7 @@ async function onSend() {
  *
  * 参数是表格插槽给的**结构类型**行（只取需要的两个字段，不对插槽类型做强断言）。
  */
-async function onResend(record: {
-  requestId?: string;
-  statusCode?: string;
-}) {
+async function onResend(record: { requestId?: string; statusCode?: string }) {
   const requestId = record.requestId;
   if (!requestId) {
     message.warning($t('page.iot.debug.resendNotAllowed'));
@@ -793,7 +788,9 @@ async function onResend(record: {
   }
   try {
     const instance = await resendDeviceCommand(props.deviceId, requestId);
-    message.success($t('page.iot.debug.resendOk', [instance.requestId ?? requestId]));
+    message.success(
+      $t('page.iot.debug.resendOk', [instance.requestId ?? requestId]),
+    );
     await loadHistory();
   } catch (error) {
     const detail = describeError(error, $t('page.iot.debug.resendFailed'));
@@ -1020,7 +1017,9 @@ const batchSummary = computed(() => {
           type="primary"
           @click="onSend"
         >
-          {{ sending ? $t('page.iot.debug.sending') : $t('page.iot.debug.send') }}
+          {{
+            sending ? $t('page.iot.debug.sending') : $t('page.iot.debug.send')
+          }}
         </Button>
         <span class="text-xs text-muted-foreground">
           {{ $t('page.iot.debug.writeDesiredHint') }}
@@ -1057,7 +1056,10 @@ const batchSummary = computed(() => {
     </div>
 
     <!-- ===== 本批下发结果 ===== -->
-    <div v-if="sendResults.length > 0" class="mt-3 rounded border border-solid p-3">
+    <div
+      v-if="sendResults.length > 0"
+      class="mt-3 rounded border border-solid p-3"
+    >
       <div class="mb-2 font-semibold">
         {{ $t('page.iot.debug.batchTitle', [String(batchSequence)]) }}
       </div>
@@ -1081,7 +1083,11 @@ const batchSummary = computed(() => {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(item, index) in sendResults" :key="index" class="border-t">
+          <tr
+            v-for="(item, index) in sendResults"
+            :key="index"
+            class="border-t"
+          >
             <td class="py-1">{{ item.identifier }}</td>
             <td class="py-1 font-mono">{{ item.requestId ?? '-' }}</td>
             <td class="py-1">
@@ -1123,7 +1129,11 @@ const batchSummary = computed(() => {
             <SelectOption value="">
               {{ $t('page.iot.debug.allStatus') }}
             </SelectOption>
-            <SelectOption v-for="item in STATUS_OPTIONS" :key="item" :value="item">
+            <SelectOption
+              v-for="item in STATUS_OPTIONS"
+              :key="item"
+              :value="item"
+            >
               {{ statusText(item) }}
             </SelectOption>
           </Select>
@@ -1203,9 +1213,7 @@ const batchSummary = computed(() => {
               <!-- 语义必须明确：重发的是**同一条请求**（同一 requestId），不新生成 -->
               <Popconfirm
                 v-if="isResendableStatus(record.statusCode)"
-                :title="
-                  $t('page.iot.debug.resendConfirm', [record.requestId])
-                "
+                :title="$t('page.iot.debug.resendConfirm', [record.requestId])"
                 @confirm="onResend(record)"
               >
                 <Button v-if="canSendCommand" size="small" type="link">
