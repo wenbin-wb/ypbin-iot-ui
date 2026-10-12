@@ -34,8 +34,8 @@ catalogs:
       specifier: ^10.5.0
       version: 10.5.0
     '@iconify/json':
-      specifier: ^2.2.504
-      version: 2.2.504
+      specifier: ^2.2.539
+      version: 2.2.539
     '@iconify/tailwind4':
       specifier: ^1.2.3
       version: 1.2.3
@@ -1320,7 +1320,7 @@ importers:
     dependencies:
       '@iconify/json':
         specifier: 'catalog:'
-        version: 2.2.504
+        version: 2.2.539
 
   packages/@core/base/icons:
     dependencies:
@@ -3722,8 +3722,8 @@ packages:
   '@iconify-json/vscode-icons@1.2.67':
     resolution: {integrity: sha512-/fObxEkBtqK2e1qf1IRjuZ4drWknAnzykdT2ngGAKESf35tCcj0Lx3MdsxYBneE5YbgvsUfOl0hbZ59R5s19vw==}
 
-  '@iconify/json@2.2.504':
-    resolution: {integrity: sha512-gNFzZxKuRtPNyEMA8TmFMwVcS4vhT4zpAVBnMCG/PILvNu4N9Z8ksvJZWtcuK3Yn6vbeFj0iIwlOLPKR/H1pkA==}
+  '@iconify/json@2.2.539':
+    resolution: {integrity: sha512-fcMTJ7NPvaLePQQ7Xmlwp+5bc+vJid6k4Pv4w47EPSjuq/Ty0im28RVMbdQRdVtvwqCKsfWbWNczYNMbs3sB/A==}
 
   '@iconify/tailwind4@1.2.3':
     resolution: {integrity: sha512-z8SKiMHRASJKF/IY//87MF88lcB7ulxh8vlhQXXLWsBkNtOh6ese9R41MyGpQeqXdRvQVt+/fX2glQtHFjQ+MA==}
@@ -13083,7 +13083,7 @@ snapshots:
     dependencies:
       '@iconify/types': 2.0.0
 
-  '@iconify/json@2.2.504':
+  '@iconify/json@2.2.539':
     dependencies:
       '@iconify/types': 2.0.0
       pathe: 2.0.3
