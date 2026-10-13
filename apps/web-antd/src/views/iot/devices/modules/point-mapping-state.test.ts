@@ -4,7 +4,9 @@ import {
   buildPointPayload,
   emptyPointForm,
   formFromPoint,
+  isModbusRegisterAddressType,
   POINT_RAW_ADDRESS_MAX,
+  registerDecodeLabelKeys,
   resolvePointListState,
   validatePointForm,
 } from './point-mapping-state';
@@ -14,7 +16,8 @@ import {
  *
  * 重点：校验与后端 IotPointMappingReq 约束同口径（propertyId NotNull /
  * refType|addressType|rawAddress|rw NotBlank / rawAddress <=128 / pollIntervalMs >=0 整数 /
- * scaleFactor|offsetValue 数字 / byteOrder big|little）；回显与提交保真。
+ * scaleFactor|offsetValue 数字 / byteOrder big|little / wordCount 1|2 / signed boolean）；
+ * 回显与提交保真；Modbus 寄存器解码 v1 的下发口径。
  */
 
 function validForm() {
@@ -89,6 +92,30 @@ describe('validatePointForm（与后端同口径）', () => {
     );
   });
 
+  it('wordCount 只允许 1|2（后端 int，默认 1）', () => {
+    expect(validatePointForm({ ...validForm(), wordCount: '1' }).ok).toBe(true);
+    expect(validatePointForm({ ...validForm(), wordCount: '2' }).ok).toBe(true);
+    expect(validatePointForm({ ...validForm(), wordCount: '' }).ok).toBe(true);
+    expect(validatePointForm({ ...validForm(), wordCount: '3' }).ok).toBe(
+      false,
+    );
+    expect(validatePointForm({ ...validForm(), wordCount: 'x' }).ok).toBe(
+      false,
+    );
+  });
+
+  it('signed 是 boolean（后端 Boolean，默认 false = 无符号）', () => {
+    expect(validatePointForm({ ...validForm(), signed: false }).ok).toBe(true);
+    expect(validatePointForm({ ...validForm(), signed: true }).ok).toBe(true);
+    // 老口径（0/1 数字或字符串）必须被拒，避免契约回归成 Integer
+    expect(validatePointForm({ ...validForm(), signed: 0 as never }).ok).toBe(
+      false,
+    );
+    expect(validatePointForm({ ...validForm(), signed: '1' as never }).ok).toBe(
+      false,
+    );
+  });
+
   it('byteOrder 只允许 big|little', () => {
     expect(validatePointForm({ ...validForm(), byteOrder: 'big' }).ok).toBe(
       true,
@@ -134,6 +161,52 @@ describe('buildPointPayload', () => {
       offsetValue: '-1.5',
     });
   });
+
+  it('寄存器点位（Modbus）默认下发后端默认值 wordCount=1 / signed=false', () => {
+    const payload = buildPointPayload('9', validForm());
+    expect(payload.wordCount).toBe(1);
+    expect(payload.signed).toBe(false);
+  });
+
+  it('★ wordCount=1（16 位）时 byteOrder 不参与 payload（契约：仅 32 位生效）', () => {
+    const form = validForm();
+    form.wordCount = '1';
+    form.byteOrder = 'little';
+    expect(buildPointPayload('9', form)).not.toHaveProperty('byteOrder');
+  });
+
+  it('★ wordCount=2（32 位）时 byteOrder 按契约带出，signed 按选择带出', () => {
+    const form = validForm();
+    form.wordCount = '2';
+    form.signed = true;
+    form.byteOrder = 'little';
+    expect(buildPointPayload('9', form)).toMatchObject({
+      wordCount: 2,
+      signed: true,
+      byteOrder: 'little',
+    });
+  });
+
+  it('wordCount=2 但未选字序时不下发 byteOrder（后端默认）', () => {
+    const form = validForm();
+    form.wordCount = '2';
+    form.byteOrder = undefined;
+    expect(buildPointPayload('9', form)).not.toHaveProperty('byteOrder');
+  });
+
+  it('★ 非 Modbus 寄存器点位（coil/discrete/nodeid/topic）不下发三个解码字段', () => {
+    for (const addressType of ['coil', 'discrete', 'nodeid', 'topic']) {
+      const form = validForm();
+      form.addressType = addressType;
+      form.wordCount = '2';
+      form.signed = true;
+      form.byteOrder = 'big';
+      const payload = buildPointPayload('9', form);
+      expect(payload).not.toHaveProperty('wordCount');
+      expect(payload).not.toHaveProperty('signed');
+      expect(payload).not.toHaveProperty('byteOrder');
+    }
+  });
 });
 
 describe('formFromPoint（编辑回显）', () => {
@@ -176,6 +249,95 @@ describe('formFromPoint（编辑回显）', () => {
     expect(form.offsetValue).toBe('');
     expect(form.byteOrder).toBe('');
     expect(form.enabled).toBe(true);
+  });
+
+  it('后端未返回 wordCount/signed 时回落到后端默认 1 / false（老数据不会被改成别的语义）', () => {
+    const form = formFromPoint({
+      id: '1',
+      deviceId: '9',
+      propertyId: '1001',
+      refType: 'property',
+      rawAddress: '40001',
+      addressType: 'holding',
+      rw: 'R',
+    });
+    expect(form.wordCount).toBe('1');
+    expect(form.signed).toBe(false);
+  });
+
+  it('wordCount=2 / signed=true 完整回显', () => {
+    const form = formFromPoint({
+      id: '1',
+      deviceId: '9',
+      propertyId: '1001',
+      refType: 'property',
+      rawAddress: '40001',
+      addressType: 'holding',
+      wordCount: 2,
+      signed: true,
+      byteOrder: 'little',
+      rw: 'R',
+    });
+    expect(form.wordCount).toBe('2');
+    expect(form.signed).toBe(true);
+    expect(form.byteOrder).toBe('little');
+  });
+});
+
+describe('寄存器解码（Modbus）：可读展示与适用性', () => {
+  it('isModbusRegisterAddressType 只认 holding|input', () => {
+    expect(isModbusRegisterAddressType('holding')).toBe(true);
+    expect(isModbusRegisterAddressType('input')).toBe(true);
+    for (const t of ['coil', 'discrete', 'nodeid', 'topic', '', undefined]) {
+      expect(isModbusRegisterAddressType(t)).toBe(false);
+    }
+  });
+
+  it('★ 32 位 · 有符号 · 低字在前（不裸露 big/little 枚举值）', () => {
+    expect(
+      registerDecodeLabelKeys({
+        addressType: 'holding',
+        wordCount: 2,
+        signed: true,
+        byteOrder: 'little',
+      }),
+    ).toEqual([
+      'page.iot.point.wordCount2',
+      'page.iot.point.signedInt',
+      'page.iot.point.byteOrderLittle',
+    ]);
+  });
+
+  it('16 位时不展示字序（即便 resp 里带着历史 byteOrder）', () => {
+    expect(
+      registerDecodeLabelKeys({
+        addressType: 'input',
+        wordCount: 1,
+        signed: false,
+        byteOrder: 'big',
+      }),
+    ).toEqual(['page.iot.point.wordCount1', 'page.iot.point.unsigned']);
+  });
+
+  it('缺字段按后端默认展示（16 位 · 无符号），非寄存器点位返回空（列表显示 -）', () => {
+    expect(registerDecodeLabelKeys({ addressType: 'holding' })).toEqual([
+      'page.iot.point.wordCount1',
+      'page.iot.point.unsigned',
+    ]);
+    for (const addressType of ['coil', 'discrete', 'nodeid', 'topic']) {
+      expect(registerDecodeLabelKeys({ addressType })).toEqual([]);
+    }
+  });
+
+  it('32 位但字序取值非法时不瞎猜（不追加字序片段）', () => {
+    expect(
+      registerDecodeLabelKeys({
+        addressType: 'holding',
+        wordCount: 2,
+        signed: false,
+        byteOrder: 'middle',
+      }),
+    ).toEqual(['page.iot.point.wordCount2', 'page.iot.point.unsigned']);
   });
 });
 
