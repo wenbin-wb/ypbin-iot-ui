@@ -7,6 +7,10 @@ import type { IotPointApi } from '#/api/iot';
  *   propertyId @NotNull；refType/addressType/rawAddress/rw @NotBlank；
  *   rawAddress @Size(max=128)；pollIntervalMs @Min(0)；scaleFactor/offsetValue 可空数字；
  *   byteOrder 可空 big|little；enabled 可空。
+ *
+ * Modbus 寄存器解码 v2 追加 registerFormat（int|float|bits）与位域（bitOffset/bitLength）：
+ * 三形态的字段可见性、payload 组成与切换清理都收敛在本文件，便于断言（见 applyRegisterFormat /
+ * buildPointPayload / registerDecodeSegments）。
  */
 
 /** propertyId 可映射到的引用类型（后端 PointRefType）。 */
@@ -33,6 +37,40 @@ export const POINT_BYTE_ORDERS = [
   { value: 'big', labelKey: 'page.iot.point.byteOrderBig' },
   { value: 'little', labelKey: 'page.iot.point.byteOrderLittle' },
 ] as const;
+
+/**
+ * 寄存器值形态（后端 `registerFormat`，默认 `int`）。
+ * - int：整数（等价 v1 —— wordCount 1|2 + signed + 字序）；
+ * - float：IEEE754 **单精度**浮点，固定占 2 个寄存器，不发 signed，字序生效；
+ * - bits：单寄存器内位域，固定 1 个寄存器，不发 signed/字序，必填 bitOffset + bitLength。
+ */
+export const POINT_REGISTER_FORMATS = [
+  { value: 'int', labelKey: 'page.iot.point.registerFormatInt' },
+  { value: 'float', labelKey: 'page.iot.point.registerFormatFloat' },
+  { value: 'bits', labelKey: 'page.iot.point.registerFormatBits' },
+] as const;
+
+/** 寄存器值形态取值。 */
+export type PointRegisterFormat =
+  (typeof POINT_REGISTER_FORMATS)[number]['value'];
+
+/** 单个 Modbus 寄存器的位宽（位域校验上限）。 */
+export const POINT_REGISTER_BITS = 16;
+
+/** 位域起始位上限（0..15）。 */
+export const POINT_BIT_OFFSET_MAX = POINT_REGISTER_BITS - 1;
+
+/** 是否为合法的寄存器值形态；非法/缺省一律按 `int` 回落。 */
+export function isPointRegisterFormat(
+  value?: string,
+): value is PointRegisterFormat {
+  return value === 'int' || value === 'float' || value === 'bits';
+}
+
+/** 形态兜底：缺字段（老数据/后端未返回）按后端默认 `int` 回落。 */
+export function normalizeRegisterFormat(value?: string): PointRegisterFormat {
+  return isPointRegisterFormat(value) ? value : 'int';
+}
 
 /** Modbus 寄存器宽度（后端 `wordCount`，int 1|2，默认 1）。 */
 export const POINT_WORD_COUNTS = [
@@ -84,6 +122,12 @@ export interface PointForm {
   wordCount: string;
   /** Modbus 数值符号（false = 无符号 | true = 有符号）。 */
   signed: boolean;
+  /** 寄存器值形态（'int' | 'float' | 'bits'）。 */
+  registerFormat: string;
+  /** 位域起始位（仅 bits；字符串形态，空 = 未填）。 */
+  bitOffset?: string;
+  /** 位域位宽（仅 bits；字符串形态，空 = 未填）。 */
+  bitLength?: string;
   rw: string;
   enabled: boolean;
 }
@@ -111,9 +155,41 @@ export function emptyPointForm(): PointForm {
     // 后端默认值：wordCount=1、signed=false（无符号）；byteOrder 默认不写（空 = 不发送）。
     wordCount: '1',
     signed: false,
+    // 后端默认值：registerFormat='int'；位域字段仅在 bits 下填写，默认不写。
+    registerFormat: 'int',
+    bitOffset: undefined,
+    bitLength: undefined,
     rw: 'R',
     enabled: true,
   };
+}
+
+/**
+ * 形态切换时的**联动清理**（返回新表单；原则与 v1 一致：界面所见即所发）。
+ *
+ * - `float`：wordCount 固定 2、signed 置 false（后端要求 false 且不下发）、清位域字段；
+ * - `bits`：wordCount 固定 1、signed 置 false、清字序（后端忽略），位域字段留给用户填；
+ * - `int`：清位域字段（位域只属于 bits），wordCount/signed 保持用户选择。
+ */
+export function applyRegisterFormat(
+  form: PointForm,
+  format: string,
+): PointForm {
+  const next: PointForm = { ...form, registerFormat: format };
+  if (format === 'float') {
+    next.wordCount = '2';
+    next.signed = false;
+    next.bitOffset = undefined;
+    next.bitLength = undefined;
+  } else if (format === 'bits') {
+    next.wordCount = '1';
+    next.signed = false;
+    next.byteOrder = undefined;
+  } else {
+    next.bitOffset = undefined;
+    next.bitLength = undefined;
+  }
+  return next;
 }
 
 /** 数字是否合法（可空：空 = 合法；非空必须是有限数字）。 */
@@ -172,6 +248,40 @@ export function validatePointForm(form: PointForm): PointFormCheck {
   if (form.signed !== true && form.signed !== false) {
     return { ok: false, message: '数值符号必须是有符号(true)/无符号(false)' };
   }
+  if (!isPointRegisterFormat(form.registerFormat)) {
+    return { ok: false, message: '寄存器值形态只能是 int / float / bits' };
+  }
+  if (form.registerFormat === 'bits') {
+    const offsetText = (form.bitOffset ?? '').trim();
+    const lengthText = (form.bitLength ?? '').trim();
+    if (offsetText === '') {
+      return { ok: false, message: '位域的起始位不能为空（0..15）' };
+    }
+    if (lengthText === '') {
+      return { ok: false, message: '位域的位宽不能为空（1..16-起始位）' };
+    }
+    const offset = Number(offsetText);
+    const length = Number(lengthText);
+    if (
+      !Number.isInteger(offset) ||
+      offset < 0 ||
+      offset > POINT_BIT_OFFSET_MAX
+    ) {
+      return {
+        ok: false,
+        message: `位域起始位必须是 0..${POINT_BIT_OFFSET_MAX} 的整数`,
+      };
+    }
+    if (!Number.isInteger(length) || length < 1) {
+      return { ok: false, message: '位域位宽必须是不小于 1 的整数' };
+    }
+    if (offset + length > POINT_REGISTER_BITS) {
+      return {
+        ok: false,
+        message: `位域越界：起始位 + 位宽不能超过 ${POINT_REGISTER_BITS}（当前 ${offset} + ${length} = ${offset + length}）`,
+      };
+    }
+  }
   if (
     form.byteOrder !== undefined &&
     form.byteOrder !== '' &&
@@ -211,13 +321,34 @@ export function buildPointPayload(
   if (offset) {
     payload.offsetValue = offset;
   }
-  // Modbus 寄存器解码三字段只对保持/输入寄存器有意义；其余地址类型一律不下发（后端按默认处理）。
+  // 寄存器解码字段只对保持/输入寄存器有意义；其余地址类型一律不下发（后端按默认处理）。
   if (isModbusRegisterAddressType(form.addressType)) {
-    payload.wordCount = form.wordCount === '2' ? 2 : 1;
-    payload.signed = form.signed === true;
-    // 字序仅在 32 位（wordCount=2）时生效 ⇒ wordCount=1 时 byteOrder 不参与 payload。
-    if (payload.wordCount === 2 && form.byteOrder) {
-      payload.byteOrder = form.byteOrder;
+    const format = normalizeRegisterFormat(form.registerFormat);
+    payload.registerFormat = format;
+    if (format === 'float') {
+      // IEEE754 单精度固定占 2 个寄存器；signed 由后端要求 false ⇒ 不下发。
+      payload.wordCount = 2;
+      if (form.byteOrder) {
+        payload.byteOrder = form.byteOrder;
+      }
+    } else if (format === 'bits') {
+      // 单寄存器内位域：wordCount 固定 1；signed / 字序后端忽略 ⇒ 不下发。
+      payload.wordCount = 1;
+      const offset = form.bitOffset?.trim();
+      const length = form.bitLength?.trim();
+      if (offset) {
+        payload.bitOffset = Number(offset);
+      }
+      if (length) {
+        payload.bitLength = Number(length);
+      }
+    } else {
+      payload.wordCount = form.wordCount === '2' ? 2 : 1;
+      payload.signed = form.signed === true;
+      // 字序仅在 32 位（wordCount=2）时生效 ⇒ wordCount=1 时 byteOrder 不参与 payload。
+      if (payload.wordCount === 2 && form.byteOrder) {
+        payload.byteOrder = form.byteOrder;
+      }
     }
   }
   return payload;
@@ -227,6 +358,15 @@ export function buildPointPayload(
  * 编辑回显：Resp → 表单（BigDecimal 字符串保留；可空字段空串化，便于输入框占位）。
  */
 export function formFromPoint(point: IotPointApi.PointMappingResp): PointForm {
+  // 形态决定宽度：float 固定 2、bits 固定 1。若后端数据与形态不自洽（历史脏数据），
+  // 以形态为准归一，保证「界面所见 = payload 所发」。
+  const registerFormat = normalizeRegisterFormat(point.registerFormat);
+  let wordCount = point.wordCount === 2 ? '2' : '1';
+  if (registerFormat === 'float') {
+    wordCount = '2';
+  } else if (registerFormat === 'bits') {
+    wordCount = '1';
+  }
   return {
     propertyId: point.propertyId,
     refType: point.refType,
@@ -240,8 +380,18 @@ export function formFromPoint(point: IotPointApi.PointMappingResp): PointForm {
     offsetValue: point.offsetValue ?? '',
     byteOrder: point.byteOrder ?? '',
     // 缺字段（老数据/后端未返回）回落到后端默认：wordCount=1、signed=false。
-    wordCount: point.wordCount === 2 ? '2' : '1',
+    wordCount,
     signed: point.signed === true,
+    // 缺字段（老数据/后端未返回）按后端默认 registerFormat='int' 回落；位域空串化便于输入。
+    registerFormat,
+    bitOffset:
+      point.bitOffset === undefined || point.bitOffset === null
+        ? ''
+        : String(point.bitOffset),
+    bitLength:
+      point.bitLength === undefined || point.bitLength === null
+        ? ''
+        : String(point.bitLength),
     rw: point.rw,
     enabled: point.enabled !== false,
   };
@@ -250,35 +400,102 @@ export function formFromPoint(point: IotPointApi.PointMappingResp): PointForm {
 /** 列表展示用的点位解码信息字段（Resp 的最小子集）。 */
 export interface RegisterDecodePoint {
   addressType?: string;
+  bitLength?: number;
+  bitOffset?: number;
   byteOrder?: string;
+  registerFormat?: string;
   signed?: boolean;
   wordCount?: number;
 }
 
+/** 「解码」列的一个可读片段：i18n 键 + 可选插值参数。 */
+export interface RegisterDecodeSegment {
+  key: string;
+  params?: (number | string)[];
+}
+
+/** 字序枚举 → i18n 键（非法取值返回 undefined，不瞎猜）。 */
+function byteOrderKey(byteOrder?: string): string | undefined {
+  if (byteOrder === 'big') {
+    return 'page.iot.point.byteOrderBig';
+  }
+  if (byteOrder === 'little') {
+    return 'page.iot.point.byteOrderLittle';
+  }
+  return undefined;
+}
+
 /**
- * 寄存器解码的**可读片段**（返回 i18n 键数组，由调用方 `$t()` 后拼接）。
+ * 寄存器解码的**可读片段**（由调用方 `$t(key, params)` 后拼接）。
  *
  * - 非 Modbus 寄存器点位（coil/discrete/nodeid/topic）返回 `[]` ⇒ 列表显示 `-`；
- * - 顺序固定为「宽度 · 符号 ·（仅 32 位时）字序」，避免裸露 `big`/`little` 这类枚举值。
+ * - `int`（默认）：`32 位（2 个寄存器） · 有符号 · 高字在前（ABCD）`；
+ * - `float`：`32 位浮点 · 低字在前（CDAB）`（IEEE754 单精度固定 2 寄存器）；
+ * - `bits`：`位域：bit 3..5（3 位）`（位域信息缺失时退化为 `位域`）；
+ * - 一律不裸露 `big`/`little`、`int` 这类枚举值。
  */
-export function registerDecodeLabelKeys(point: RegisterDecodePoint): string[] {
+export function registerDecodeSegments(
+  point: RegisterDecodePoint,
+): RegisterDecodeSegment[] {
   if (!isModbusRegisterAddressType(point.addressType)) {
     return [];
   }
-  const keys = [
-    point.wordCount === 2
-      ? 'page.iot.point.wordCount2'
-      : 'page.iot.point.wordCount1',
-    point.signed === true
-      ? 'page.iot.point.signedInt'
-      : 'page.iot.point.unsigned',
-  ];
-  if (point.wordCount === 2 && point.byteOrder === 'big') {
-    keys.push('page.iot.point.byteOrderBig');
-  } else if (point.wordCount === 2 && point.byteOrder === 'little') {
-    keys.push('page.iot.point.byteOrderLittle');
+  const format = normalizeRegisterFormat(point.registerFormat);
+
+  if (format === 'float') {
+    // IEEE754 单精度固定 2 个寄存器；字序仍生效。
+    const segments: RegisterDecodeSegment[] = [
+      { key: 'page.iot.point.registerFormatFloatShort' },
+    ];
+    const orderKey = byteOrderKey(point.byteOrder);
+    if (orderKey) {
+      segments.push({ key: orderKey });
+    }
+    return segments;
   }
-  return keys;
+
+  if (format === 'bits') {
+    const { bitLength, bitOffset } = point;
+    if (
+      typeof bitOffset !== 'number' ||
+      typeof bitLength !== 'number' ||
+      !Number.isInteger(bitOffset) ||
+      !Number.isInteger(bitLength) ||
+      bitLength < 1
+    ) {
+      // 位域信息不完整（异常数据）：只说明形态，不编造范围。
+      return [{ key: 'page.iot.point.registerFormatBitsShort' }];
+    }
+    return [
+      {
+        key: 'page.iot.point.bitsRangeShort',
+        params: [bitOffset, bitOffset + bitLength - 1, bitLength],
+      },
+    ];
+  }
+
+  // int：等价 v1 的「宽度 · 符号 ·（仅 32 位时）字序」。
+  const segments: RegisterDecodeSegment[] = [
+    {
+      key:
+        point.wordCount === 2
+          ? 'page.iot.point.wordCount2'
+          : 'page.iot.point.wordCount1',
+    },
+    {
+      key:
+        point.signed === true
+          ? 'page.iot.point.signedInt'
+          : 'page.iot.point.unsigned',
+    },
+  ];
+  if (point.wordCount === 2) {
+    const orderKey = byteOrderKey(point.byteOrder);
+    if (orderKey) {
+      segments.push({ key: orderKey });
+    }
+  }
+  return segments;
 }
 
 /** 点位列表展示态（错误优先于空）。 */

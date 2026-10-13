@@ -37,6 +37,17 @@ export namespace IotPointApi {
      * 与同 DTO 的 `enabled` 一致按 Boolean 处理（DB 列 TINYINT 0/1）。
      */
     signed?: boolean;
+    /**
+     * 寄存器值形态（Modbus 寄存器解码 v2，仅 holding|input）：
+     * - `int`（默认）：整数，等价 v1 —— wordCount 1|2 + signed + 字序；
+     * - `float`：IEEE754 **单精度**浮点，固定占 2 个寄存器；**不发 signed**；字序生效；
+     * - `bits`：单寄存器内位域，固定 1 个寄存器；**不发 signed / 字序**；必填 bitOffset + bitLength。
+     */
+    registerFormat?: 'bits' | 'float' | 'int';
+    /** 位域起始位（仅 registerFormat=bits，0..15）。 */
+    bitOffset?: number;
+    /** 位域位宽（仅 registerFormat=bits，≥1 且 bitOffset + bitLength ≤ 16）。 */
+    bitLength?: number;
     /** 读写：R|W|RW（与属性 accessMode 联动校验）。 */
     rw: string;
     enabled?: boolean;
@@ -52,7 +63,12 @@ export namespace IotPointApi {
    * wordCount 1|2（默认 1）；signed boolean（默认 false = 无符号）；
    * byteOrder big|little（默认不发送）——语义是**字序**（big=高字在前 ABCD / little=低字在前 CDAB），
    * 不是 BADC/DCBA 字节交换。
-   * v1 不支持 IEEE754 浮点 / BADC·DCBA 字节交换 / 字符串寄存器 / 位域，故无对应字段。
+   * Modbus 寄存器解码 v2 追加「寄存器值形态」：
+   * registerFormat `int`（默认）| `float` | `bits`；
+   * - float：wordCount 固定 2（IEEE754 **单精度**）、signed 不发（后端要求 false）、字序生效；
+   * - bits：wordCount 固定 1、signed/字序不发、必填 bitOffset(0..15) + bitLength(≥1 且和 ≤16)；
+   * 三者只对 holding|input 下发，其它地址类型一律不带。
+   * 仍不支持 BADC·DCBA 字节交换 / 字符串寄存器。
    */
   export interface PointMappingSaveReq {
     deviceId?: string;
@@ -68,6 +84,12 @@ export namespace IotPointApi {
     wordCount?: number;
     /** Modbus 数值符号：`true` = 有符号；`false` = 无符号（默认）。仅 holding|input 有意义。 */
     signed?: boolean;
+    /** 寄存器值形态：int（默认）| float（IEEE754 单精度，固定 2 寄存器）| bits（单寄存器位域）。仅 holding|input 有意义。 */
+    registerFormat?: 'bits' | 'float' | 'int';
+    /** 位域起始位（仅 bits，0..15）。 */
+    bitOffset?: number;
+    /** 位域位宽（仅 bits，≥1 且 bitOffset + bitLength ≤ 16）。 */
+    bitLength?: number;
     rw: string;
     enabled?: boolean;
   }
