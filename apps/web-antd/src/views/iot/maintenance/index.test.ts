@@ -89,7 +89,9 @@ vi.mock('#/adapter/vxe-table', () => ({
         () =>
           h('div', { class: 'grid-stub' }, [
             slots['toolbar-tools']?.(),
-            gridStub.renderEmpty ? slots.empty?.() : undefined,
+            gridStub.renderEmpty
+              ? h('div', { class: 'grid-empty' }, slots.empty?.())
+              : undefined,
             gridStub.renderAction && slots.action
               ? h('div', slots.action({ row: gridStub.row }))
               : undefined,
@@ -302,10 +304,10 @@ describe('maintenance/index.vue 交互', () => {
     await runQuery();
     await nextTick();
 
-    const guideBtn = [...container.querySelectorAll('button')]
-      .filter((b) => b.textContent?.includes('接入向导'))
-      // 工具栏里已有一个同名按钮，这里取空态卡片里的那个（后渲染）
-      .at(-1) as HTMLButtonElement | undefined;
+    // 工具栏里也有同名按钮 ⇒ 只在空态容器里找
+    const guideBtn = container.querySelector(
+      '.grid-empty button',
+    ) as HTMLButtonElement | null;
     expect(guideBtn).toBeTruthy();
 
     guideBtn?.click();
