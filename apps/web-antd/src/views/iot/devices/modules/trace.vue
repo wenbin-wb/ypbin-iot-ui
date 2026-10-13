@@ -20,12 +20,18 @@ import { extractErrorMessage } from '#/utils/error';
 
 import {
   directionLabelKey,
+  formatDiscardDetail,
+  formatPersistedAt,
   formatTraceTime,
   hasAdvice,
+  hasBatchInfo,
   needsAttention,
   needsRetryHint,
   outcomeColor,
   outcomeLabelKey,
+  receiptStatusColor,
+  receiptStatusLabelKey,
+  resolveDiscardAdvice,
   resolveTraceListState,
   showsTruncationHint,
   stageLabelKey,
@@ -77,7 +83,22 @@ const listState = computed(() =>
 );
 
 /** 一行 = 一条目（后端保证），因此前端不再做任何展开/合并。 */
-const rows = computed(() => resp.value?.items ?? []);
+const rows = computed(() =>
+  (resp.value?.items ?? []).map((item) => ({
+    ...item,
+    /** 二批兜底建议：纯函数预推导一次，避免模板里重复计算。 */
+    derivedAdvice: resolveDiscardAdvice(item),
+  })),
+);
+
+/**
+ * 有任一行带二批字段时才渲染「落库与批次」列。
+ *
+ * 全是下行/事件的设备（或老后端）不显示这一列，避免整列「不适用」占掉下行报文的空间。
+ */
+const hasAnyBatchInfo = computed(() =>
+  rows.value.some((item) => hasBatchInfo(item)),
+);
 
 const stageOptions = computed(() =>
   [
@@ -85,6 +106,8 @@ const stageOptions = computed(() =>
     'down-published',
     'down-ack',
     'up-received',
+    'up-persisted',
+    'up-discarded',
     'event-reported',
     'device-offline',
   ].map((code) => ({ code, label: $t(stageLabelKey(code)) })),
@@ -260,6 +283,54 @@ onMounted(load);
           </Tag>
         </template>
       </Table.Column>
+      <!-- 二批：落库/丢弃批次。没有任一二批字段的条目（下行/事件）显示占位符，不编造批次 -->
+      <Table.Column
+        v-if="hasAnyBatchInfo"
+        :title="$t('page.iot.device.trace.colBatch')"
+        :width="200"
+      >
+        <template #default="{ record }">
+          <div v-if="hasBatchInfo(record)" class="flex flex-col gap-1 text-xs">
+            <Tag :color="receiptStatusColor(record.receiptStatus)">
+              {{ $t(receiptStatusLabelKey(record.receiptStatus)) }}
+            </Tag>
+            <span>
+              {{
+                $t('page.iot.device.trace.batchCounts', {
+                  received: record.receivedCount ?? '-',
+                  persisted: record.persistedRows ?? '-',
+                })
+              }}
+            </span>
+            <!-- 🔴 只认 persistedAt：为空显示占位符，绝不用其它时间列冒充落库时刻 -->
+            <span class="text-gray-500">
+              {{
+                $t('page.iot.device.trace.persistedAt', {
+                  time: formatPersistedAt(record),
+                })
+              }}
+            </span>
+            <span v-if="record.discardReason" class="text-red-500">
+              {{
+                $t('page.iot.device.trace.discardReason', {
+                  reason: record.discardReason,
+                })
+              }}
+            </span>
+            <!-- 🔴 原样显示后端截断后的明细（含 ,...(+N) 后缀），前端不再加工 -->
+            <span v-if="record.discardDetail" class="break-all text-gray-500">
+              {{
+                $t('page.iot.device.trace.discardDetail', {
+                  detail: formatDiscardDetail(record.discardDetail),
+                })
+              }}
+            </span>
+          </div>
+          <span v-else class="text-xs text-gray-400">
+            {{ $t('page.iot.device.trace.batchNotApplicable') }}
+          </span>
+        </template>
+      </Table.Column>
       <Table.Column
         :title="$t('page.iot.device.trace.colTitle')"
         data-index="title"
@@ -287,6 +358,23 @@ onMounted(load);
             <span class="text-xs text-gray-400">{{
               record.advice.ruleId
             }}</span>
+          </div>
+          <!-- 二批兜底：后端未给建议时，用结构化字段（回执性质/原因码/条数）推导 -->
+          <div v-else-if="record.derivedAdvice" class="flex flex-col gap-1">
+            <span class="text-sm">{{
+              $t(record.derivedAdvice.summaryKey)
+            }}</span>
+            <ul class="m-0 pl-4 text-xs">
+              <li
+                v-for="actionKey in record.derivedAdvice.actionKeys"
+                :key="actionKey"
+              >
+                {{ $t(actionKey) }}
+              </li>
+            </ul>
+            <span class="text-xs text-gray-400">
+              {{ record.derivedAdvice.ruleId }}
+            </span>
           </div>
           <span v-else class="text-xs text-gray-400">
             <!-- 没有建议时也要显示，且要说明"原始错误码见左列"——不是静默空白 -->
