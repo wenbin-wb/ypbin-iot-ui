@@ -292,8 +292,8 @@ catalogs:
       specifier: ^7.2.0
       version: 7.2.0
     globals:
-      specifier: ^17.12.0
-      version: 17.12.0
+      specifier: ^17.13.0
+      version: 17.13.0
     h3:
       specifier: ^1.15.11
       version: 1.15.11
@@ -1026,14 +1026,14 @@ importers:
         version: 2.10.4(vue@3.5.43(typescript@6.0.3))
       vitepress-plugin-group-icons:
         specifier: 'catalog:'
-        version: 1.7.6(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.104.0)(terser@5.49.0)(yaml@2.9.0))
+        version: 1.7.6(vite@8.3.4(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.104.0)(terser@5.49.0)(yaml@2.9.0))
     devDependencies:
       '@nolebase/vitepress-plugin-git-changelog':
         specifier: 'catalog:'
         version: 2.18.2(supports-color@10.2.2)(vitepress@2.0.0-alpha.20(@types/node@26.1.1)(async-validator@4.2.5)(axios@1.18.1(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(nprogress@0.2.0)(postcss@8.5.29)(qrcode@1.5.4)(sass-embedded@1.104.0)(sass@1.104.0)(sortablejs@1.15.7)(terser@5.49.0)(typescript@6.0.3)(yaml@2.9.0))(vue@3.5.43(typescript@6.0.3))
       '@tailwindcss/vite':
         specifier: 'catalog:'
-        version: 4.3.3(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.104.0)(terser@5.49.0)(yaml@2.9.0))
+        version: 4.3.3(vite@8.3.4(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.104.0)(terser@5.49.0)(yaml@2.9.0))
       '@vben/tailwind-config':
         specifier: workspace:*
         version: link:../internal/tailwind-config
@@ -1042,7 +1042,7 @@ importers:
         version: link:../internal/vite-config
       '@vite-pwa/vitepress':
         specifier: 'catalog:'
-        version: 1.1.0(vite-plugin-pwa@1.3.0(supports-color@10.2.2)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.104.0)(terser@5.49.0)(yaml@2.9.0))(workbox-build@7.4.1(supports-color@10.2.2))(workbox-window@7.4.1))
+        version: 1.1.0(vite-plugin-pwa@1.3.0(supports-color@10.2.2)(vite@8.3.4(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.104.0)(terser@5.49.0)(yaml@2.9.0))(workbox-build@7.4.1(supports-color@10.2.2))(workbox-window@7.4.1))
       vitepress:
         specifier: 'catalog:'
         version: 2.0.0-alpha.20(@types/node@26.1.1)(async-validator@4.2.5)(axios@1.18.1(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(nprogress@0.2.0)(postcss@8.5.29)(qrcode@1.5.4)(sass-embedded@1.104.0)(sass@1.104.0)(sortablejs@1.15.7)(terser@5.49.0)(typescript@6.0.3)(yaml@2.9.0)
@@ -1108,7 +1108,7 @@ importers:
         version: 3.8.1(eslint@10.7.0(jiti@2.7.0)(supports-color@10.2.2))
       globals:
         specifier: 'catalog:'
-        version: 17.12.0
+        version: 17.13.0
       vue-eslint-parser:
         specifier: 'catalog:'
         version: 10.4.1(eslint@10.7.0(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)
@@ -8035,8 +8035,8 @@ packages:
     resolution: {integrity: sha512-7ACyT3wmyp3I61S4fG682L0VA2RGD9otkqGJIwNUMF1SWUombIIk+af1unuDYgMm082aHYwD+mzJvv9Iu8dsgg==}
     engines: {node: '>=18'}
 
-  globals@17.12.0:
-    resolution: {integrity: sha512-cezEd/DTyyht9cvSSURyygXPfy04GtWO/5e6ZPvH7fCtjKz9PYOmuawphw1Ctd1f6C+5JypXfGD7ahNMXvevBA==}
+  globals@17.13.0:
+    resolution: {integrity: sha512-RwMTC61u7hrG3ZJMkZQOK4JLJrKS8QtoTii63EmWvFXHqycY9FObBJQCbsLxSO8kjKhWE5kV1GC+Vb1g3RI0Zg==}
     engines: {node: '>=18'}
 
   globalthis@1.0.4:
@@ -14520,12 +14520,12 @@ snapshots:
       tailwindcss: 4.3.3
       vite: 8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.101.6)(terser@5.49.0)(yaml@2.9.0)
 
-  '@tailwindcss/vite@4.3.3(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.104.0)(terser@5.49.0)(yaml@2.9.0))':
+  '@tailwindcss/vite@4.3.3(vite@8.3.4(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.104.0)(terser@5.49.0)(yaml@2.9.0))':
     dependencies:
       '@tailwindcss/node': 4.3.3
       '@tailwindcss/oxide': 4.3.3
       tailwindcss: 4.3.3
-      vite: 8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.104.0)(terser@5.49.0)(yaml@2.9.0)
+      vite: 8.3.4(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.104.0)(terser@5.49.0)(yaml@2.9.0)
 
   '@tanstack/devtools-event-client@0.4.4': {}
 
@@ -15292,9 +15292,9 @@ snapshots:
       - rollup
       - supports-color
 
-  '@vite-pwa/vitepress@1.1.0(vite-plugin-pwa@1.3.0(supports-color@10.2.2)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.104.0)(terser@5.49.0)(yaml@2.9.0))(workbox-build@7.4.1(supports-color@10.2.2))(workbox-window@7.4.1))':
+  '@vite-pwa/vitepress@1.1.0(vite-plugin-pwa@1.3.0(supports-color@10.2.2)(vite@8.3.4(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.104.0)(terser@5.49.0)(yaml@2.9.0))(workbox-build@7.4.1(supports-color@10.2.2))(workbox-window@7.4.1))':
     dependencies:
-      vite-plugin-pwa: 1.3.0(supports-color@10.2.2)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.104.0)(terser@5.49.0)(yaml@2.9.0))(workbox-build@7.4.1(supports-color@10.2.2))(workbox-window@7.4.1)
+      vite-plugin-pwa: 1.3.0(supports-color@10.2.2)(vite@8.3.4(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.104.0)(terser@5.49.0)(yaml@2.9.0))(workbox-build@7.4.1(supports-color@10.2.2))(workbox-window@7.4.1)
 
   '@vitejs/plugin-vue-jsx@5.1.6(supports-color@10.2.2)(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.101.6)(terser@5.49.0)(yaml@2.9.0))(vue@3.5.43(typescript@6.0.3))':
     dependencies:
@@ -15531,7 +15531,7 @@ snapshots:
       '@vue/shared': 3.5.43
       estree-walker: 2.0.2
       magic-string: 0.30.21
-      postcss: 8.5.28
+      postcss: 8.5.29
       source-map-js: 1.2.2
 
   '@vue/compiler-ssr@3.5.40':
@@ -17621,7 +17621,7 @@ snapshots:
 
   globals@15.15.0: {}
 
-  globals@17.12.0: {}
+  globals@17.13.0: {}
 
   globalthis@1.0.4:
     dependencies:
@@ -21192,12 +21192,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  vite-plugin-pwa@1.3.0(supports-color@10.2.2)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.104.0)(terser@5.49.0)(yaml@2.9.0))(workbox-build@7.4.1(supports-color@10.2.2))(workbox-window@7.4.1):
+  vite-plugin-pwa@1.3.0(supports-color@10.2.2)(vite@8.3.4(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.104.0)(terser@5.49.0)(yaml@2.9.0))(workbox-build@7.4.1(supports-color@10.2.2))(workbox-window@7.4.1):
     dependencies:
       debug: 4.4.3(supports-color@10.2.2)
       pretty-bytes: 6.1.1
       tinyglobby: 0.2.17
-      vite: 8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.104.0)(terser@5.49.0)(yaml@2.9.0)
+      vite: 8.3.4(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.104.0)(terser@5.49.0)(yaml@2.9.0)
       workbox-build: 7.4.1(supports-color@10.2.2)
       workbox-window: 7.4.1
     transitivePeerDependencies:
@@ -21304,13 +21304,13 @@ snapshots:
       terser: 5.49.0
       yaml: 2.9.0
 
-  vitepress-plugin-group-icons@1.7.6(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.104.0)(terser@5.49.0)(yaml@2.9.0)):
+  vitepress-plugin-group-icons@1.7.6(vite@8.3.4(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.104.0)(terser@5.49.0)(yaml@2.9.0)):
     dependencies:
       '@iconify-json/logos': 1.2.11
       '@iconify-json/vscode-icons': 1.2.67
       '@iconify/utils': 3.1.4
     optionalDependencies:
-      vite: 8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.104.0)(terser@5.49.0)(yaml@2.9.0)
+      vite: 8.3.4(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(sass-embedded@1.104.0)(sass@1.104.0)(terser@5.49.0)(yaml@2.9.0)
 
   vitepress@2.0.0-alpha.20(@types/node@26.1.1)(async-validator@4.2.5)(axios@1.18.1(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(esbuild@0.28.1)(jiti@2.7.0)(less@4.8.0(supports-color@10.2.2))(nprogress@0.2.0)(postcss@8.5.29)(qrcode@1.5.4)(sass-embedded@1.104.0)(sass@1.104.0)(sortablejs@1.15.7)(terser@5.49.0)(typescript@6.0.3)(yaml@2.9.0):
     dependencies:
