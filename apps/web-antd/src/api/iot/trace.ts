@@ -17,8 +17,30 @@ export namespace IotDeviceTraceApi {
     DOWN_PUBLISHED: 'down-published',
     DOWN_ACK: 'down-ack',
     UP_RECEIVED: 'up-received',
+    /**
+     * 二批新增：上行整批已落库（后端由 `persistedAt`/`persistedRows` 判定）。
+     * 一期此阶段「结构性不可得」；二批补齐 receipt 列后才有该条目。
+     */
+    UP_PERSISTED: 'up-persisted',
+    /**
+     * 二批新增：上行整批被拒/丢弃（后端由 `receiptStatus=rejected` 判定）。
+     * 定位原因见 `discardReason`/`discardDetail`。
+     */
+    UP_DISCARDED: 'up-discarded',
     EVENT_REPORTED: 'event-reported',
     DEVICE_OFFLINE: 'device-offline',
+  } as const;
+
+  /**
+   * 上行回执行的性质（后端 `receipt_status`；避开既有 `status TINYINT`）。
+   *
+   * 非上行条目（下行/事件）该字段为空。
+   */
+  export const TRACE_RECEIPT_STATUS = {
+    /** 本批已受理（可能部分落库，见 `persistedRows`）。 */
+    ACCEPTED: 'accepted',
+    /** 本批整批被拒，`persistedRows` 为 0。 */
+    REJECTED: 'rejected',
   } as const;
 
   /** 方向码。 */
@@ -66,6 +88,28 @@ export namespace IotDeviceTraceApi {
     enqueuedAt?: string;
     publishedAt?: string;
     ackedAt?: string;
+    /**
+     * 二批字段（后端字段契约逐字一致）：上行回执行性质，`accepted` / `rejected`。
+     * 非上行条目为空。
+     */
+    receiptStatus?: null | string;
+    /** 二批字段：本批收到的读数条数（含被丢弃的）。 */
+    receivedCount?: null | number;
+    /** 二批字段：实际落库条数；`rejected` 行为 0。 */
+    persistedRows?: null | number;
+    /**
+     * 二批字段：落库完成时刻。
+     * **为空表示不可得**——前端不得回退到其它时间列冒充落库时刻。
+     */
+    persistedAt?: null | string;
+    /** 二批字段：丢弃原因码（复用后端 `MqttIngestRejectReason` 14 码）。 */
+    discardReason?: null | string;
+    /**
+     * 二批字段：丢弃明细。
+     * 后端已按「未映射 pointId 前 8 个逗号连接，超出记 `,...(+N)`」截断；
+     * **前端原样显示，不二次截断/加工**。
+     */
+    discardDetail?: null | string;
   }
 
   /** 时间线响应。 */

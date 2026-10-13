@@ -132,6 +132,12 @@ export function stageLabelKey(stage?: string): string {
     case 'event-reported': {
       return 'page.iot.device.trace.stageEventReported';
     }
+    case 'up-discarded': {
+      return 'page.iot.device.trace.stageUpDiscarded';
+    }
+    case 'up-persisted': {
+      return 'page.iot.device.trace.stageUpPersisted';
+    }
     case 'up-received': {
       return 'page.iot.device.trace.stageUpReceived';
     }
@@ -220,4 +226,205 @@ export function formatTraceTime(value?: null | string): string {
     `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
     `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
   );
+}
+
+// ---------------------------------------------------------------------------
+// 二批（上行结构化补齐）：落库/丢弃展示与原因码定位规则
+// ---------------------------------------------------------------------------
+
+/** 二批：上行回执行性质码（与后端 `receipt_status` 逐字一致）。 */
+export const RECEIPT_STATUS = {
+  ACCEPTED: 'accepted',
+  REJECTED: 'rejected',
+} as const;
+
+/**
+ * 二批：丢弃原因码中**本页规则会用到**的两个（后端 `MqttIngestRejectReason`）。
+ *
+ * 只列规则用到的码，其余 12 码不在此处映射——规则不命中时返回 null，
+ * 由页面显式显示「暂无定位建议」+ 原始 `discardReason`（**不硬凑建议**）。
+ */
+export const DISCARD_REASON = {
+  /** 整批读数都未通过点位映射校验。 */
+  NO_ACCEPTED_ITEM: 'NO_ACCEPTED_ITEM',
+  /** 报文声明的设备不存在。 */
+  DEVICE_NOT_FOUND: 'DEVICE_NOT_FOUND',
+} as const;
+
+/** 二批：定位建议规则 id（与后端 `advice.ruleId` 同一命名空间）。 */
+export const TRACE_RULE = {
+  /** 整批被拒，原因=点位未映射。 */
+  UP_REJECTED_MAP: 'UP_REJECTED_MAP',
+  /** 已受理但部分丢弃。 */
+  UP_PARTIAL: 'UP_PARTIAL',
+  /** 设备不存在。 */
+  UP_DEVICE_NOT_FOUND: 'UP_DEVICE_NOT_FOUND',
+} as const;
+
+/** 二批：前端可自行推导的定位建议（只含 i18n 键，文案不在逻辑层硬编码）。 */
+export interface DerivedAdvice {
+  /** 规则标识（与后端 advice.ruleId 同口径，便于用户指认）。 */
+  ruleId: string;
+  /** 一句话结论的 i18n 键。 */
+  summaryKey: string;
+  /** 可执行动作的 i18n 键（非空）。 */
+  actionKeys: string[];
+}
+
+/**
+ * 是否要显示「落库与批次」这一格。
+ *
+ * 判据是**有没有任一二批字段**；都没有说明这是下行/事件条目或老后端，
+ * 显示空格而不是「已受理 0 条」这类可能失真的默认值。
+ *
+ * @param item 条目
+ * @returns 需要显示返回 true
+ */
+export function hasBatchInfo(item: IotDeviceTraceApi.Item): boolean {
+  return (
+    isProvided(item.receiptStatus) ||
+    isProvided(item.receivedCount) ||
+    isProvided(item.persistedRows) ||
+    isProvided(item.discardReason) ||
+    isProvided(item.discardDetail)
+  );
+}
+
+/**
+ * 值是否已给出（不为 null/undefined）。
+ *
+ * 不用 `!= null`：本仓 lint 禁宽松相等；且 **0 与空串算已给出**——
+ * `receivedCount=0` 是有意义的批次事实，不能当缺失处理。
+ *
+ * @param value 待判定的值
+ * @returns 已给出返回 true
+ */
+function isProvided(value: unknown): boolean {
+  return value !== null && value !== undefined;
+}
+
+/**
+ * 回执行性质 → i18n 键。
+ *
+ * @param status 回执行性质
+ * @returns i18n 键；未知回落到「批次信息未知」（绝不返回空串）
+ */
+export function receiptStatusLabelKey(status?: null | string): string {
+  switch (status) {
+    case RECEIPT_STATUS.ACCEPTED: {
+      return 'page.iot.device.trace.receiptAccepted';
+    }
+    case RECEIPT_STATUS.REJECTED: {
+      return 'page.iot.device.trace.receiptRejected';
+    }
+    default: {
+      return 'page.iot.device.trace.receiptUnknown';
+    }
+  }
+}
+
+/**
+ * 回执行性质 → antdv Tag 颜色。
+ *
+ * @param status 回执行性质
+ * @returns Tag 颜色
+ */
+export function receiptStatusColor(status?: null | string): string {
+  switch (status) {
+    case RECEIPT_STATUS.ACCEPTED: {
+      return 'success';
+    }
+    case RECEIPT_STATUS.REJECTED: {
+      return 'error';
+    }
+    default: {
+      return 'default';
+    }
+  }
+}
+
+/**
+ * 落库时刻的显示文本。
+ *
+ * 🔴 **只用 `persistedAt`**：为空/非法一律返回占位符，**绝不回退到
+ * `occurredAt`/`publishedAt`/`createTime`**——那会把「落库时刻不可得」画成一个假时间。
+ *
+ * @param item 条目
+ * @returns 显示文本；不可得时为占位符
+ */
+export function formatPersistedAt(item: IotDeviceTraceApi.Item): string {
+  return formatTraceTime(item.persistedAt);
+}
+
+/**
+ * 丢弃明细的显示文本。
+ *
+ * 🔴 **原样透传**：后端已按「前 8 个 pointId 逗号连接 + `,...(+N)`」截断，
+ * 前端不再截断、不再拆分、不再重算后缀（二次加工会与后端口径漂移）。
+ *
+ * @param value 后端给的 discardDetail（可空）
+ * @returns 原样文本；空值返回空串（由页面决定是否渲染整行）
+ */
+export function formatDiscardDetail(value?: null | string): string {
+  return value ?? '';
+}
+
+/**
+ * 从二批结构化字段推导「定位建议」（仅当前端/后端都未给 advice 时的兜底）。
+ *
+ * 规则表（**纯函数、无 IO、可单测**）：
+ * 1. `receiptStatus=rejected` 且 `discardReason=DEVICE_NOT_FOUND` ⇒ `UP_DEVICE_NOT_FOUND`；
+ * 2. `receiptStatus=rejected` 且 `discardReason=NO_ACCEPTED_ITEM` ⇒ `UP_REJECTED_MAP`；
+ * 3. `receiptStatus=accepted` 且 `receivedCount > persistedRows` ⇒ `UP_PARTIAL`。
+ *
+ * **不命中一律返回 null**（宁可显示「暂无定位建议」，也不硬凑一条可能是错的建议）；
+ * 规则只认结构化枚举，不猜测自由文本。
+ *
+ * @param item 条目
+ * @returns 推导出的建议；无匹配返回 null
+ */
+export function resolveDiscardAdvice(
+  item: IotDeviceTraceApi.Item,
+): DerivedAdvice | null {
+  const rejected = item.receiptStatus === RECEIPT_STATUS.REJECTED;
+
+  if (rejected && item.discardReason === DISCARD_REASON.DEVICE_NOT_FOUND) {
+    return {
+      ruleId: TRACE_RULE.UP_DEVICE_NOT_FOUND,
+      summaryKey: 'page.iot.device.trace.adviceUpDeviceNotFoundSummary',
+      actionKeys: ['page.iot.device.trace.adviceUpDeviceNotFoundAction1'],
+    };
+  }
+
+  if (rejected && item.discardReason === DISCARD_REASON.NO_ACCEPTED_ITEM) {
+    return {
+      ruleId: TRACE_RULE.UP_REJECTED_MAP,
+      summaryKey: 'page.iot.device.trace.adviceUpRejectedMapSummary',
+      actionKeys: [
+        'page.iot.device.trace.adviceUpRejectedMapAction1',
+        'page.iot.device.trace.adviceUpRejectedMapAction2',
+      ],
+    };
+  }
+
+  if (item.receiptStatus === RECEIPT_STATUS.ACCEPTED) {
+    const received = Number(item.receivedCount);
+    const persisted = Number(item.persistedRows);
+    if (
+      Number.isFinite(received) &&
+      Number.isFinite(persisted) &&
+      received > persisted
+    ) {
+      return {
+        ruleId: TRACE_RULE.UP_PARTIAL,
+        summaryKey: 'page.iot.device.trace.adviceUpPartialSummary',
+        actionKeys: [
+          'page.iot.device.trace.adviceUpPartialAction1',
+          'page.iot.device.trace.adviceUpPartialAction2',
+        ],
+      };
+    }
+  }
+
+  return null;
 }
