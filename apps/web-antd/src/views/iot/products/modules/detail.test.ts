@@ -274,3 +274,138 @@ describe('products/modules/detail.vue 运行时分支', () => {
     expect(apiMock.importTsl).not.toHaveBeenCalled();
   });
 });
+
+const SERVICE_A = {
+  description: '',
+  id: 's-a',
+  serviceId: 'svcA',
+  serviceName: '服务 A',
+  serviceOption: 'r',
+};
+const SERVICE_B = {
+  description: '',
+  id: 's-b',
+  serviceId: 'svcB',
+  serviceName: '服务 B',
+  serviceOption: 'r',
+};
+
+describe('products/modules/detail.vue 补充分支（元素表独立性 / TSL / 服务切换）', () => {
+  it('★ 三张元素表各自独立：属性表失败不牵连命令与事件，也不把整页画成「物模型加载失败」', async () => {
+    apiMock.listServices.mockResolvedValue([SERVICE_A]);
+    apiMock.listProperties.mockRejectedValue(new Error('属性表查询失败'));
+    apiMock.listCommands.mockResolvedValue([{ id: 'c1', identifier: 'cmd-A' }]);
+    apiMock.listEvents.mockResolvedValue([{ id: 'e1', identifier: 'evt-A' }]);
+
+    const container = await openDetail();
+    clickTab(container, '物模型');
+    await flush();
+
+    const html = container.innerHTML;
+    // loadServiceElements 用 Promise.allSettled：一张表失败，另外两张必须照旧有数据
+    expect(html).toContain('cmd-A');
+    expect(html).toContain('evt-A');
+    // 元素级失败不构成整页失败（modelError 只在 loadModel 本身抛错时设置）
+    expect(html).not.toContain('物模型加载失败');
+  });
+
+  it('★ TSL 导入成功：解析后的文档交给后端、刷新；后端逐项报错则只展示、不刷新', async () => {
+    apiMock.getProductDetail.mockResolvedValue({
+      id: '9100001',
+      modelStatus: 'draft',
+      productCode: 'demo-product',
+      productName: '演示产品',
+    } as IotProductApi.ProductResp);
+    apiMock.listServices.mockResolvedValue([SERVICE_A]);
+
+    const container = await openDetail();
+    clickTab(container, 'TSL 导入导出');
+    await flush();
+
+    const setTsl = (text: string) => {
+      const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+      textarea.value = text;
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+
+    // 1) 后端全部接受 ⇒ 调接口 + 成功后 reloadAll（服务列表被重查）
+    setTsl(JSON.stringify({ properties: [] }));
+    await flush();
+    apiMock.importTsl.mockResolvedValue({ errors: [], successCount: 2 });
+    const servicesCallsBefore = apiMock.listServices.mock.calls.length;
+    clickButton(container, '导入 TSL');
+    await flush();
+
+    expect(apiMock.importTsl).toHaveBeenCalledTimes(1);
+    expect(apiMock.importTsl.mock.calls[0]?.[0]).toBe('9100001');
+    expect(apiMock.importTsl.mock.calls[0]?.[1]).toEqual({ properties: [] });
+    expect(apiMock.listServices.mock.calls.length).toBeGreaterThan(
+      servicesCallsBefore,
+    );
+
+    // 2) 后端逐项报错 ⇒ 错误可见，且**不**触发 reloadAll
+    setTsl(JSON.stringify({ properties: [1] }));
+    await flush();
+    apiMock.importTsl.mockResolvedValue({
+      errors: ['属性 1 非法'],
+      successCount: 0,
+    });
+    const servicesCallsBeforeError = apiMock.listServices.mock.calls.length;
+    clickButton(container, '导入 TSL');
+    await flush();
+
+    expect(container.innerHTML).toContain('属性 1 非法');
+    expect(apiMock.listServices.mock.calls.length).toBe(
+      servicesCallsBeforeError,
+    );
+  });
+
+  it('★ 导出 TSL：拉取文档并回填文本框（页面可核对），不只是下载', async () => {
+    apiMock.exportTsl.mockResolvedValue({ profile: { productKey: 'pk-1' } });
+    // happy-dom 不实现 ObjectURL；本用例只关心「文档是否回填到页面」，故给下载打桩
+    const urlAny = URL as unknown as Record<string, unknown>;
+    const originalCreate = urlAny.createObjectURL;
+    const originalRevoke = urlAny.revokeObjectURL;
+    urlAny.createObjectURL = vi.fn(() => 'blob:stub');
+    urlAny.revokeObjectURL = vi.fn();
+
+    try {
+      const container = await openDetail();
+      clickTab(container, 'TSL 导入导出');
+      await flush();
+      clickButton(container, '导出 TSL');
+      await flush();
+
+      expect(apiMock.exportTsl).toHaveBeenCalledWith('9100001');
+      const textarea = container.querySelector(
+        'textarea',
+      ) as HTMLTextAreaElement;
+      expect(textarea.value).toContain('"productKey": "pk-1"');
+    } finally {
+      urlAny.createObjectURL = originalCreate;
+      urlAny.revokeObjectURL = originalRevoke;
+    }
+  });
+
+  it('★ 切换服务：只重查该服务下的三张表，不重查服务列表（不扇出整个产品）', async () => {
+    apiMock.listServices.mockResolvedValue([SERVICE_A, SERVICE_B]);
+
+    const container = await openDetail();
+    clickTab(container, '物模型');
+    await flush();
+
+    const servicesCallsBefore = apiMock.listServices.mock.calls.length;
+    const serviceBButton = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent?.includes('svcB'),
+    ) as HTMLButtonElement | undefined;
+    expect(serviceBButton, '未渲染出服务 B 的选择按钮').toBeTruthy();
+
+    serviceBButton?.click();
+    await flush();
+
+    expect(apiMock.listServices.mock.calls.length).toBe(servicesCallsBefore);
+    expect(apiMock.listProperties).toHaveBeenLastCalledWith('9100001', 's-b');
+    expect(apiMock.listCommands).toHaveBeenLastCalledWith('9100001', 's-b');
+    expect(apiMock.listEvents).toHaveBeenLastCalledWith('9100001', 's-b');
+  });
+});
