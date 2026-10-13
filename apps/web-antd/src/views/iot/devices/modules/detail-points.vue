@@ -170,11 +170,32 @@ const registerFormat = computed(() =>
 );
 const isIntFormat = computed(() => registerFormat.value === 'int');
 const isFloatFormat = computed(() => registerFormat.value === 'float');
+const isDoubleFormat = computed(() => registerFormat.value === 'double');
 const isBitsFormat = computed(() => registerFormat.value === 'bits');
 const isStringFormat = computed(() => registerFormat.value === 'string');
 
-/** int 下宽度可选（1|2）；float 固定 2、bits 固定 1 ⇒ 置灰不可改（string 走数字输入）。 */
+/**
+ * int 下宽度可选（1|2）；float 固定 2、double 固定 4、bits 固定 1 ⇒ 置灰不可改
+ * （string 走可编辑的数字输入）。
+ */
 const wordCountEditable = computed(() => isIntFormat.value);
+
+/**
+ * 宽度下拉的可选项：固定形态只给「它那一个」值（避免 int 用户误选 4）；
+ * int 才给 1|2 两个选项。
+ */
+const wordCountOptions = computed(() => {
+  if (isDoubleFormat.value) {
+    return [{ labelKey: 'page.iot.point.wordCount4', value: '4' }];
+  }
+  if (isFloatFormat.value) {
+    return [POINT_WORD_COUNTS[1]];
+  }
+  if (isBitsFormat.value) {
+    return [POINT_WORD_COUNTS[0]];
+  }
+  return POINT_WORD_COUNTS;
+});
 
 /** 宽度字段标签：string 下语义是「寄存器个数」（1..32），其余是「寄存器宽度」。 */
 const wordCountLabelKey = computed(() =>
@@ -183,14 +204,16 @@ const wordCountLabelKey = computed(() =>
     : 'page.iot.point.wordCount',
 );
 
-/** 数值符号只属于 int（float/bits/string 后端要求 false 且不下发）。 */
+/** 数值符号只属于 int（float/double/bits/string 后端要求 false 且不下发）。 */
 const signedVisible = computed(
   () => showRegisterDecode.value && isIntFormat.value,
 );
 
-/** 字序：int（且 32 位）与 float 生效；bits/string 后端忽略 ⇒ 不展示。 */
+/** 字序：int（且 32 位）、float、double 生效；bits/string 后端忽略 ⇒ 不展示。 */
 const byteOrderVisible = computed(
-  () => showRegisterDecode.value && (isIntFormat.value || isFloatFormat.value),
+  () =>
+    showRegisterDecode.value &&
+    (isIntFormat.value || isFloatFormat.value || isDoubleFormat.value),
 );
 
 /** 位域输入只在 bits 展示。 */
@@ -198,15 +221,38 @@ const bitsVisible = computed(
   () => showRegisterDecode.value && isBitsFormat.value,
 );
 
-/** 字序仅在「float 固定 2 寄存器」或「int 且 wordCount=2」时生效。 */
+/** 字序在「float 固定 2 寄存器 / double 固定 4 寄存器」或「int 且 wordCount=2」时生效。 */
 const byteOrderEnabled = computed(
   () =>
-    byteOrderVisible.value && (isFloatFormat.value || form.wordCount === '2'),
+    byteOrderVisible.value &&
+    (isFloatFormat.value || isDoubleFormat.value || form.wordCount === '2'),
+);
+
+/**
+ * 字序下拉选项：double 的 little 是 **4 寄存器整体翻转（DCBA）**，与 2 寄存器的 CDAB 不同，
+ * 故换成专用文案；big 两处共用（高字在前 ABCD）。
+ */
+const byteOrderOptions = computed(() =>
+  POINT_BYTE_ORDERS.map((option) => ({
+    ...option,
+    labelKey:
+      isDoubleFormat.value && option.value === 'little'
+        ? 'page.iot.point.byteOrderLittleDouble'
+        : option.labelKey,
+  })),
+);
+
+/** 字序提示：double 需点明 DCBA（整体翻转）与「不支持 BADC/CDAB」。 */
+const byteOrderHintKey = computed(() =>
+  isDoubleFormat.value
+    ? 'page.iot.point.byteOrderHintDouble'
+    : 'page.iot.point.byteOrderHint',
 );
 
 /**
  * 形态切换：走纯函数 applyRegisterFormat 做联动清理（float 固定 2 寄存器 + 清 signed、
- * bits 固定 1 寄存器 + 清字序、int 清位域），保证**界面所见即所发**。
+ * double 固定 4 寄存器 + 清 signed（保留字序）、bits 固定 1 寄存器 + 清字序、int 清位域），
+ * 保证**界面所见即所发**。
  */
 function onRegisterFormatChange() {
   Object.assign(form, applyRegisterFormat(form, form.registerFormat));
@@ -685,7 +731,7 @@ onMounted(load);
       </div>
       <!-- Modbus 寄存器解码 v2：仅保持/输入寄存器展示；位类型与非 Modbus 地址不展示 -->
       <div v-if="showRegisterDecode" class="space-y-3">
-        <!-- 值形态 + 寄存器宽度（float 固定 2 个寄存器、bits 固定 1 个 ⇒ 置灰不可改） -->
+        <!-- 值形态 + 寄存器宽度（float 固定 2、double 固定 4、bits 固定 1 ⇒ 置灰不可改） -->
         <div class="flex gap-2">
           <div class="w-1/2">
             <div class="mb-1 text-sm">
@@ -725,7 +771,7 @@ onMounted(load);
               @change="onWordCountChange"
             >
               <Select.Option
-                v-for="option in POINT_WORD_COUNTS"
+                v-for="option in wordCountOptions"
                 :key="option.value"
                 :value="option.value"
               >
@@ -734,6 +780,9 @@ onMounted(load);
             </Select>
             <div v-if="isFloatFormat" class="mt-1 text-xs text-gray-400">
               {{ $t('page.iot.point.floatFixedTwoWords') }}
+            </div>
+            <div v-if="isDoubleFormat" class="mt-1 text-xs text-gray-400">
+              {{ $t('page.iot.point.doubleFixedFourWords') }}
             </div>
             <div v-if="isStringFormat" class="mt-1 text-xs text-gray-400">
               {{ $t('page.iot.point.stringWordCountHint') }}
@@ -773,7 +822,7 @@ onMounted(load);
               :placeholder="$t('page.iot.point.byteOrderPlaceholder')"
             >
               <Select.Option
-                v-for="option in POINT_BYTE_ORDERS"
+                v-for="option in byteOrderOptions"
                 :key="option.value"
                 :value="option.value"
               >
@@ -781,7 +830,7 @@ onMounted(load);
               </Select.Option>
             </Select>
             <div class="mt-1 text-xs text-gray-400">
-              {{ $t('page.iot.point.byteOrderHint') }}
+              {{ $t(byteOrderHintKey) }}
             </div>
             <div v-if="!byteOrderEnabled" class="mt-1 text-xs text-amber-600">
               {{ $t('page.iot.point.byteOrderOnlyFor32') }}

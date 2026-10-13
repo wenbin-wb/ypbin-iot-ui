@@ -8,7 +8,8 @@ import type { IotPointApi } from '#/api/iot';
  *   rawAddress @Size(max=128)；pollIntervalMs @Min(0)；scaleFactor/offsetValue 可空数字；
  *   byteOrder 可空 big|little；enabled 可空。
  *
- * Modbus 寄存器解码 v3 再追加 string（多寄存器拼固定 UTF-8，wordCount 语义为寄存器个数 1..32）。
+ * Modbus 寄存器解码 v4 再追加 double（IEEE754 双精度，固定 4 个寄存器；wordCount 恒为 4）；
+ * v3 追加 string（多寄存器拼固定 UTF-8，wordCount 语义为寄存器个数 1..32）。
  * v2 的 registerFormat（int|float|bits）与位域（bitOffset/bitLength）：
  * 三形态的字段可见性、payload 组成与切换清理都收敛在本文件，便于断言（见 applyRegisterFormat /
  * buildPointPayload / registerDecodeSegments）。
@@ -42,7 +43,10 @@ export const POINT_BYTE_ORDERS = [
 /**
  * 寄存器值形态（后端 `registerFormat`，默认 `int`）。
  * - int：整数（等价 v1 —— wordCount 1|2 + signed + 字序）；
- * - float：IEEE754 **单精度**浮点，固定占 2 个寄存器，不发 signed，字序生效；
+ * - float：IEEE754 **单精度**浮点（4 字节），固定占 2 个寄存器，不发 signed，字序生效
+ *   （little = 低字在前 CDAB，2 寄存器整体翻转）；
+ * - double：IEEE754 **双精度**（8 字节），固定占 4 个寄存器，不发 signed，字序生效
+ *   （little = 低字在前 DCBA，4 寄存器整体翻转）；不支持 BADC/CDAB 中间排列；
  * - bits：单寄存器内位域，固定 1 个寄存器，不发 signed/字序，必填 bitOffset + bitLength；
  * - string：多寄存器拼**固定 UTF-8**（v3），wordCount 语义变为**寄存器个数 1..32**，
  *   只发 registerFormat + wordCount（signed/字序/位域一律不发）。
@@ -50,6 +54,7 @@ export const POINT_BYTE_ORDERS = [
 export const POINT_REGISTER_FORMATS = [
   { value: 'int', labelKey: 'page.iot.point.registerFormatInt' },
   { value: 'float', labelKey: 'page.iot.point.registerFormatFloat' },
+  { value: 'double', labelKey: 'page.iot.point.registerFormatDouble' },
   { value: 'bits', labelKey: 'page.iot.point.registerFormatBits' },
   { value: 'string', labelKey: 'page.iot.point.registerFormatString' },
 ] as const;
@@ -64,6 +69,9 @@ export const POINT_REGISTER_BITS = 16;
 /** 位域起始位上限（0..15）。 */
 export const POINT_BIT_OFFSET_MAX = POINT_REGISTER_BITS - 1;
 
+/** double 形态固定占用的寄存器个数（IEEE754 双精度 = 8 字节）。 */
+export const POINT_DOUBLE_WORD_COUNT = 4;
+
 /** string 形态的寄存器个数下限。 */
 export const POINT_STRING_WORD_COUNT_MIN = 1;
 
@@ -77,6 +85,7 @@ export function isPointRegisterFormat(
   return (
     value === 'int' ||
     value === 'float' ||
+    value === 'double' ||
     value === 'bits' ||
     value === 'string'
   );
@@ -216,6 +225,13 @@ export function applyRegisterFormat(
     next.wordCount = '1';
     next.signed = false;
     next.byteOrder = undefined;
+  } else if (format === 'double') {
+    // IEEE754 双精度固定 4 个寄存器；signed 置 false（后端要求 false 且不下发）；
+    // **保留字序**（与 float 一致），清位域。
+    next.wordCount = String(POINT_DOUBLE_WORD_COUNT);
+    next.signed = false;
+    next.bitOffset = undefined;
+    next.bitLength = undefined;
   } else if (format === 'string') {
     // 最少改动：寄存器个数默认 1（后端默认同向）；signed/字序/位域一律清掉（都不下发）。
     next.wordCount = String(POINT_STRING_WORD_COUNT_MIN);
@@ -300,6 +316,16 @@ export function validatePointForm(form: PointForm): PointFormCheck {
       return {
         ok: false,
         message: `字符串形态的寄存器个数必须是 ${POINT_STRING_WORD_COUNT_MIN}..${POINT_STRING_WORD_COUNT_MAX} 的整数`,
+      };
+    }
+  } else if (form.registerFormat === 'double') {
+    // double：固定 4 个寄存器（IEEE754 双精度），不是可选项。
+    if (
+      String(form.wordCount ?? '').trim() !== String(POINT_DOUBLE_WORD_COUNT)
+    ) {
+      return {
+        ok: false,
+        message: `双精度浮点固定占 ${POINT_DOUBLE_WORD_COUNT} 个寄存器（wordCount 必须为 ${POINT_DOUBLE_WORD_COUNT}）`,
       };
     }
   } else if (
@@ -391,6 +417,12 @@ export function buildPointPayload(
       // v3：多寄存器拼固定 UTF-8；wordCount = 寄存器个数（1..32）。
       // 只发 registerFormat + wordCount —— signed / 字序 / 位域一律不发。
       payload.wordCount = Number(normalizeStringWordCount(form.wordCount));
+    } else if (format === 'double') {
+      // v4：IEEE754 双精度固定 4 个寄存器；signed 由后端要求 false ⇒ 不下发；字序生效。
+      payload.wordCount = POINT_DOUBLE_WORD_COUNT;
+      if (form.byteOrder) {
+        payload.byteOrder = form.byteOrder;
+      }
     } else if (format === 'float') {
       // IEEE754 单精度固定占 2 个寄存器；signed 由后端要求 false ⇒ 不下发。
       payload.wordCount = 2;
@@ -432,6 +464,8 @@ export function formFromPoint(point: IotPointApi.PointMappingResp): PointForm {
     wordCount = '2';
   } else if (registerFormat === 'bits') {
     wordCount = '1';
+  } else if (registerFormat === 'double') {
+    wordCount = String(POINT_DOUBLE_WORD_COUNT);
   } else if (registerFormat === 'string') {
     wordCount = normalizeStringWordCount(point.wordCount);
   }
@@ -499,7 +533,9 @@ function byteOrderKey(byteOrder?: string): string | undefined {
  * - 非 Modbus 寄存器点位（coil/discrete/nodeid/topic）返回 `[]` ⇒ 列表显示 `-`；
  * - `int`（默认）：`32 位（2 个寄存器） · 有符号 · 高字在前（ABCD）`；
  * - `float`：`32 位浮点 · 低字在前（CDAB）`（IEEE754 单精度固定 2 寄存器）；
+ * - `double`：`双精度浮点（4 个寄存器） · 低字在前（DCBA）`（IEEE754 双精度固定 4 寄存器）；
  * - `bits`：`位域：bit 3..5（3 位）`（位域信息缺失时退化为 `位域`）；
+ * - `string`：`字符串 · 3 个寄存器（UTF-8）`（个数异常时退化为 `字符串`）；
  * - 一律不裸露 `big`/`little`、`int` 这类枚举值。
  */
 export function registerDecodeSegments(
@@ -525,6 +561,19 @@ export function registerDecodeSegments(
       ];
     }
     return [{ key: 'page.iot.point.registerFormatStringShort' }];
+  }
+
+  if (format === 'double') {
+    // v4：IEEE754 双精度固定 4 个寄存器；little = DCBA（4 寄存器整体翻转），故用专用字序键。
+    const segments: RegisterDecodeSegment[] = [
+      { key: 'page.iot.point.registerFormatDoubleShort' },
+    ];
+    if (point.byteOrder === 'big') {
+      segments.push({ key: 'page.iot.point.byteOrderBig' });
+    } else if (point.byteOrder === 'little') {
+      segments.push({ key: 'page.iot.point.byteOrderLittleDouble' });
+    }
+    return segments;
   }
 
   if (format === 'float') {
