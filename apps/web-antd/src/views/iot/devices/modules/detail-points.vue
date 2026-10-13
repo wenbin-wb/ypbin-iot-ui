@@ -171,16 +171,24 @@ const registerFormat = computed(() =>
 const isIntFormat = computed(() => registerFormat.value === 'int');
 const isFloatFormat = computed(() => registerFormat.value === 'float');
 const isBitsFormat = computed(() => registerFormat.value === 'bits');
+const isStringFormat = computed(() => registerFormat.value === 'string');
 
-/** int 下宽度可选；float 固定 2、bits 固定 1，均由形态联动决定 ⇒ 置灰不可改。 */
+/** int 下宽度可选（1|2）；float 固定 2、bits 固定 1 ⇒ 置灰不可改（string 走数字输入）。 */
 const wordCountEditable = computed(() => isIntFormat.value);
 
-/** 数值符号只属于 int（float/bits 后端要求 false 且不下发）。 */
+/** 宽度字段标签：string 下语义是「寄存器个数」（1..32），其余是「寄存器宽度」。 */
+const wordCountLabelKey = computed(() =>
+  isStringFormat.value
+    ? 'page.iot.point.wordCountString'
+    : 'page.iot.point.wordCount',
+);
+
+/** 数值符号只属于 int（float/bits/string 后端要求 false 且不下发）。 */
 const signedVisible = computed(
   () => showRegisterDecode.value && isIntFormat.value,
 );
 
-/** 字序：int（且 32 位）与 float 生效；bits 后端忽略 ⇒ 不展示。 */
+/** 字序：int（且 32 位）与 float 生效；bits/string 后端忽略 ⇒ 不展示。 */
 const byteOrderVisible = computed(
   () => showRegisterDecode.value && (isIntFormat.value || isFloatFormat.value),
 );
@@ -699,9 +707,18 @@ onMounted(load);
           </div>
           <div class="w-1/2">
             <div class="mb-1 text-sm">
-              {{ $t('page.iot.point.wordCount') }}
+              {{ $t(wordCountLabelKey) }}
             </div>
+            <!-- string：寄存器个数 1..32（多寄存器拼 UTF-8），可编辑数字输入 -->
+            <InputNumber
+              v-if="isStringFormat"
+              v-model:value="form.wordCount"
+              :min="1"
+              :max="32"
+              class="w-full"
+            />
             <Select
+              v-else
               v-model:value="form.wordCount"
               class="w-full"
               :disabled="!wordCountEditable"
@@ -717,6 +734,9 @@ onMounted(load);
             </Select>
             <div v-if="isFloatFormat" class="mt-1 text-xs text-gray-400">
               {{ $t('page.iot.point.floatFixedTwoWords') }}
+            </div>
+            <div v-if="isStringFormat" class="mt-1 text-xs text-gray-400">
+              {{ $t('page.iot.point.stringWordCountHint') }}
             </div>
           </div>
         </div>
