@@ -10,6 +10,7 @@ import {
   normalizeRegisterFormat,
   normalizeStringWordCount,
   POINT_BIT_OFFSET_MAX,
+  POINT_DOUBLE_WORD_COUNT,
   POINT_RAW_ADDRESS_MAX,
   POINT_REGISTER_BITS,
   POINT_STRING_WORD_COUNT_MAX,
@@ -416,10 +417,12 @@ describe('registerFormat：默认值与老数据回落', () => {
     expect(normalizeRegisterFormat('bool')).toBe('int');
     expect(normalizeRegisterFormat('float')).toBe('float');
     expect(normalizeRegisterFormat('bits')).toBe('bits');
-    // v3：string 已成为合法形态
+    // v3：string 已成为合法形态；v4：double 亦然
     expect(normalizeRegisterFormat('string')).toBe('string');
+    expect(normalizeRegisterFormat('double')).toBe('double');
     expect(isPointRegisterFormat('bits')).toBe(true);
     expect(isPointRegisterFormat('string')).toBe(true);
+    expect(isPointRegisterFormat('double')).toBe(true);
     expect(isPointRegisterFormat('bool')).toBe(false);
   });
 
@@ -824,7 +827,153 @@ describe('string 形态（多寄存器拼固定 UTF-8）', () => {
   });
 });
 
-describe('int/float/bits 回归（v3 不改既有口径）', () => {
+describe('double 形态（IEEE754 双精度，固定 4 寄存器）', () => {
+  it('注册表与常量：double 合法，固定 4 个寄存器', () => {
+    expect(isPointRegisterFormat('double')).toBe(true);
+    expect(normalizeRegisterFormat('double')).toBe('double');
+    expect(POINT_DOUBLE_WORD_COUNT).toBe(4);
+  });
+
+  it('★ payload：只发 registerFormat + wordCount=4 + 可选 byteOrder（不发 signed/位域）', () => {
+    const form = validForm();
+    form.registerFormat = 'double';
+    form.wordCount = '4';
+    form.byteOrder = 'little';
+    // 故意都填上：double 下 signed/位域必须一个都不下发
+    form.signed = true;
+    form.bitOffset = '3';
+    form.bitLength = '3';
+    const payload = buildPointPayload('9', form);
+    expect(payload).toMatchObject({
+      registerFormat: 'double',
+      wordCount: 4,
+      byteOrder: 'little',
+    });
+    for (const field of ['bitLength', 'bitOffset', 'signed']) {
+      expect(payload).not.toHaveProperty(field);
+    }
+    // 未选字序时不发 byteOrder
+    const noOrder = validForm();
+    noOrder.registerFormat = 'double';
+    noOrder.wordCount = '4';
+    expect(buildPointPayload('9', noOrder)).not.toHaveProperty('byteOrder');
+  });
+
+  it('★ 校验：wordCount 必须为 4（1/2/3/5/空/非数字 全拒）', () => {
+    const withCount = (count: string) => {
+      const form = validForm();
+      form.registerFormat = 'double';
+      form.wordCount = count;
+      return form;
+    };
+    expect(validatePointForm(withCount('4')).ok).toBe(true);
+    for (const bad of ['', '1', '2', '3', '5', '44', 'x']) {
+      expect(validatePointForm(withCount(bad)).ok).toBe(false);
+    }
+  });
+
+  it('★ 切换清理：切到 double ⇒ wordCount=4、清 signed/位域、**保留字序**（与 float 一致）', () => {
+    const form = validForm();
+    form.registerFormat = 'int';
+    form.wordCount = '1';
+    form.signed = true;
+    form.byteOrder = 'little';
+    form.bitOffset = '3';
+    form.bitLength = '3';
+    const next = applyRegisterFormat(form, 'double');
+    expect(next.registerFormat).toBe('double');
+    expect(next.wordCount).toBe('4');
+    expect(next.signed).toBe(false);
+    expect(next.bitOffset).toBeUndefined();
+    expect(next.bitLength).toBeUndefined();
+    expect(next.byteOrder).toBe('little');
+  });
+
+  it('★ 切走 double 时超范围 wordCount 清回 1 / 归到目标形态固定值', () => {
+    const form = validForm();
+    form.registerFormat = 'double';
+    form.wordCount = '4';
+    const toInt = applyRegisterFormat(form, 'int');
+    expect(toInt.registerFormat).toBe('int');
+    expect(toInt.wordCount).toBe('1');
+    expect(applyRegisterFormat(form, 'float').wordCount).toBe('2');
+    expect(applyRegisterFormat(form, 'bits').wordCount).toBe('1');
+  });
+
+  it('formFromPoint：double 回显 wordCount=4（脏数据也归一到 4）', () => {
+    const doubleResp = (
+      wordCount?: number,
+    ): Parameters<typeof formFromPoint>[0] => ({
+      id: '1',
+      deviceId: '9',
+      propertyId: '1001',
+      refType: 'property',
+      rawAddress: '40001',
+      addressType: 'holding',
+      registerFormat: 'double',
+      wordCount,
+      rw: 'R',
+    });
+    expect(formFromPoint(doubleResp(4)).wordCount).toBe('4');
+    expect(formFromPoint(doubleResp(2)).wordCount).toBe('4');
+    expect(formFromPoint(doubleResp(undefined)).wordCount).toBe('4');
+  });
+
+  it('registerDecodeSegments：`双精度浮点（4 个寄存器） · 低字在前（DCBA）`', () => {
+    expect(
+      registerDecodeSegments({
+        addressType: 'holding',
+        registerFormat: 'double',
+        wordCount: 4,
+        byteOrder: 'little',
+      }),
+    ).toEqual([
+      { key: 'page.iot.point.registerFormatDoubleShort' },
+      { key: 'page.iot.point.byteOrderLittleDouble' },
+    ]);
+    expect(
+      registerDecodeSegments({
+        addressType: 'holding',
+        registerFormat: 'double',
+        wordCount: 4,
+        byteOrder: 'big',
+      }),
+    ).toEqual([
+      { key: 'page.iot.point.registerFormatDoubleShort' },
+      { key: 'page.iot.point.byteOrderBig' },
+    ]);
+    // 未选字序 / 非法字序：只说形态
+    expect(
+      registerDecodeSegments({
+        addressType: 'holding',
+        registerFormat: 'double',
+        wordCount: 4,
+      }),
+    ).toEqual([{ key: 'page.iot.point.registerFormatDoubleShort' }]);
+    expect(
+      registerDecodeSegments({
+        addressType: 'holding',
+        registerFormat: 'double',
+        wordCount: 4,
+        byteOrder: 'middle',
+      }),
+    ).toEqual([{ key: 'page.iot.point.registerFormatDoubleShort' }]);
+  });
+
+  it('double 只在 Modbus 寄存器点位下发（沿用 v2/v3 规则）', () => {
+    for (const addressType of ['coil', 'discrete', 'nodeid', 'topic']) {
+      const form = validForm();
+      form.addressType = addressType;
+      form.registerFormat = 'double';
+      form.wordCount = '4';
+      const payload = buildPointPayload('9', form);
+      expect(payload).not.toHaveProperty('registerFormat');
+      expect(payload).not.toHaveProperty('wordCount');
+    }
+  });
+});
+
+describe('int/float/bits/string 回归（v4 不改既有口径）', () => {
   it('int：wordCount 1|2 + signed；字序仅 32 位下发', () => {
     const form = validForm();
     form.registerFormat = 'int';
@@ -886,13 +1035,31 @@ describe('int/float/bits 回归（v3 不改既有口径）', () => {
     ).toBe(false);
   });
 
-  it('int/float/bits 的 wordCount 校验仍是 1|2（不受 string 1..32 影响）', () => {
+  it('string：只发 registerFormat + wordCount（回归不变）', () => {
+    const form = validForm();
+    form.registerFormat = 'string';
+    form.wordCount = '3';
+    form.signed = true;
+    form.byteOrder = 'big';
+    const payload = buildPointPayload('9', form);
+    expect(payload).toMatchObject({ registerFormat: 'string', wordCount: 3 });
+    for (const field of ['signed', 'byteOrder', 'bitOffset', 'bitLength']) {
+      expect(payload).not.toHaveProperty(field);
+    }
+  });
+
+  it('int/float/bits 的 wordCount 校验仍是 1|2；double 必须为 4（不受 string 1..32 影响）', () => {
     for (const registerFormat of ['int', 'float', 'bits']) {
       const form = validForm();
       form.registerFormat = registerFormat;
       form.wordCount = '3';
       expect(validatePointForm(form).ok).toBe(false);
+      expect(buildPointPayload('9', form).wordCount).not.toBe(3);
     }
+    const doubleForm = validForm();
+    doubleForm.registerFormat = 'double';
+    doubleForm.wordCount = '3';
+    expect(validatePointForm(doubleForm).ok).toBe(false);
   });
 });
 
