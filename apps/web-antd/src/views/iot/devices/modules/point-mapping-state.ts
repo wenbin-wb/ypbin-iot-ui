@@ -25,11 +25,37 @@ export const POINT_ADDRESS_TYPES = [
   { value: 'topic', labelKey: 'page.iot.point.addressTopic' },
 ] as const;
 
-/** 字节序（schema 注释 big|little）。 */
+/**
+ * 字序（word order，后端 `byteOrder`）：big = 高字在前（ABCD）；little = 低字在前（CDAB）。
+ * **仅 Modbus 寄存器点位、且 wordCount=2（32 位）时生效。**
+ */
 export const POINT_BYTE_ORDERS = [
   { value: 'big', labelKey: 'page.iot.point.byteOrderBig' },
   { value: 'little', labelKey: 'page.iot.point.byteOrderLittle' },
 ] as const;
+
+/** Modbus 寄存器宽度（后端 `wordCount`，int 1|2，默认 1）。 */
+export const POINT_WORD_COUNTS = [
+  { value: '1', labelKey: 'page.iot.point.wordCount1' },
+  { value: '2', labelKey: 'page.iot.point.wordCount2' },
+] as const;
+
+/**
+ * Modbus 数值符号（后端 `signed`，**Boolean**，默认 false = 无符号）。
+ * 与同 DTO 的 `enabled` 口径一致（DB 列 TINYINT 0/1，Java 侧是 Boolean）。
+ */
+export const POINT_SIGNED_OPTIONS = [
+  { value: false, labelKey: 'page.iot.point.unsigned' },
+  { value: true, labelKey: 'page.iot.point.signedInt' },
+] as const;
+
+/**
+ * 是否为「Modbus 寄存器」地址类型 —— 只有保持/输入寄存器参与寄存器解码 v1。
+ * coil/discrete（位）与 nodeid/topic（非 Modbus）都不适用。
+ */
+export function isModbusRegisterAddressType(addressType?: string): boolean {
+  return addressType === 'holding' || addressType === 'input';
+}
 
 /** 读写权限（schema 注释 R/W/RW）。 */
 export const POINT_RW_OPTIONS = [
@@ -54,6 +80,10 @@ export interface PointForm {
   /** 偏移量（空 = 未设）。 */
   offsetValue?: string;
   byteOrder?: string;
+  /** Modbus 寄存器宽度（'1' = 16 位 | '2' = 32 位；字符串形态便于回显与提交保真）。 */
+  wordCount: string;
+  /** Modbus 数值符号（false = 无符号 | true = 有符号）。 */
+  signed: boolean;
   rw: string;
   enabled: boolean;
 }
@@ -78,6 +108,9 @@ export function emptyPointForm(): PointForm {
     scaleFactor: undefined,
     offsetValue: undefined,
     byteOrder: undefined,
+    // 后端默认值：wordCount=1、signed=false（无符号）；byteOrder 默认不写（空 = 不发送）。
+    wordCount: '1',
+    signed: false,
     rw: 'R',
     enabled: true,
   };
@@ -129,12 +162,23 @@ export function validatePointForm(form: PointForm): PointFormCheck {
     return { ok: false, message: '偏移量必须是数字' };
   }
   if (
+    form.wordCount !== undefined &&
+    form.wordCount !== '' &&
+    form.wordCount !== '1' &&
+    form.wordCount !== '2'
+  ) {
+    return { ok: false, message: '寄存器宽度只能是 1（16 位）或 2（32 位）' };
+  }
+  if (form.signed !== true && form.signed !== false) {
+    return { ok: false, message: '数值符号必须是有符号(true)/无符号(false)' };
+  }
+  if (
     form.byteOrder !== undefined &&
     form.byteOrder !== '' &&
     form.byteOrder !== 'big' &&
     form.byteOrder !== 'little'
   ) {
-    return { ok: false, message: '字节序只能是 big 或 little' };
+    return { ok: false, message: '字序只能是 big 或 little' };
   }
   return { ok: true, message: '' };
 }
@@ -167,8 +211,14 @@ export function buildPointPayload(
   if (offset) {
     payload.offsetValue = offset;
   }
-  if (form.byteOrder) {
-    payload.byteOrder = form.byteOrder;
+  // Modbus 寄存器解码三字段只对保持/输入寄存器有意义；其余地址类型一律不下发（后端按默认处理）。
+  if (isModbusRegisterAddressType(form.addressType)) {
+    payload.wordCount = form.wordCount === '2' ? 2 : 1;
+    payload.signed = form.signed === true;
+    // 字序仅在 32 位（wordCount=2）时生效 ⇒ wordCount=1 时 byteOrder 不参与 payload。
+    if (payload.wordCount === 2 && form.byteOrder) {
+      payload.byteOrder = form.byteOrder;
+    }
   }
   return payload;
 }
@@ -189,9 +239,46 @@ export function formFromPoint(point: IotPointApi.PointMappingResp): PointForm {
     scaleFactor: point.scaleFactor ?? '',
     offsetValue: point.offsetValue ?? '',
     byteOrder: point.byteOrder ?? '',
+    // 缺字段（老数据/后端未返回）回落到后端默认：wordCount=1、signed=false。
+    wordCount: point.wordCount === 2 ? '2' : '1',
+    signed: point.signed === true,
     rw: point.rw,
     enabled: point.enabled !== false,
   };
+}
+
+/** 列表展示用的点位解码信息字段（Resp 的最小子集）。 */
+export interface RegisterDecodePoint {
+  addressType?: string;
+  byteOrder?: string;
+  signed?: boolean;
+  wordCount?: number;
+}
+
+/**
+ * 寄存器解码的**可读片段**（返回 i18n 键数组，由调用方 `$t()` 后拼接）。
+ *
+ * - 非 Modbus 寄存器点位（coil/discrete/nodeid/topic）返回 `[]` ⇒ 列表显示 `-`；
+ * - 顺序固定为「宽度 · 符号 ·（仅 32 位时）字序」，避免裸露 `big`/`little` 这类枚举值。
+ */
+export function registerDecodeLabelKeys(point: RegisterDecodePoint): string[] {
+  if (!isModbusRegisterAddressType(point.addressType)) {
+    return [];
+  }
+  const keys = [
+    point.wordCount === 2
+      ? 'page.iot.point.wordCount2'
+      : 'page.iot.point.wordCount1',
+    point.signed === true
+      ? 'page.iot.point.signedInt'
+      : 'page.iot.point.unsigned',
+  ];
+  if (point.wordCount === 2 && point.byteOrder === 'big') {
+    keys.push('page.iot.point.byteOrderBig');
+  } else if (point.wordCount === 2 && point.byteOrder === 'little') {
+    keys.push('page.iot.point.byteOrderLittle');
+  }
+  return keys;
 }
 
 /** 点位列表展示态（错误优先于空）。 */
