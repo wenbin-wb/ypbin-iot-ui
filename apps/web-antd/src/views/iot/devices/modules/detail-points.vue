@@ -16,6 +16,7 @@ import {
   message,
   Modal,
   Popconfirm,
+  Radio,
   Select,
   Spin,
   Switch,
@@ -37,10 +38,14 @@ import {
   buildPointPayload,
   emptyPointForm,
   formFromPoint,
+  isModbusRegisterAddressType,
   POINT_ADDRESS_TYPES,
   POINT_BYTE_ORDERS,
   POINT_REF_TYPES,
   POINT_RW_OPTIONS,
+  POINT_SIGNED_OPTIONS,
+  POINT_WORD_COUNTS,
+  registerDecodeLabelKeys,
   validatePointForm,
 } from './point-mapping-state';
 
@@ -147,6 +152,43 @@ const modalTitle = computed(() =>
     ? $t('page.iot.point.editTitle', [editing.value.propertyId])
     : $t('page.iot.point.createTitle'),
 );
+
+/**
+ * Modbus 寄存器解码三字段是否展示：只有保持/输入寄存器（holding|input）参与解码 v1；
+ * coil/discrete（位）与 nodeid/topic（非 Modbus）都不展示，也不下发这三个字段。
+ */
+const showRegisterDecode = computed(() =>
+  isModbusRegisterAddressType(form.addressType),
+);
+
+/** 字序仅 32 位（wordCount=2）时生效 ⇒ 16 位时置灰并提示。 */
+const byteOrderEnabled = computed(
+  () => showRegisterDecode.value && form.wordCount === '2',
+);
+
+/**
+ * 宽度切回 16 位时清掉已选字序：**界面所见即所发**——wordCount=1 时后端不接收 byteOrder，
+ * 若还留着一个「看着像已保存」的值会误导用户。
+ */
+function onWordCountChange() {
+  if (form.wordCount !== '2') {
+    form.byteOrder = undefined;
+  }
+}
+
+/**
+ * 列表「解码」列：可读文本（如 `32 位（2 个寄存器） · 有符号 · 低字在前（CDAB）`）。
+ * 非 Modbus 寄存器点位显示 `-`，与既有 `'-'` 风格一致。
+ */
+function registerDecodeText(point: {
+  addressType?: string;
+  byteOrder?: string;
+  signed?: boolean;
+  wordCount?: number;
+}): string {
+  const keys = registerDecodeLabelKeys(point);
+  return keys.length > 0 ? keys.map((key) => $t(key)).join(' · ') : '-';
+}
 
 /** propertyId 候选：当前物模型属性（值=属性主键；label 显示 identifier + 类型）。 */
 const propertyOptions = computed(() =>
@@ -315,6 +357,7 @@ onMounted(load);
             <th class="py-1">{{ $t('page.iot.point.unit') }}</th>
             <th class="py-1">{{ $t('page.iot.point.rawAddress') }}</th>
             <th class="py-1">{{ $t('page.iot.point.addressType') }}</th>
+            <th class="py-1">{{ $t('page.iot.point.decode') }}</th>
             <th class="py-1">{{ $t('page.iot.point.pollIntervalMs') }}</th>
             <th class="py-1">{{ $t('page.iot.point.scaleFactor') }}</th>
             <th class="py-1">{{ $t('page.iot.point.enabled') }}</th>
@@ -337,6 +380,9 @@ onMounted(load);
               </Tag>
             </td>
             <td class="py-1">{{ row.point?.addressType ?? '-' }}</td>
+            <td class="py-1">
+              {{ row.point ? registerDecodeText(row.point) : '-' }}
+            </td>
             <td class="py-1">{{ row.point?.pollIntervalMs ?? '-' }}</td>
             <td class="py-1">{{ row.point?.scaleFactor ?? '-' }}</td>
             <td class="py-1">
@@ -409,6 +455,7 @@ onMounted(load);
           <th class="py-1">{{ $t('page.iot.point.refType') }}</th>
           <th class="py-1">{{ $t('page.iot.point.rawAddress') }}</th>
           <th class="py-1">{{ $t('page.iot.point.addressType') }}</th>
+          <th class="py-1">{{ $t('page.iot.point.decode') }}</th>
           <th class="py-1">{{ $t('page.iot.point.pollIntervalMs') }}</th>
           <th class="py-1">{{ $t('page.iot.point.rw') }}</th>
           <th class="py-1">{{ $t('page.iot.point.enabled') }}</th>
@@ -421,6 +468,7 @@ onMounted(load);
           <td class="py-1">{{ point.refType }}</td>
           <td class="py-1">{{ point.rawAddress }}</td>
           <td class="py-1">{{ point.addressType }}</td>
+          <td class="py-1">{{ registerDecodeText(point) }}</td>
           <td class="py-1">{{ point.pollIntervalMs ?? '-' }}</td>
           <td class="py-1">{{ point.rw }}</td>
           <td class="py-1">{{ point.enabled === false ? 'off' : 'on' }}</td>
@@ -578,12 +626,57 @@ onMounted(load);
           />
         </div>
       </div>
-      <div class="flex gap-2">
+      <!-- Modbus 寄存器解码（v1）：仅保持/输入寄存器展示；位类型与非 Modbus 地址不展示 -->
+      <div v-if="showRegisterDecode" class="flex gap-2">
         <div class="w-1/2">
+          <div class="mb-1 text-sm">
+            {{ $t('page.iot.point.wordCount') }}
+          </div>
+          <Select
+            v-model:value="form.wordCount"
+            class="w-full"
+            @change="onWordCountChange"
+          >
+            <Select.Option
+              v-for="option in POINT_WORD_COUNTS"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ $t(option.labelKey) }}
+            </Select.Option>
+          </Select>
+        </div>
+        <div class="w-1/2">
+          <div class="mb-1 text-sm">
+            {{ $t('page.iot.point.signed') }}
+          </div>
+          <Radio.Group
+            v-model:value="form.signed"
+            button-style="solid"
+            class="w-full"
+          >
+            <Radio.Button
+              v-for="option in POINT_SIGNED_OPTIONS"
+              :key="String(option.value)"
+              :value="option.value"
+            >
+              {{ $t(option.labelKey) }}
+            </Radio.Button>
+          </Radio.Group>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <div v-if="showRegisterDecode" class="w-1/2">
           <div class="mb-1 text-sm">
             {{ $t('page.iot.point.byteOrder') }}
           </div>
-          <Select v-model:value="form.byteOrder" allow-clear class="w-full">
+          <Select
+            v-model:value="form.byteOrder"
+            allow-clear
+            class="w-full"
+            :disabled="!byteOrderEnabled"
+            :placeholder="$t('page.iot.point.byteOrderPlaceholder')"
+          >
             <Select.Option
               v-for="option in POINT_BYTE_ORDERS"
               :key="option.value"
@@ -592,6 +685,12 @@ onMounted(load);
               {{ $t(option.labelKey) }}
             </Select.Option>
           </Select>
+          <div class="mt-1 text-xs text-gray-400">
+            {{ $t('page.iot.point.byteOrderHint') }}
+          </div>
+          <div v-if="!byteOrderEnabled" class="mt-1 text-xs text-amber-600">
+            {{ $t('page.iot.point.byteOrderOnlyFor32') }}
+          </div>
         </div>
         <div class="w-1/2">
           <div class="mb-1 text-sm">

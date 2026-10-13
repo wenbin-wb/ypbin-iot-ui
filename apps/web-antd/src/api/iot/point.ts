@@ -22,8 +22,21 @@ export namespace IotPointApi {
     scaleFactor?: string;
     /** BigDecimal 全局序列化为字符串。 */
     offsetValue?: string;
-    /** 字节序：big|little（可空）。 */
+    /**
+     * 字序（word order）：`big` = 高字在前（ABCD）；`little` = 低字在前（CDAB）。
+     * 仅 Modbus 寄存器点位（addressType 为 holding|input）且 `wordCount = 2` 时有意义，可空。
+     */
     byteOrder?: string;
+    /**
+     * 寄存器宽度（Modbus 寄存器点位）：1 = 16 位（单寄存器）；2 = 32 位（双寄存器）。
+     * 后端默认 1；coil/discrete/nodeid/topic 等非寄存器点位不适用。
+     */
+    wordCount?: number;
+    /**
+     * 数值符号（Modbus 寄存器点位）：`true` = 有符号；`false` = 无符号（默认）。
+     * 与同 DTO 的 `enabled` 一致按 Boolean 处理（DB 列 TINYINT 0/1）。
+     */
+    signed?: boolean;
     /** 读写：R|W|RW（与属性 accessMode 联动校验）。 */
     rw: string;
     enabled?: boolean;
@@ -34,6 +47,12 @@ export namespace IotPointApi {
    * 创建/更新请求（后端 IotPointMappingReq 校验约束）：
    * propertyId @NotNull；refType/addressType/rawAddress/rw @NotBlank；
    * rawAddress @Size(max=128)；pollIntervalMs @Min(0)；scaleFactor/offsetValue/byteOrder/enabled 可空。
+   *
+   * Modbus 寄存器解码 v1（仅 addressType 为 holding|input 有意义）：
+   * wordCount 1|2（默认 1）；signed boolean（默认 false = 无符号）；
+   * byteOrder big|little（默认不发送）——语义是**字序**（big=高字在前 ABCD / little=低字在前 CDAB），
+   * 不是 BADC/DCBA 字节交换。
+   * v1 不支持 IEEE754 浮点 / BADC·DCBA 字节交换 / 字符串寄存器 / 位域，故无对应字段。
    */
   export interface PointMappingSaveReq {
     deviceId?: string;
@@ -45,6 +64,10 @@ export namespace IotPointApi {
     scaleFactor?: string;
     offsetValue?: string;
     byteOrder?: string;
+    /** Modbus 寄存器宽度：1 = 16 位；2 = 32 位（默认 1）。仅 holding|input 有意义。 */
+    wordCount?: number;
+    /** Modbus 数值符号：`true` = 有符号；`false` = 无符号（默认）。仅 holding|input 有意义。 */
+    signed?: boolean;
     rw: string;
     enabled?: boolean;
   }
