@@ -13,6 +13,9 @@ const allowedScopes = [
   'dev',
   'deploy',
   'other',
+  // fork 定制：本仓 IoT 前端改动统一用 (iot)（仓内已有 17 个此类提交）。
+  // 上游 vben 的 scope 列表里没有它，导致每次都得 --no-verify；见 issue #81。
+  'iot',
 ];
 
 // precomputed scope

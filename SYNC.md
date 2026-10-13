@@ -32,6 +32,25 @@
      该页签另套 `views/iot/shared/panel-error-boundary.vue`（alerts/products 详情页签复用），任何 setup/render 异常都落成 Alert（原样显示错误栈），**绝不留空白**。
    - 教训：**组件级用例里 mock 掉 `#/locales` 会结构性地漏掉这类 bug**——必须用真实 i18n 跑。
 
+8. **提交 scope `iot` 已加入 commitlint 允许列表**（白名单外的必要改动，issue #81）：
+   `internal/lint-configs/commitlint-config/index.mjs` 是**上游 vben 原样文件**（与本仓 fork 点
+   `d3dc081b` 逐字节相同），但它硬编码的 `allowedScopes` 里没有 `iot` —— 而本仓实际已有
+   **17 个 `(iot)` 提交**（IoT 前端改动的既定 scope），于是每次提交都被本地 `commit-msg`
+   钩子（lefthook → commitlint）拒绝、只能 `--no-verify`；CI 又不跑 commitlint，
+   结果就是「规范存在、与实际做法相反、且没人守」。
+   - **为什么必须改既有文件**：规则 2 的白名单按「IoT 页面落在哪」划分，**不覆盖工具链配置**；
+     而 scope 列表是硬编码在配置里的常量（`@vben/commitlint-config` 不导出 `allowedScopes`，
+     外部无法只做「追加」而不复制整份策略），因此只能在原文件追加一行。
+   - **改动**：`allowedScopes` 末尾追加 `'iot'`（最小改动，另加两行注释说明来源）。
+   - **不反向移植**：上游 vben 没有 IoT 前端，不应把 `iot` 塞进它的通用列表 ⇒ 本项是
+     **fork 定制**，不是规则 2 所说的「通用缺陷修复」，不回植 upstream。
+   - **实测**：`echo "feat(iot): x" | pnpm exec commitlint` 通过（`feat(nope): x` 仍被拒，
+     证明规则未被放宽成通配）。
+   - **顺带发现（未处理，待定）**：还有别的「实际在用但不在 `allowedScopes`」的 scope ——
+     `deps`(40) / `tracking`(23) / `ui`(2) / `web-antd`(1) / `system`(1) / `layout`(1)；
+     其中 `deps` 是 dependabot 自动生成的。是否加由维护者定。
+
+
 ## 最近同步点
 
 - **分叉点**：`2aa8e3b`（2026-09-18，admin-ui `main`）。
