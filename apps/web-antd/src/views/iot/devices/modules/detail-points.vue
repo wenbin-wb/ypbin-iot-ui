@@ -35,17 +35,20 @@ import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
 
 import {
+  applyRegisterFormat,
   buildPointPayload,
   emptyPointForm,
   formFromPoint,
   isModbusRegisterAddressType,
+  normalizeRegisterFormat,
   POINT_ADDRESS_TYPES,
   POINT_BYTE_ORDERS,
   POINT_REF_TYPES,
+  POINT_REGISTER_FORMATS,
   POINT_RW_OPTIONS,
   POINT_SIGNED_OPTIONS,
   POINT_WORD_COUNTS,
-  registerDecodeLabelKeys,
+  registerDecodeSegments,
   validatePointForm,
 } from './point-mapping-state';
 
@@ -154,40 +157,86 @@ const modalTitle = computed(() =>
 );
 
 /**
- * Modbus 寄存器解码三字段是否展示：只有保持/输入寄存器（holding|input）参与解码 v1；
- * coil/discrete（位）与 nodeid/topic（非 Modbus）都不展示，也不下发这三个字段。
+ * 寄存器解码字段是否展示：只有保持/输入寄存器（holding|input）参与解码；
+ * coil/discrete（位）与 nodeid/topic（非 Modbus）都不展示，也不下发。
  */
 const showRegisterDecode = computed(() =>
   isModbusRegisterAddressType(form.addressType),
 );
 
-/** 字序仅 32 位（wordCount=2）时生效 ⇒ 16 位时置灰并提示。 */
+/** 形态兜底：缺字段按后端默认 int 回落（与 point-mapping-state 一致）。 */
+const registerFormat = computed(() =>
+  normalizeRegisterFormat(form.registerFormat),
+);
+const isIntFormat = computed(() => registerFormat.value === 'int');
+const isFloatFormat = computed(() => registerFormat.value === 'float');
+const isBitsFormat = computed(() => registerFormat.value === 'bits');
+
+/** int 下宽度可选；float 固定 2、bits 固定 1，均由形态联动决定 ⇒ 置灰不可改。 */
+const wordCountEditable = computed(() => isIntFormat.value);
+
+/** 数值符号只属于 int（float/bits 后端要求 false 且不下发）。 */
+const signedVisible = computed(
+  () => showRegisterDecode.value && isIntFormat.value,
+);
+
+/** 字序：int（且 32 位）与 float 生效；bits 后端忽略 ⇒ 不展示。 */
+const byteOrderVisible = computed(
+  () => showRegisterDecode.value && (isIntFormat.value || isFloatFormat.value),
+);
+
+/** 位域输入只在 bits 展示。 */
+const bitsVisible = computed(
+  () => showRegisterDecode.value && isBitsFormat.value,
+);
+
+/** 字序仅在「float 固定 2 寄存器」或「int 且 wordCount=2」时生效。 */
 const byteOrderEnabled = computed(
-  () => showRegisterDecode.value && form.wordCount === '2',
+  () =>
+    byteOrderVisible.value && (isFloatFormat.value || form.wordCount === '2'),
 );
 
 /**
- * 宽度切回 16 位时清掉已选字序：**界面所见即所发**——wordCount=1 时后端不接收 byteOrder，
- * 若还留着一个「看着像已保存」的值会误导用户。
+ * 形态切换：走纯函数 applyRegisterFormat 做联动清理（float 固定 2 寄存器 + 清 signed、
+ * bits 固定 1 寄存器 + 清字序、int 清位域），保证**界面所见即所发**。
+ */
+function onRegisterFormatChange() {
+  Object.assign(form, applyRegisterFormat(form, form.registerFormat));
+}
+
+/**
+ * 宽度切回 16 位时清掉已选字序（仅 int 需要；float 固定 2 不受影响）：
+ * wordCount=1 时后端不接收 byteOrder，留着一个「看着像已保存」的值会误导用户。
  */
 function onWordCountChange() {
-  if (form.wordCount !== '2') {
+  if (isIntFormat.value && form.wordCount !== '2') {
     form.byteOrder = undefined;
   }
 }
 
 /**
- * 列表「解码」列：可读文本（如 `32 位（2 个寄存器） · 有符号 · 低字在前（CDAB）`）。
+ * 列表「解码」列：可读文本（如 `32 位（2 个寄存器） · 有符号 · 低字在前（CDAB）`、
+ * `32 位浮点 · 低字在前（CDAB）`、`位域：bit 3..5（3 位）`）。
  * 非 Modbus 寄存器点位显示 `-`，与既有 `'-'` 风格一致。
  */
 function registerDecodeText(point: {
   addressType?: string;
+  bitLength?: number;
+  bitOffset?: number;
   byteOrder?: string;
+  registerFormat?: string;
   signed?: boolean;
   wordCount?: number;
 }): string {
-  const keys = registerDecodeLabelKeys(point);
-  return keys.length > 0 ? keys.map((key) => $t(key)).join(' · ') : '-';
+  const segments = registerDecodeSegments(point);
+  if (segments.length === 0) {
+    return '-';
+  }
+  return segments
+    .map((segment) =>
+      segment.params ? $t(segment.key, segment.params) : $t(segment.key),
+    )
+    .join(' · ');
 }
 
 /** propertyId 候选：当前物模型属性（值=属性主键；label 显示 identifier + 类型）。 */
@@ -626,72 +675,136 @@ onMounted(load);
           />
         </div>
       </div>
-      <!-- Modbus 寄存器解码（v1）：仅保持/输入寄存器展示；位类型与非 Modbus 地址不展示 -->
-      <div v-if="showRegisterDecode" class="flex gap-2">
-        <div class="w-1/2">
-          <div class="mb-1 text-sm">
-            {{ $t('page.iot.point.wordCount') }}
-          </div>
-          <Select
-            v-model:value="form.wordCount"
-            class="w-full"
-            @change="onWordCountChange"
-          >
-            <Select.Option
-              v-for="option in POINT_WORD_COUNTS"
-              :key="option.value"
-              :value="option.value"
+      <!-- Modbus 寄存器解码 v2：仅保持/输入寄存器展示；位类型与非 Modbus 地址不展示 -->
+      <div v-if="showRegisterDecode" class="space-y-3">
+        <!-- 值形态 + 寄存器宽度（float 固定 2 个寄存器、bits 固定 1 个 ⇒ 置灰不可改） -->
+        <div class="flex gap-2">
+          <div class="w-1/2">
+            <div class="mb-1 text-sm">
+              {{ $t('page.iot.point.registerFormat') }}
+            </div>
+            <Select
+              v-model:value="form.registerFormat"
+              class="w-full"
+              @change="onRegisterFormatChange"
             >
-              {{ $t(option.labelKey) }}
-            </Select.Option>
-          </Select>
-        </div>
-        <div class="w-1/2">
-          <div class="mb-1 text-sm">
-            {{ $t('page.iot.point.signed') }}
+              <Select.Option
+                v-for="option in POINT_REGISTER_FORMATS"
+                :key="option.value"
+                :value="option.value"
+              >
+                {{ $t(option.labelKey) }}
+              </Select.Option>
+            </Select>
           </div>
-          <Radio.Group
-            v-model:value="form.signed"
-            button-style="solid"
-            class="w-full"
-          >
-            <Radio.Button
-              v-for="option in POINT_SIGNED_OPTIONS"
-              :key="String(option.value)"
-              :value="option.value"
+          <div class="w-1/2">
+            <div class="mb-1 text-sm">
+              {{ $t('page.iot.point.wordCount') }}
+            </div>
+            <Select
+              v-model:value="form.wordCount"
+              class="w-full"
+              :disabled="!wordCountEditable"
+              @change="onWordCountChange"
             >
-              {{ $t(option.labelKey) }}
-            </Radio.Button>
-          </Radio.Group>
+              <Select.Option
+                v-for="option in POINT_WORD_COUNTS"
+                :key="option.value"
+                :value="option.value"
+              >
+                {{ $t(option.labelKey) }}
+              </Select.Option>
+            </Select>
+            <div v-if="isFloatFormat" class="mt-1 text-xs text-gray-400">
+              {{ $t('page.iot.point.floatFixedTwoWords') }}
+            </div>
+          </div>
         </div>
+
+        <!-- 数值符号（仅 int）/ 字序（int 32 位 与 float） -->
+        <div v-if="signedVisible || byteOrderVisible" class="flex gap-2">
+          <div v-if="signedVisible" class="w-1/2">
+            <div class="mb-1 text-sm">
+              {{ $t('page.iot.point.signed') }}
+            </div>
+            <Radio.Group
+              v-model:value="form.signed"
+              button-style="solid"
+              class="w-full"
+            >
+              <Radio.Button
+                v-for="option in POINT_SIGNED_OPTIONS"
+                :key="String(option.value)"
+                :value="option.value"
+              >
+                {{ $t(option.labelKey) }}
+              </Radio.Button>
+            </Radio.Group>
+          </div>
+          <div v-if="byteOrderVisible" class="w-1/2">
+            <div class="mb-1 text-sm">
+              {{ $t('page.iot.point.byteOrder') }}
+            </div>
+            <Select
+              v-model:value="form.byteOrder"
+              allow-clear
+              class="w-full"
+              :disabled="!byteOrderEnabled"
+              :placeholder="$t('page.iot.point.byteOrderPlaceholder')"
+            >
+              <Select.Option
+                v-for="option in POINT_BYTE_ORDERS"
+                :key="option.value"
+                :value="option.value"
+              >
+                {{ $t(option.labelKey) }}
+              </Select.Option>
+            </Select>
+            <div class="mt-1 text-xs text-gray-400">
+              {{ $t('page.iot.point.byteOrderHint') }}
+            </div>
+            <div v-if="!byteOrderEnabled" class="mt-1 text-xs text-amber-600">
+              {{ $t('page.iot.point.byteOrderOnlyFor32') }}
+            </div>
+          </div>
+        </div>
+
+        <!-- 位域（仅 bits）：起始位 + 位宽，后端必填 -->
+        <template v-if="bitsVisible">
+          <div class="flex gap-2">
+            <div class="w-1/2">
+              <div class="mb-1 text-sm">
+                {{ $t('page.iot.point.bitOffset') }}
+              </div>
+              <InputNumber
+                v-model:value="form.bitOffset"
+                :min="0"
+                :max="15"
+                class="w-full"
+                :placeholder="$t('page.iot.point.bitOffsetPlaceholder')"
+              />
+            </div>
+            <div class="w-1/2">
+              <div class="mb-1 text-sm">
+                {{ $t('page.iot.point.bitLength') }}
+              </div>
+              <InputNumber
+                v-model:value="form.bitLength"
+                :min="1"
+                :max="16"
+                class="w-full"
+                :placeholder="$t('page.iot.point.bitLengthPlaceholder')"
+              />
+            </div>
+          </div>
+          <div class="text-xs text-gray-400">
+            {{ $t('page.iot.point.bitsHint') }}
+          </div>
+        </template>
       </div>
+
+      <!-- 读写权限 -->
       <div class="flex gap-2">
-        <div v-if="showRegisterDecode" class="w-1/2">
-          <div class="mb-1 text-sm">
-            {{ $t('page.iot.point.byteOrder') }}
-          </div>
-          <Select
-            v-model:value="form.byteOrder"
-            allow-clear
-            class="w-full"
-            :disabled="!byteOrderEnabled"
-            :placeholder="$t('page.iot.point.byteOrderPlaceholder')"
-          >
-            <Select.Option
-              v-for="option in POINT_BYTE_ORDERS"
-              :key="option.value"
-              :value="option.value"
-            >
-              {{ $t(option.labelKey) }}
-            </Select.Option>
-          </Select>
-          <div class="mt-1 text-xs text-gray-400">
-            {{ $t('page.iot.point.byteOrderHint') }}
-          </div>
-          <div v-if="!byteOrderEnabled" class="mt-1 text-xs text-amber-600">
-            {{ $t('page.iot.point.byteOrderOnlyFor32') }}
-          </div>
-        </div>
         <div class="w-1/2">
           <div class="mb-1 text-sm">
             {{ $t('page.iot.point.rw') }}
