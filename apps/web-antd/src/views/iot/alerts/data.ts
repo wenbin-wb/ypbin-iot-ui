@@ -326,7 +326,9 @@ export function useRuleColumns(): VxeTableGridColumns {
     },
     {
       field: 'notifyTargets',
-      title: $t('page.iot.alert.notify.title'),
+      // 列头用「通知对象」而不是「通知记录」：这一列渲染的是规则的通知对象风险标签
+      // （notifyRisk），不是投递记录；旧标题会让「未配通知对象」的提示看起来答非所问。
+      title: $t('page.iot.alert.notifyTargets'),
       width: 140,
       slots: { default: 'notifyRisk' },
     },
