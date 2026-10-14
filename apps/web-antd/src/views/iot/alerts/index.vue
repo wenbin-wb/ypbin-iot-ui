@@ -30,6 +30,7 @@ import {
   setAlertRulesEnabled,
   silenceAlerts,
 } from '#/api/iot';
+import { createTrailingDebounce } from '#/api/iot/realtime';
 import { $t } from '#/locales';
 import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
@@ -45,6 +46,7 @@ import {
   saveFilterIfChanged,
 } from '../shared/list-filter';
 import PanelErrorBoundary from '../shared/panel-error-boundary.vue';
+import { useIotRealtime } from '../shared/use-iot-realtime';
 import { detectRunawayGrowth, RUNAWAY_HEIGHT } from './alerts-layout';
 import { channelLabel } from './channel';
 import {
@@ -94,6 +96,20 @@ const canAck = computed(() => hasAccessByCodes(['iot:alert:ack']));
 const canViewRule = computed(() => hasAccessByCodes(['iot:alert:rule-list']));
 
 const canSaveRule = computed(() => hasAccessByCodes(['iot:alert:rule-save']));
+
+/** alert 事件去抖窗口：一次批量确认/恢复会连发多条，合并成一次刷新。 */
+const REALTIME_ALERT_DEBOUNCE_MS = 500;
+
+const {
+  error: realtimeError,
+  onEvent: onRealtimeEvent,
+  state: realtimeState,
+} = useIotRealtime();
+
+/** 断线/重连中才提示；首次 connecting 不闪提示。 */
+const realtimeDisconnected = computed(
+  () => realtimeState.value === 'reconnecting',
+);
 
 const [RuleDrawer, RuleDrawerApi] = useVbenDrawer({
   connectedComponent: RuleForm,
@@ -311,6 +327,21 @@ async function reloadAll() {
   await reloadSummary();
 }
 
+/**
+ * SSE `alert` 事件 → 去抖刷新**列表 + 摘要**。
+ *
+ * 去抖原因：一次批量确认/静默/恢复会向同一租户连发多条 alert，逐条刷新会把
+ * `/alerts/page` 与 `/alerts/summary` 打成请求风暴；500ms 内合并为一次，
+ * 语义仍是「最终一致」。刷新走既有 `reloadAll()`，不改丢弃/重发语义。
+ */
+const refreshOnRealtimeAlert = createTrailingDebounce(() => {
+  void reloadAll();
+}, REALTIME_ALERT_DEBOUNCE_MS);
+
+onRealtimeEvent('alert', () => {
+  refreshOnRealtimeAlert();
+});
+
 async function onAck(ids: string[]) {
   try {
     const count = await ackAlerts(ids);
@@ -522,6 +553,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  refreshOnRealtimeAlert.cancel();
   stopHeightWatch?.();
   instanceGuard?.dispose();
   ruleGuard?.dispose();
@@ -603,6 +635,20 @@ onUnmounted(() => {
           🔴 失败态**必须挂在表格之外**（不能只放 `#empty` 槽里）：真实 vxe 只在表体无行时才渲染该槽
           ⇒ 「已有数据后刷新失败」时槽不渲染、失败提示会消失、页面继续展示过期数据。
         -->
+          <!--
+            实时流断线必须可见（不阻塞页面）：标题 + 最近错误原因都在，
+            避免用户以为页面数据仍是实时的。
+          -->
+          <Alert
+            v-if="realtimeDisconnected"
+            class="mb-2"
+            :description="
+              $t('page.iot.realtime.disconnectedHint', [realtimeError || '-'])
+            "
+            :message="$t('page.iot.realtime.disconnected')"
+            show-icon
+            type="warning"
+          />
           <Alert
             v-if="listError"
             class="mb-2"

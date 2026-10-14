@@ -19,6 +19,10 @@ import {
 /** 设备台账列表列（可用率/历史曲线入口放在操作列：逐台设备的数据面查询是「可用率与断档」能力的核心观感）。 */
 export function useColumns(): VxeTableGridColumns {
   return [
+    // 勾选列必须**显式声明**：vxe 不会因为 `checkboxConfig` 自动生成勾选列
+    // （告警页 2026-10-03 用真实挂载 A/B 探针证实：只有 checkboxConfig 时勾选单元格数 = 0）。
+    // 批量启用/停用/删除都依赖它。
+    { type: 'checkbox', width: 46 },
     { field: 'deviceCode', title: $t('page.iot.device.code'), minWidth: 140 },
     { field: 'deviceName', title: $t('page.iot.device.name'), minWidth: 160 },
     {

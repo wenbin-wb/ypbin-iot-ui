@@ -42,6 +42,18 @@ export namespace IotDeviceApi {
     protocol?: string;
   }
 
+  /** 批量启停请求体（`PUT /iot/devices/batch/status`）：ids 全程字符串（Long，铁律 9）。 */
+  export interface DeviceBatchStatusReq {
+    ids: string[];
+    /** 1 启用 / 0 停用（后端 `EntityStatus` 码值）。 */
+    status: number;
+  }
+
+  /** 批量删除请求体（`POST /iot/devices/batch/delete`）：ids 全程字符串（Long，铁律 9）。 */
+  export interface DeviceBatchDeleteReq {
+    ids: string[];
+  }
+
   export interface DeviceSaveReq {
     deviceCode: string;
     deviceName: string;
@@ -172,4 +184,32 @@ export async function updateDeviceStatus(id: string, status: number) {
 
 export async function deleteDevice(id: string) {
   return requestClient.delete(`/iot/devices/${id}`);
+}
+
+/**
+ * 批量启用/停用设备（`PUT /iot/devices/batch/status`，权限 `iot:device:update`）。
+ *
+ * 与单条 `updateDeviceStatus` 同一码值口径（1 启用 / 0 停用），但只发一个请求；
+ * `ids` 为空时**不发请求**（由页面禁用按钮兜底，这里再短路一道防呆）。
+ */
+export async function batchUpdateDeviceStatus(ids: string[], status: number) {
+  if (ids.length === 0) {
+    return;
+  }
+  const data: IotDeviceApi.DeviceBatchStatusReq = { ids, status };
+  return requestClient.put('/iot/devices/batch/status', data);
+}
+
+/**
+ * 批量删除设备（`POST /iot/devices/batch/delete`，权限 `iot:device:delete`）。
+ *
+ * ⚠️ 破坏性操作：删除后设备从台账移除且不可恢复（后端逻辑删除）；
+ * 页面必须由 Popconfirm 明确后果，`ids` 为空时短路不发请求。
+ */
+export async function batchDeleteDevices(ids: string[]) {
+  if (ids.length === 0) {
+    return;
+  }
+  const data: IotDeviceApi.DeviceBatchDeleteReq = { ids };
+  return requestClient.post('/iot/devices/batch/delete', data);
 }

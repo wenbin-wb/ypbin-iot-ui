@@ -2,7 +2,7 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { IotDeviceApi } from '#/api/iot';
 
-import { onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { Page, useVbenDrawer } from '@vben/common-ui';
@@ -17,6 +17,9 @@ import {
   getDevicePage,
   updateDeviceStatus,
 } from '#/api/iot';
+// 批量端点从全路径导入（skill 的值导入约定）：既不与聚合器 mock 的既有测试互相牵制，
+// 也避免「聚合器多导出一个函数」就把老测试的固定 mock 打破。
+import { batchDeleteDevices, batchUpdateDeviceStatus } from '#/api/iot/device';
 import { $t } from '#/locales';
 import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
@@ -98,6 +101,17 @@ const alertCounts = ref<Record<string, number | string>>({});
 
 const alertCountError = ref('');
 
+/** 勾选设备的 id 列表（批量启停/删除的目标；由 vxe `checkbox-change` 同步）。 */
+const selectedIds = ref<string[]>([]);
+
+/** 批量请求在途：防重复提交（按钮同时进入禁用态）。 */
+const batchPending = ref(false);
+
+/** 批量按钮禁用条件：未勾选任何行，或已有批量请求在途。 */
+const batchActionDisabled = computed(
+  () => selectedIds.value.length === 0 || batchPending.value,
+);
+
 /**
  * `?productId=` 带来的**初始筛选值**（产品详情「添加设备」与按产品浏览共用这个参数）。
  *
@@ -122,9 +136,14 @@ const [Grid, gridApi] = useVbenVxeGrid({
     height: 'auto',
     keepSource: true,
     pagerConfig: { enabled: true },
+    // 勾选行高亮；勾选列在 data.ts 的 columns 里显式声明
+    checkboxConfig: { highlight: true },
     proxyConfig: {
       ajax: {
         query: async ({ page }, formValues: IotDeviceApi.DeviceQuery = {}) => {
+          // 翻页/筛选/刷新会整表重载：旧页勾选的 id 不能继续留在批量目标里
+          // （否则界面上看不到勾选、按钮却可用，可能对上一页设备误操作）。
+          selectedIds.value = [];
           try {
             // 搜索条件原样透传（字段与后端同名，不做改名校验/映射）
             const result = await getDevicePage({
@@ -237,6 +256,84 @@ function onDelete(row: IotDeviceApi.DeviceResp) {
     })
     // 失败提示由全局请求拦截器统一处理，这里仅兜底避免未处理拒绝
     .catch(() => {});
+}
+
+/** vxe 勾选变化 → 同步批量操作的目标 id（字符串，铁律 9）。 */
+function onCheckboxChange({ records }: { records: IotDeviceApi.DeviceResp[] }) {
+  selectedIds.value = records.map((item) => item.id);
+}
+
+/**
+ * 清空勾选：既清 ref，也清 vxe 的勾选视觉态。
+ *
+ * 只把 `selectedIds` 置空是不够的——表格行首的复选框仍会勾着（用户会以为还会对这些行操作）。
+ * `clearCheckboxRow()` 在未挂载/测试桩上可能不存在，用可选链兜底。
+ */
+function clearSelection() {
+  selectedIds.value = [];
+  gridApi.grid?.clearCheckboxRow();
+}
+
+/**
+ * 批量启用/停用（`iot:device:update`）。
+ *
+ * - 停用是破坏性动作（接入侧解绑、撤销点位订阅）⇒ 调用方（模板）用 Popconfirm 讲清后果；
+ * - 成功：message + 清空勾选 + 刷新列表（不能只改本地行状态，要以后端真实结果为准）；
+ * - 失败：原样展示后端 message（不静默、不假装成功），且**不清空勾选**，用户可直接重试。
+ */
+async function onBatchStatus(status: number) {
+  const ids = [...selectedIds.value];
+  if (ids.length === 0 || batchPending.value) {
+    return;
+  }
+  batchPending.value = true;
+  try {
+    await batchUpdateDeviceStatus(ids, status);
+    message.success(
+      $t(
+        status === DEVICE_ENABLED
+          ? 'page.iot.device.batchEnableDone'
+          : 'page.iot.device.batchDisableDone',
+        [String(ids.length)],
+      ),
+    );
+    clearSelection();
+    gridApi.query();
+  } catch (error) {
+    message.error(
+      extractErrorMessage(error, $t('page.iot.device.batchStatusFailed')),
+    );
+  } finally {
+    batchPending.value = false;
+  }
+}
+
+/**
+ * 批量删除（`iot:device:delete`）。
+ *
+ * 删除不可恢复 ⇒ 模板用 Popconfirm + danger；成功 message + 清空勾选 + 刷新，
+ * 失败原样展示后端 message 且保留勾选（不静默、不把失败当成功）。
+ */
+async function onBatchDelete() {
+  const ids = [...selectedIds.value];
+  if (ids.length === 0 || batchPending.value) {
+    return;
+  }
+  batchPending.value = true;
+  try {
+    await batchDeleteDevices(ids);
+    message.success(
+      $t('page.iot.device.batchDeleteDone', [String(ids.length)]),
+    );
+    clearSelection();
+    gridApi.query();
+  } catch (error) {
+    message.error(
+      extractErrorMessage(error, $t('page.iot.device.batchDeleteFailed')),
+    );
+  } finally {
+    batchPending.value = false;
+  }
 }
 
 /** 打开接入向导抽屉（空态引导与工具栏按钮共用同一个入口）。 */
@@ -376,7 +473,7 @@ function openImport() {
       :error="listError"
       :title="$t('page.iot.device.listLoadFailed')"
     />
-    <Grid>
+    <Grid @checkbox-change="onCheckboxChange">
       <template #toolbar-tools>
         <!-- 接入向导入口：不带权限码（所有角色可见，先知道下一步做什么）； -->
         <!-- 向导里的写动作各自沿用 iot:product:create / iot:product:publish / iot:device:create。 -->
@@ -391,6 +488,58 @@ function openImport() {
         >
           {{ $t('page.iot.ledger.pageTitle') }}
         </Button>
+        <!--
+          批量运维：按钮按权限码显示（iot:device:update / iot:device:delete），
+          未勾选或批量请求在途时禁用。启用无破坏性后果直接执行；停用/删除必须 Popconfirm 讲清后果。
+        -->
+        <Button
+          v-access:code="['iot:device:update']"
+          class="mr-2"
+          data-testid="batch-enable"
+          :disabled="batchActionDisabled"
+          @click="onBatchStatus(DEVICE_ENABLED)"
+        >
+          {{ $t('page.iot.device.batchEnable') }}
+        </Button>
+        <Popconfirm
+          :cancel-text="$t('common.cancel')"
+          :ok-text="$t('page.iot.device.disabled')"
+          :title="
+            $t('page.iot.device.batchDisableConfirm', [
+              String(selectedIds.length),
+            ])
+          "
+          @confirm="onBatchStatus(DEVICE_DISABLED)"
+        >
+          <Button
+            v-access:code="['iot:device:update']"
+            class="mr-2"
+            data-testid="batch-disable"
+            :disabled="batchActionDisabled"
+          >
+            {{ $t('page.iot.device.batchDisable') }}
+          </Button>
+        </Popconfirm>
+        <Popconfirm
+          :cancel-text="$t('common.cancel')"
+          :ok-text="$t('common.delete')"
+          :title="
+            $t('page.iot.device.batchDeleteConfirm', [
+              String(selectedIds.length),
+            ])
+          "
+          @confirm="onBatchDelete"
+        >
+          <Button
+            v-access:code="['iot:device:delete']"
+            class="mr-2"
+            danger
+            data-testid="batch-delete"
+            :disabled="batchActionDisabled"
+          >
+            {{ $t('page.iot.device.batchDelete') }}
+          </Button>
+        </Popconfirm>
         <!-- 批量导入（CSV）：一次能建上万台设备 ⇒ 独立权限码 iot:device:import -->
         <Button
           v-access:code="['iot:device:import']"

@@ -18,7 +18,8 @@ const isUpdate = ref(false);
 const rowId = ref('');
 
 const [Form, formApi] = useVbenForm({
-  schema: useFormSchema(),
+  // rowId 传给 schema：父分组下拉按当前编辑行排除自身及后代
+  schema: useFormSchema(rowId),
   showDefaultActions: false,
 });
 

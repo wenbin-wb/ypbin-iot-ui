@@ -3,10 +3,12 @@ import { requestClient } from '#/api/request';
 /**
  * IoT 运行总览 API（首页分析页 / 工作台共用）。
  *
- * ⚠️ 后端目前**没有** `/iot/dashboard/overview` 统计端点；页面数据源走
- * `#/views/dashboard/shared/use-iot-overview.ts`：先试本接口，失败（含 404）
- * 自动回落演示数据并在页面标注「演示数据」。后端补齐端点后无需改前端即切真实数据，
- * 字段口径以下列类型为准。
+ * 契约：后端 `GET /iot/dashboard/overview` 一次返回全部统计（网关 `/iot/**` StripPrefix=1）。
+ * 页面数据源走 `#/views/dashboard/shared/use-iot-overview.ts`：先试本接口，失败/未就绪
+ * 自动回落演示数据并在页面标注「演示数据」；本文件字段为前后端共同契约。
+ *
+ * 趋势增强字段 `alertTrend` / `deviceGrowthTrend` / `alertRuleTop` 由后端并行补齐，
+ * 消费方（analytics 页）对数组字段按「缺失 = 空数组」容错，旧响应也不会崩图表。
  */
 export namespace IotDashboardApi {
   /** 通用「名称-数值」分布项（协议分布、告警级别分布、产品 TOP 等） */
@@ -29,6 +31,23 @@ export namespace IotDashboardApi {
     date: string;
     online: number;
     offline: number;
+  }
+
+  /** 按日告警趋势点：当天各级别新建告警数（后端已按天补 0） */
+  export interface AlertTrendPoint {
+    /** yyyy-MM-dd */
+    date: string;
+    critical: number;
+    info: number;
+    warning: number;
+  }
+
+  /** 按日设备增长趋势点 */
+  export interface DeviceGrowthPoint {
+    /** yyyy-MM-dd */
+    date: string;
+    /** 当日新增设备数 */
+    added: number;
   }
 
   /** 最近告警条目（severity/state 取告警中心同一**小写**码值，前端按 page.iot.alert.* 翻译） */
@@ -76,12 +95,18 @@ export namespace IotDashboardApi {
     messageTrend: MessageTrendPoint[];
     /** 近 14 日在线趋势 */
     onlineTrend: OnlineTrendPoint[];
+    /** 近 30 日告警趋势（按天、按严重级别，后端已补 0） */
+    alertTrend: AlertTrendPoint[];
+    /** 近 14 日设备增长（每日新增设备数） */
+    deviceGrowthTrend: DeviceGrowthPoint[];
     /** 接入协议分布（按设备数）。`name` 是**协议码**（modbus/tcp/mqtt/opcua），展示层须经 protocolLabel 翻译 */
     protocolDistribution: NameValue[];
     /** 待处理告警级别分布。`name` 是**级别码**（critical/warning/info，小写，与告警中心同口径） */
     severityDistribution: NameValue[];
     /** 设备数 TOP 产品。`name` 是产品名（已是展示名，不做码值翻译） */
     productTop: NameValue[];
+    /** 近 30 日告警数 TOP 规则。`name` 是规则名（后端已解析，非 ruleId） */
+    alertRuleTop: NameValue[];
     /** 最近告警列表 */
     recentAlerts: RecentAlert[];
   }

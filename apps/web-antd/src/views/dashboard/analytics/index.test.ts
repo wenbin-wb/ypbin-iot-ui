@@ -47,11 +47,37 @@ vi.mock('@vben/common-ui', async () => {
       setup:
         (_props, { slots }) =>
         () =>
-          h('div', [slots.default?.(), slots.trends?.(), slots.visits?.()]),
+          h('div', [slots.default?.()]),
     });
+  // 卡片要渲染 title（新增「告警最多的规则」卡片标题要能被断言到）
+  const CardStub = defineComponent({
+    name: 'AnalysisChartCard',
+    props: { title: { default: '', type: String } },
+    setup(props, { slots }) {
+      return () => h('div', [h('h3', props.title), slots.default?.()]);
+    },
+  });
+  // 页签要渲染 tabs 文案，并展开 4 个具名 slot（新增告警趋势/设备增长）
+  const TabsStub = defineComponent({
+    name: 'AnalysisChartsTabs',
+    props: { tabs: { default: () => [], type: Array } },
+    setup(props, { slots }) {
+      return () =>
+        h('div', [
+          ...((props.tabs as { label: string }[]) ?? []).map((tab) =>
+            h('span', { class: 'tab-label' }, tab.label),
+          ),
+          slots.default?.(),
+          slots.trends?.(),
+          slots.visits?.(),
+          slots.alertTrends?.(),
+          slots.growth?.(),
+        ]);
+    },
+  });
   return {
-    AnalysisChartCard: SlotStub('AnalysisChartCard'),
-    AnalysisChartsTabs: SlotStub('AnalysisChartsTabs'),
+    AnalysisChartCard: CardStub,
+    AnalysisChartsTabs: TabsStub,
     useVbenDrawer: () => {
       const api = { close: vi.fn(), open: vi.fn(), setState: vi.fn() };
       drawerApis.push(api);
@@ -65,8 +91,11 @@ vi.mock('../shared/use-iot-overview', async () => {
   const overview = ref({
     alertPending: 3,
     alertResolvedToday: 1,
+    alertRuleTop: [{ name: '电流超上限', value: 9 }],
     alertToday: 5,
+    alertTrend: [{ critical: 1, date: '2026-10-14', info: 2, warning: 1 }],
     deviceDisabled: 1,
+    deviceGrowthTrend: [{ added: 4, date: '2026-10-14' }],
     deviceOffline: 3,
     deviceOnline: 7,
     deviceTotal: 42,
@@ -124,6 +153,11 @@ describe('分析页', () => {
     expect(text).toContain('演示数据');
     expect(text).toContain('42');
     expect(text).not.toContain('overview ?');
+    // 新增：两个趋势页签 + TOP 规则卡片（标题与规则名都要真的渲染出来）
+    expect(text).toContain('告警趋势');
+    expect(text).toContain('设备增长');
+    expect(text).toContain('告警最多的规则');
+    expect(text).toContain('电流超上限');
 
     const helpButton = [...container.querySelectorAll('button')].find(
       (element) => element.textContent?.includes('术语看不懂？打开帮助'),

@@ -10,13 +10,17 @@ import {
   useVbenDrawer,
 } from '@vben/common-ui';
 
-import { Tag, Tooltip } from 'ant-design-vue';
+import { Alert, Tag, Tooltip } from 'ant-design-vue';
 
 import { $t } from '#/locales';
 
 import HelpDrawer from '../../iot/shared/help-drawer.vue';
 import NoviceGuideCard from '../shared/novice-guide-card.vue';
+import { useDashboardRealtime } from '../shared/use-dashboard-realtime';
 import { useIotOverview } from '../shared/use-iot-overview';
+import AnalyticsAlertTrend from './analytics-alert-trend.vue';
+import AnalyticsDeviceGrowth from './analytics-device-growth.vue';
+import AnalyticsRuleTop from './analytics-rule-top.vue';
 import AnalyticsTrends from './analytics-trends.vue';
 import AnalyticsVisitsData from './analytics-visits-data.vue';
 import AnalyticsVisitsSales from './analytics-visits-sales.vue';
@@ -28,7 +32,12 @@ const BRAND_GRAD =
   'linear-gradient(135deg, hsl(var(--primary)), hsl(245 82% 67%))';
 
 const router = useRouter();
-const { loading, overview, usingDemo } = useIotOverview();
+const { load, loading, overview, usingDemo } = useIotOverview();
+
+// SSE 实时刷新：latest/device-status/alert 去抖后重拉总览；断线状态用于可见提示
+const { error: realtimeError, state: realtimeState } = useDashboardRealtime(
+  () => void load(),
+);
 
 // 术语词典抽屉：与工作台/接入向导共用同一份内容（view 层只负责打开）
 const [HelpDrawerContainer, helpDrawerApi] = useVbenDrawer({
@@ -37,6 +46,21 @@ const [HelpDrawerContainer, helpDrawerApi] = useVbenDrawer({
 
 /** 演示数据兜底时页面数据可能为 null，模板统一走空对象口径 */
 const data = computed(() => overview.value);
+
+/**
+ * 数组字段容错：趋势增强字段（alertTrend/deviceGrowthTrend/alertRuleTop）与后端并行上线，
+ * 新旧后端并存时旧响应可能没有这些数组。统一按「缺失 = 空数组」进图表，
+ * 让空态兜住，而不是在 `.length` 上炸掉整页。
+ */
+function asArray<T>(value?: null | T[]): T[] {
+  return Array.isArray(value) ? value : [];
+}
+
+const alertTrendPoints = computed(() => asArray(data.value?.alertTrend));
+const deviceGrowthPoints = computed(() =>
+  asArray(data.value?.deviceGrowthTrend),
+);
+const alertRuleTopItems = computed(() => asArray(data.value?.alertRuleTop));
 
 const dayBadges = computed(() => {
   const d = data.value;
@@ -111,6 +135,8 @@ const overviewCards = computed(() => {
 const chartTabs = computed<TabOption[]>(() => [
   { label: $t('page.dashboard.messageTrend'), value: 'trends' },
   { label: $t('page.dashboard.onlineTrend'), value: 'visits' },
+  { label: $t('page.dashboard.alertTrend'), value: 'alertTrends' },
+  { label: $t('page.dashboard.deviceGrowth'), value: 'growth' },
 ]);
 
 /** 最近告警表头与行数据（severity/state 与告警中心同口径翻译） */
@@ -191,6 +217,20 @@ function openHelp() {
                 {{ $t('page.dashboard.demoBadge') }}
               </Tag>
             </Tooltip>
+            <Tag
+              v-else-if="realtimeState === 'live'"
+              color="success"
+              class="!mr-0"
+            >
+              {{ $t('page.iot.realtime.live') }}
+            </Tag>
+            <Tag
+              v-else-if="realtimeState === 'connecting'"
+              color="processing"
+              class="!mr-0"
+            >
+              {{ $t('page.iot.realtime.connecting') }}
+            </Tag>
           </h2>
           <p class="mt-1 text-sm text-muted-foreground">
             {{ $t('page.dashboard.analyticsSubtitle') }}
@@ -217,6 +257,15 @@ function openHelp() {
         </div>
       </div>
     </div>
+
+    <Alert
+      v-if="realtimeState === 'reconnecting'"
+      class="mt-3"
+      :description="$t('page.iot.realtime.disconnectedHint', [realtimeError])"
+      :message="$t('page.iot.realtime.disconnected')"
+      show-icon
+      type="warning"
+    />
 
     <!-- 新手快速上手：面向第一次接入的物业/值班人员，术语问题统一走帮助抽屉 -->
     <NoviceGuideCard class="mt-5" @open-help="openHelp" />
@@ -277,6 +326,12 @@ function openHelp() {
       <template #visits>
         <AnalyticsVisits :points="data.onlineTrend" />
       </template>
+      <template #alertTrends>
+        <AnalyticsAlertTrend :points="alertTrendPoints" />
+      </template>
+      <template #growth>
+        <AnalyticsDeviceGrowth :points="deviceGrowthPoints" />
+      </template>
     </AnalysisChartsTabs>
     <div
       v-else-if="!loading"
@@ -306,79 +361,88 @@ function openHelp() {
       </AnalysisChartCard>
     </div>
 
-    <!-- 最近告警（与告警中心同口径；查看全部跳转 /iot/alerts） -->
-    <div v-if="data" class="mt-5 rounded-xl border border-border/80 bg-card">
-      <div
-        class="flex items-center justify-between border-b border-border/70 px-5 py-4"
-      >
-        <h3 class="text-sm font-semibold">
-          {{ $t('page.dashboard.recentAlerts') }}
-        </h3>
-        <a class="text-xs text-primary" @click="goAlerts">
-          {{ $t('page.dashboard.viewAllAlerts') }} →
-        </a>
-      </div>
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead>
-            <tr
-              class="border-b border-border/70 text-left text-xs text-muted-foreground"
-            >
-              <th class="px-5 py-2.5 font-medium">
-                {{ $t('page.dashboard.colDevice') }}
-              </th>
-              <th class="px-5 py-2.5 font-medium">
-                {{ $t('page.dashboard.colRule') }}
-              </th>
-              <th class="px-5 py-2.5 font-medium">
-                {{ $t('page.dashboard.colSeverity') }}
-              </th>
-              <th class="px-5 py-2.5 font-medium">
-                {{ $t('page.dashboard.colState') }}
-              </th>
-              <th class="px-5 py-2.5 font-medium">
-                {{ $t('page.dashboard.colTime') }}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="alert in recentAlerts"
-              :key="alert.id"
-              class="border-b border-border/50 last:border-b-0 hover:bg-accent/40"
-            >
-              <td class="px-5 py-2.5 font-medium">
-                {{ alert.deviceName }}
-              </td>
-              <td class="px-5 py-2.5 text-muted-foreground">
-                {{ alert.ruleName }}
-              </td>
-              <td class="px-5 py-2.5">
-                <Tag
-                  :color="SEVERITY_TAG_COLORS[alert.severity] ?? 'default'"
-                  class="!mr-0"
-                >
-                  {{ alert.severityLabel }}
-                </Tag>
-              </td>
-              <td class="px-5 py-2.5 text-muted-foreground">
-                {{ alert.stateLabel }}
-              </td>
-              <td class="px-5 py-2.5 tabular-nums text-muted-foreground">
-                {{ alert.triggeredAt }}
-              </td>
-            </tr>
-            <tr v-if="recentAlerts.length === 0">
-              <td
-                colspan="5"
-                class="px-5 py-8 text-center text-muted-foreground"
+    <!-- 最近告警（与告警中心同口径；查看全部跳转 /iot/alerts）+ 告警最多的规则 -->
+    <div v-if="data" class="mt-5 flex w-full flex-col gap-4 xl:flex-row">
+      <div class="min-w-0 flex-1 rounded-xl border border-border/80 bg-card">
+        <div
+          class="flex items-center justify-between border-b border-border/70 px-5 py-4"
+        >
+          <h3 class="text-sm font-semibold">
+            {{ $t('page.dashboard.recentAlerts') }}
+          </h3>
+          <a class="text-xs text-primary" @click="goAlerts">
+            {{ $t('page.dashboard.viewAllAlerts') }} →
+          </a>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr
+                class="border-b border-border/70 text-left text-xs text-muted-foreground"
               >
-                {{ $t('page.dashboard.noData') }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+                <th class="px-5 py-2.5 font-medium">
+                  {{ $t('page.dashboard.colDevice') }}
+                </th>
+                <th class="px-5 py-2.5 font-medium">
+                  {{ $t('page.dashboard.colRule') }}
+                </th>
+                <th class="px-5 py-2.5 font-medium">
+                  {{ $t('page.dashboard.colSeverity') }}
+                </th>
+                <th class="px-5 py-2.5 font-medium">
+                  {{ $t('page.dashboard.colState') }}
+                </th>
+                <th class="px-5 py-2.5 font-medium">
+                  {{ $t('page.dashboard.colTime') }}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="alert in recentAlerts"
+                :key="alert.id"
+                class="border-b border-border/50 last:border-b-0 hover:bg-accent/40"
+              >
+                <td class="px-5 py-2.5 font-medium">
+                  {{ alert.deviceName }}
+                </td>
+                <td class="px-5 py-2.5 text-muted-foreground">
+                  {{ alert.ruleName }}
+                </td>
+                <td class="px-5 py-2.5">
+                  <Tag
+                    :color="SEVERITY_TAG_COLORS[alert.severity] ?? 'default'"
+                    class="!mr-0"
+                  >
+                    {{ alert.severityLabel }}
+                  </Tag>
+                </td>
+                <td class="px-5 py-2.5 text-muted-foreground">
+                  {{ alert.stateLabel }}
+                </td>
+                <td class="px-5 py-2.5 tabular-nums text-muted-foreground">
+                  {{ alert.triggeredAt }}
+                </td>
+              </tr>
+              <tr v-if="recentAlerts.length === 0">
+                <td
+                  colspan="5"
+                  class="px-5 py-8 text-center text-muted-foreground"
+                >
+                  {{ $t('page.dashboard.noData') }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
+
+      <AnalysisChartCard
+        class="xl:w-[340px] xl:shrink-0"
+        :title="$t('page.dashboard.ruleTopTitle')"
+      >
+        <AnalyticsRuleTop :items="alertRuleTopItems" />
+      </AnalysisChartCard>
     </div>
 
     <HelpDrawerContainer />

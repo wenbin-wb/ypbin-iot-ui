@@ -25,6 +25,7 @@ import { $t } from '#/locales';
 
 import HelpDrawer from '../../iot/shared/help-drawer.vue';
 import NoviceGuideCard from '../shared/novice-guide-card.vue';
+import { useDashboardRealtime } from '../shared/use-dashboard-realtime';
 import { useIotOverview } from '../shared/use-iot-overview';
 import { useWorkbenchTrends } from './use-workbench-trends';
 
@@ -32,7 +33,12 @@ const userStore = useUserStore();
 const router = useRouter();
 
 // 运行总览（真实接口缺位时演示数据兜底，页面上以徽标标注）
-const { loading, overview, usingDemo } = useIotOverview();
+const { load, loading, overview, usingDemo } = useIotOverview();
+
+// SSE 实时刷新：latest/device-status/alert 去抖后重拉总览；断线状态用于可见提示
+const { error: realtimeError, state: realtimeState } = useDashboardRealtime(
+  () => void load(),
+);
 
 // 术语词典抽屉：与工作台/接入向导共用同一份内容（view 层只负责打开）
 const [HelpDrawerContainer, helpDrawerApi] = useVbenDrawer({
@@ -345,6 +351,15 @@ function onProjectClick(item: WorkbenchProjectItem) {
 
 <template>
   <div class="p-5">
+    <Alert
+      v-if="realtimeState === 'reconnecting'"
+      class="mb-3"
+      :description="$t('page.iot.realtime.disconnectedHint', [realtimeError])"
+      :message="$t('page.iot.realtime.disconnected')"
+      show-icon
+      type="warning"
+    />
+
     <!-- 页头：问候 + 右侧关键计数 -->
     <WorkbenchHeader :avatar="avatar">
       <template #title>
@@ -355,6 +370,20 @@ function onProjectClick(item: WorkbenchProjectItem) {
               {{ $t('page.dashboard.demoBadge') }}
             </Tag>
           </Tooltip>
+          <Tag
+            v-else-if="realtimeState === 'live'"
+            color="success"
+            class="!mr-0"
+          >
+            {{ $t('page.iot.realtime.live') }}
+          </Tag>
+          <Tag
+            v-else-if="realtimeState === 'connecting'"
+            color="processing"
+            class="!mr-0"
+          >
+            {{ $t('page.iot.realtime.connecting') }}
+          </Tag>
         </span>
       </template>
       <template #description>

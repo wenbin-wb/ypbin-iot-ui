@@ -433,7 +433,17 @@
       "searchKeywordPlaceholder": "设备名称 / 编码",
       "protocolFilterPlaceholder": "全部协议",
       "onlineStatusFilterPlaceholder": "全部在线状态",
-      "productFilterPlaceholder": "全部产品"
+      "productFilterPlaceholder": "全部产品",
+      "batchEnable": "批量启用",
+      "batchDisable": "批量停用",
+      "batchDelete": "批量删除",
+      "batchEnableDone": "已启用 {0} 台设备",
+      "batchDisableDone": "已停用 {0} 台设备",
+      "batchDeleteDone": "已删除 {0} 台设备",
+      "batchStatusFailed": "批量启停失败",
+      "batchDeleteFailed": "批量删除失败",
+      "batchDisableConfirm": "将停用选中的 {0} 台设备：停用后接入侧会解绑设备并停止采集（点位订阅一并撤销），确定吗？",
+      "batchDeleteConfirm": "将删除选中的 {0} 台设备：删除后设备从台账移除，且不可恢复，确定吗？"
     },
     "event": {
       "title": "运行期事件",
@@ -547,7 +557,11 @@
       "memberEmptyHint": "设备在「设备台账」创建并绑定产品后再加入分组；加入后可在此处查看与移除。",
       "memberGoDevices": "去设备台账",
       "emptyHint": "该租户还没有设备分组：分组用于把设备按用途/位置归拢，便于批量查看与维护。",
-      "listLoadFailed": "设备分组列表加载失败"
+      "listLoadFailed": "设备分组列表加载失败",
+      "parentName": "上级分组",
+      "parentPlaceholder": "请选择上级分组",
+      "parentHelp": "留空 = 根分组（顶级分组）",
+      "parentRoot": "根分组"
     },
     "availability": {
       "title": "可用率 / 断档{0}",
@@ -1200,6 +1214,12 @@
       "termOpenApiKeyWhen": "对接第三方系统或自建大屏时签发；Secret 明文只显示一次，要立即保存。",
       "termPlatformAlertWhat": "平台监控自身健康的告警，比如采集调度停摆、通知发送失败，不是某台设备的故障。",
       "termPlatformAlertWhen": "平台自告警出现时先看这里，判断是平台问题还是设备问题。"
+    },
+    "realtime": {
+      "disconnected": "实时连接中断",
+      "disconnectedHint": "页面数据可能不是最新，正在自动重连（也可手动刷新）。最近错误：{0}",
+      "live": "实时连接",
+      "connecting": "实时连接中"
     }
   },
   "ai": {
@@ -1733,7 +1753,11 @@
     "todoNoMessage": "检查今日数据上报",
     "todoNoMessageContent": "今日暂无消息上报，检查设备在线状态与点位映射配置。",
     "todoAllGood": "运行正常",
-    "todoAllGoodContent": "当前无待处理告警与离线设备，保持关注即可。"
+    "todoAllGoodContent": "当前无待处理告警与离线设备，保持关注即可。",
+    "alertTrend": "告警趋势",
+    "deviceGrowth": "设备增长",
+    "ruleTopTitle": "告警最多的规则（近 30 天）",
+    "ruleTopEmpty": "近 30 天没有规则告警"
   },
   "admin": {
     "title": "基础管理"

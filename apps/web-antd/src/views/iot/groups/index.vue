@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import type { GroupRow } from './data';
+
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { IotGroupApi } from '#/api/iot';
 
@@ -11,6 +13,7 @@ import { Button, message } from 'ant-design-vue';
 
 import { useVbenVxeGrid, VbenTableAction } from '#/adapter/vxe-table';
 import { deleteGroup, getGroupList } from '#/api/iot';
+import { isRootGroup } from '#/api/iot/group';
 import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
 
@@ -33,6 +36,21 @@ const [MembersDrawer, MembersDrawerApi] = useVbenDrawer({
  */
 const listError = ref('');
 
+/**
+ * 给列表行补展示用的 `parentIdName`：parentId → groupName 的映射来自**同一次**列表结果
+ * （一次批量，绝不逐行查）；根分组、父分组已不存在时保持空，由列 formatter 决定显示什么。
+ */
+function withParentIdName(rows: IotGroupApi.GroupResp[]): GroupRow[] {
+  const nameById = new Map(rows.map((row) => [row.id, row.groupName]));
+  return rows.map((row) => {
+    const parentId = isRootGroup(row.parentId)
+      ? undefined
+      : String(row.parentId);
+    const parentIdName = parentId ? nameById.get(parentId) : undefined;
+    return parentIdName ? { ...row, parentIdName } : { ...row };
+  });
+}
+
 const [Grid, gridApi] = useVbenVxeGrid({
   gridOptions: {
     columns: useColumns(),
@@ -45,7 +63,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
           try {
             const rows = await getGroupList();
             listError.value = '';
-            return rows;
+            return withParentIdName(rows);
           } catch (error) {
             // 记下失败原因（原样展示后端 message），异常继续抛出 ⇒ 不改原有失败语义
             listError.value = extractErrorMessage(
@@ -59,18 +77,18 @@ const [Grid, gridApi] = useVbenVxeGrid({
     },
     rowConfig: { keyField: 'id' },
     toolbarConfig: { custom: true, export: false, refresh: true, zoom: true },
-  } as VxeTableGridOptions<IotGroupApi.GroupResp>,
+  } as VxeTableGridOptions<GroupRow>,
 });
 
-function onEdit(row: IotGroupApi.GroupResp) {
+function onEdit(row: GroupRow) {
   FormDrawerApi.setData(row).open();
 }
 
-function onMembers(row: IotGroupApi.GroupResp) {
+function onMembers(row: GroupRow) {
   MembersDrawerApi.setData(row).open();
 }
 
-function onDelete(row: IotGroupApi.GroupResp) {
+function onDelete(row: GroupRow) {
   deleteGroup(row.id)
     .then(() => {
       message.success($t('common.success'));
