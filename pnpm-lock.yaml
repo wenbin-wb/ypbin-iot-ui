@@ -508,8 +508,8 @@ catalogs:
       specifier: ^4.16.19
       version: 4.16.19
     vxe-table:
-      specifier: ^4.20.6
-      version: 4.20.6
+      specifier: ^4.22.4
+      version: 4.22.4
     watermark-js-plus:
       specifier: ^1.6.6
       version: 1.6.6
@@ -1907,7 +1907,7 @@ importers:
         version: 4.16.19(vue@3.5.43(typescript@6.0.3))
       vxe-table:
         specifier: 'catalog:'
-        version: 4.20.6
+        version: 4.22.4
 
   packages/effects/request:
     dependencies:
@@ -11363,8 +11363,8 @@ packages:
   vxe-pc-ui@4.16.19:
     resolution: {integrity: sha512-P4q9cW2A4HwQvt5qNHlbpFc5eG5laQcUo1lglg7op8IwZrMeZtj/23bMuIoUe4R9dWCgnivWv2hBarBrfYhIuQ==}
 
-  vxe-table@4.20.6:
-    resolution: {integrity: sha512-gP1dhE80VDjpTg5mKLny+zHR1G+t5TcvM1qUgFghOHmKLbDcSq7tRrTP5elgXzu2qveq/YF2poGcenhwkgAekg==}
+  vxe-table@4.22.4:
+    resolution: {integrity: sha512-WkJF8nZMWMdRnSLvR3G4nKDrk3LE2srrfMCcLd8TOO59vimEOy+r+wFkA6PKe/O34/GloJ5vDyFEOs1DQGx7MQ==}
 
   w3c-keyname@2.2.8:
     resolution: {integrity: sha512-dpojBhNsCNN7T82Tm7k26A6G9ML3NkhDsnw9n/eoxSRlVBB4CEtIQ/KTCLI2Fwf3ataSXRhYFkQi3SlnFwPvPQ==}
@@ -21587,7 +21587,7 @@ snapshots:
     transitivePeerDependencies:
       - vue
 
-  vxe-table@4.20.6: {}
+  vxe-table@4.22.4: {}
 
   w3c-keyname@2.2.8: {}
 

@@ -214,7 +214,7 @@ catalog:
   vue-tippy: ^6.7.1
   vue-tsc: ^3.3.8
   vxe-pc-ui: ^4.16.19
-  vxe-table: ^4.20.6
+  vxe-table: ^4.22.4
   watermark-js-plus: ^1.6.6
   yaml-eslint-parser: ^2.1.0
   zod: ^4.4.3
