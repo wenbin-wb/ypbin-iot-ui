@@ -1721,7 +1721,19 @@
       "wizard": "需要手把手？打开接入向导",
       "conceptAlert": "告警规则：给点位设阈值或掉线条件，满足后系统自动通知，不用一直盯大屏。",
       "conceptMaintenance": "维护窗口：提前登记计划停电/检修时段，这段停机不算断档，不影响可用率。"
-    }
+    },
+    "todoAlertPending": "处理未恢复告警",
+    "todoAlertPendingContent": "当前有 {0} 条未恢复告警，去告警中心确认或静默，避免漏掉真实故障。",
+    "todoDeviceOffline": "排查离线设备",
+    "todoDeviceOfflineContent": "当前有 {0} 台设备离线，检查设备供电、网络与接入配置。",
+    "todoNoProduct": "创建第一个产品",
+    "todoNoProductContent": "产品定义物模型（属性/命令/事件），设备必须先绑定已发布产品。",
+    "todoNoDevice": "添加第一台设备",
+    "todoNoDeviceContent": "按接入向导创建产品、发布物模型并添加设备，平台即可开始采集。",
+    "todoNoMessage": "检查今日数据上报",
+    "todoNoMessageContent": "今日暂无消息上报，检查设备在线状态与点位映射配置。",
+    "todoAllGood": "运行正常",
+    "todoAllGoodContent": "当前无待处理告警与离线设备，保持关注即可。"
   },
   "admin": {
     "title": "基础管理"

@@ -1721,7 +1721,19 @@
       "wizard": "Prefer a step-by-step wizard? Open the onboarding guide",
       "conceptAlert": "Alert rules: set a threshold or offline condition on a point and get notified automatically instead of watching the dashboard.",
       "conceptMaintenance": "Maintenance windows: register planned downtime in advance so it is excluded from outages and availability."
-    }
+    },
+    "todoAlertPending": "Handle unresolved alerts",
+    "todoAlertPendingContent": "{0} alert(s) are unresolved. Acknowledge or silence them in the alert center so real incidents are not missed.",
+    "todoDeviceOffline": "Check offline devices",
+    "todoDeviceOfflineContent": "{0} device(s) are offline. Check power, network and access configuration.",
+    "todoNoProduct": "Create your first product",
+    "todoNoProductContent": "A product defines the thing model (properties/commands/events). Devices must bind to a published product.",
+    "todoNoDevice": "Add your first device",
+    "todoNoDeviceContent": "Use the onboarding guide to create a product, publish its thing model and add a device. Ingestion starts right after.",
+    "todoNoMessage": "Check today's data ingestion",
+    "todoNoMessageContent": "No messages have been received today. Check device online status and point mapping configuration.",
+    "todoAllGood": "All good",
+    "todoAllGoodContent": "No unresolved alerts or offline devices. Keep monitoring as usual."
   },
   "admin": {
     "title": "Administration"

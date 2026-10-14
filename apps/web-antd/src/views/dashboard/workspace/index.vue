@@ -211,8 +211,10 @@ const projectItems = computed<WorkbenchProjectItem[]>(() => [
   },
 ]);
 
-// ---- 运营待办（暂无后端接口，演示数据标注）----
-const todoItems = computed<WorkbenchTodoItem[]>(() => [
+// ---- 运营待办 ----
+// 真实总览返回后，按「告警 → 离线 → 无产品 → 无设备 → 无上报」的优先级生成可执行待办；
+// 演示兜底时仍用静态示例并保留「演示数据」标注，避免把演示数字当真实结论。
+const demoTodoItems = computed<WorkbenchTodoItem[]>(() => [
   {
     title: $t('page.dashboard.todoAckAlert'),
     content: $t('page.dashboard.todoAckAlertContent'),
@@ -244,6 +246,76 @@ const todoItems = computed<WorkbenchTodoItem[]>(() => [
     date: $t('page.dashboard.thisWeek'),
   },
 ]);
+
+const realTodoItems = computed<WorkbenchTodoItem[]>(() => {
+  const d = overview.value;
+  if (!d) {
+    return [];
+  }
+  const today = $t('page.dashboard.today');
+  const items: WorkbenchTodoItem[] = [];
+  if (d.alertPending > 0) {
+    items.push({
+      title: $t('page.dashboard.todoAlertPending'),
+      content: $t('page.dashboard.todoAlertPendingContent', [
+        String(d.alertPending),
+      ]),
+      completed: false,
+      date: today,
+    });
+  }
+  if (d.deviceOffline > 0) {
+    items.push({
+      title: $t('page.dashboard.todoDeviceOffline'),
+      content: $t('page.dashboard.todoDeviceOfflineContent', [
+        String(d.deviceOffline),
+      ]),
+      completed: false,
+      date: today,
+    });
+  }
+  if (d.productTotal === 0) {
+    items.push({
+      title: $t('page.dashboard.todoNoProduct'),
+      content: $t('page.dashboard.todoNoProductContent'),
+      completed: false,
+      date: today,
+    });
+  } else if (d.deviceTotal === 0) {
+    items.push({
+      title: $t('page.dashboard.todoNoDevice'),
+      content: $t('page.dashboard.todoNoDeviceContent'),
+      completed: false,
+      date: today,
+    });
+  } else if (d.messageToday === 0) {
+    items.push({
+      title: $t('page.dashboard.todoNoMessage'),
+      content: $t('page.dashboard.todoNoMessageContent'),
+      completed: false,
+      date: today,
+    });
+  }
+  if (items.length === 0) {
+    items.push({
+      title: $t('page.dashboard.todoAllGood'),
+      content: $t('page.dashboard.todoAllGoodContent'),
+      completed: true,
+      date: today,
+    });
+  }
+  return items.slice(0, 4);
+});
+
+const todoItems = computed<WorkbenchTodoItem[]>(() =>
+  usingDemo.value ? demoTodoItems.value : realTodoItems.value,
+);
+
+const todoTitle = computed(() =>
+  usingDemo.value
+    ? `${$t('page.dashboard.todoTitle')}${$t('page.dashboard.demoSuffix')}`
+    : $t('page.dashboard.todoTitle'),
+);
 
 const welcomeTitle = computed(
   () =>
@@ -437,10 +509,7 @@ function onProjectClick(item: WorkbenchProjectItem) {
     <!-- 运营待办（演示数据，标注） -->
     <div class="mt-5 flex flex-col gap-4 xl:flex-row">
       <div class="min-w-0 flex-1">
-        <WorkbenchTodo
-          :items="todoItems"
-          :title="`${$t('page.dashboard.todoTitle')}${$t('page.dashboard.demoSuffix')}`"
-        />
+        <WorkbenchTodo :items="todoItems" :title="todoTitle" />
       </div>
     </div>
 
