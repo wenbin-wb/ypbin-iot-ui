@@ -7,13 +7,14 @@ import { ref } from 'vue';
 import { Page, useVbenDrawer } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
-import { Alert, Button, message } from 'ant-design-vue';
+import { Button, message } from 'ant-design-vue';
 
 import { useVbenVxeGrid, VbenTableAction } from '#/adapter/vxe-table';
 import { deleteGroup, getGroupList } from '#/api/iot';
 import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
 
+import ListErrorAlert from '../shared/list-error-alert.vue';
 import { useColumns } from './data';
 import Form from './modules/form.vue';
 import Members from './modules/members.vue';
@@ -83,18 +84,15 @@ function onDelete(row: IotGroupApi.GroupResp) {
     <FormDrawer @reload="gridApi.query()" />
     <MembersDrawer />
     <!-- 失败态必须挂在表格之外：真实 vxe 只在表体无行时渲染 `#empty` 槽，
-         「已有数据后刷新失败」时槽不渲染 ⇒ 放槽里的失败提示会看不见。 -->
-    <Alert
-      v-if="listError"
-      class="mb-2"
-      :description="listError"
-      :message="$t('page.iot.group.listLoadFailed')"
-      show-icon
-      type="error"
+         「已有数据后刷新失败」时槽不渲染 ⇒ 放槽里的失败提示会看不见。
+         统一走 shared/list-error-alert.vue。 -->
+    <ListErrorAlert
+      :error="listError"
+      :title="$t('page.iot.group.listLoadFailed')"
     />
     <Grid>
       <!-- 空态：本页原先没有 `#empty` 槽 ⇒ 失败时会落到 vxe 默认的「暂无数据」（假空态）。
-           这里只声明**真的没有数据**这一种情况；失败态由上方 Alert 单独承担。 -->
+           这里只声明**真的没有数据**这一种情况；失败态由上方 ListErrorAlert 单独承担。 -->
       <template #empty>
         <span v-if="!listError" class="text-muted-foreground">
           {{ $t('page.iot.group.emptyHint') }}
@@ -133,7 +131,9 @@ function onDelete(row: IotGroupApi.GroupResp) {
               auth: 'iot:group:delete',
               danger: true,
               popConfirm: {
-                title: $t('ui.actionMessage.deleteConfirm', [row.groupName || '']),
+                title: $t('ui.actionMessage.deleteConfirm', [
+                  row.groupName || '',
+                ]),
                 confirm: () => onDelete(row),
               },
             },

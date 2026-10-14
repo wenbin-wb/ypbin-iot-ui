@@ -35,6 +35,12 @@ import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
 
 import {
+  accessModeLabel,
+  addressTypeLabel,
+  dataTypeLabel,
+  pointRefTypeLabel,
+} from '../../shared/display';
+import {
   applyRegisterFormat,
   buildPointPayload,
   emptyPointForm,
@@ -49,6 +55,7 @@ import {
   POINT_SIGNED_OPTIONS,
   POINT_WORD_COUNTS,
   registerDecodeSegments,
+  resolvePointFormCheckMessage,
   validatePointForm,
 } from './point-mapping-state';
 
@@ -145,10 +152,9 @@ const form = reactive<PointForm>(emptyPointForm());
 const saving = ref(false);
 
 const formOk = computed(() => validatePointForm(form).ok);
-const formError = computed(() => {
-  const check = validatePointForm(form);
-  return check.ok ? '' : check.message;
-});
+const formError = computed(() =>
+  resolvePointFormCheckMessage(validatePointForm(form)),
+);
 
 const modalTitle = computed(() =>
   editing.value
@@ -297,7 +303,7 @@ function registerDecodeText(point: {
 const propertyOptions = computed(() =>
   propertyRows.value.map((row) => ({
     value: row.propertyId,
-    label: `${row.identifier} (${row.dataType})`,
+    label: `${row.identifier} (${dataTypeLabel(row.dataType)})`,
   })),
 );
 
@@ -471,8 +477,8 @@ onMounted(load);
           <tr v-for="row in mergedRows" :key="row.propertyId" class="border-t">
             <td class="py-1">{{ row.identifier }}</td>
             <td class="py-1">{{ row.serviceId }}</td>
-            <td class="py-1">{{ row.dataType }}</td>
-            <td class="py-1">{{ row.accessMode }}</td>
+            <td class="py-1">{{ dataTypeLabel(row.dataType) }}</td>
+            <td class="py-1">{{ accessModeLabel(row.accessMode) }}</td>
             <td class="py-1">{{ row.unit || '-' }}</td>
             <td class="py-1">
               <template v-if="row.point">
@@ -482,7 +488,9 @@ onMounted(load);
                 {{ $t('page.iot.point.unmapped') }}
               </Tag>
             </td>
-            <td class="py-1">{{ row.point?.addressType ?? '-' }}</td>
+            <td class="py-1">
+              {{ row.point ? addressTypeLabel(row.point.addressType) : '-' }}
+            </td>
             <td class="py-1">
               {{ row.point ? registerDecodeText(row.point) : '-' }}
             </td>
@@ -568,13 +576,21 @@ onMounted(load);
       <tbody>
         <tr v-for="point in points" :key="point.id" class="border-t">
           <td class="py-1">{{ point.propertyId }}</td>
-          <td class="py-1">{{ point.refType }}</td>
+          <td class="py-1">{{ pointRefTypeLabel(point.refType) }}</td>
           <td class="py-1">{{ point.rawAddress }}</td>
-          <td class="py-1">{{ point.addressType }}</td>
+          <td class="py-1">{{ addressTypeLabel(point.addressType) }}</td>
           <td class="py-1">{{ registerDecodeText(point) }}</td>
           <td class="py-1">{{ point.pollIntervalMs ?? '-' }}</td>
-          <td class="py-1">{{ point.rw }}</td>
-          <td class="py-1">{{ point.enabled === false ? 'off' : 'on' }}</td>
+          <td class="py-1">{{ accessModeLabel(point.rw) }}</td>
+          <td class="py-1">
+            <Tag :color="tagColor(point.enabled)">
+              {{
+                point.enabled === false
+                  ? $t('common.disabled')
+                  : $t('common.enabled')
+              }}
+            </Tag>
+          </td>
           <td class="py-1">
             <div class="flex gap-1">
               <Button
@@ -615,7 +631,7 @@ onMounted(load);
         <tbody>
           <tr v-for="point in orphanPoints" :key="point.id" class="border-t">
             <td class="py-1">{{ point.propertyId }}</td>
-            <td class="py-1">{{ point.refType }}</td>
+            <td class="py-1">{{ pointRefTypeLabel(point.refType) }}</td>
             <td class="py-1">{{ point.rawAddress }}</td>
             <td class="py-1">
               <Popconfirm

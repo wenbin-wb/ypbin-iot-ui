@@ -24,8 +24,8 @@ import {
   Tag,
   Timeline,
   TimelineItem,
+  Tooltip,
 } from 'ant-design-vue';
-import dayjs from 'dayjs';
 
 import {
   getDeviceAvailability,
@@ -38,12 +38,22 @@ import { $t } from '#/locales';
 import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
 
+import CopyText from '../../shared/copy-text.vue';
+import {
+  formatDateTime,
+  formatRelativeTime,
+  onlineStatusColor,
+  onlineStatusLabel,
+  prettyJson,
+  protocolLabel,
+  qualityLabel,
+} from '../../shared/display';
+import PanelErrorBoundary from '../../shared/panel-error-boundary.vue';
 import Availability from './availability.vue';
 import Credential from './credential.vue';
 import DetailAlert from './detail-alert.vue';
 import DetailDebug from './detail-debug.vue';
 import DetailPoints from './detail-points.vue';
-import PanelErrorBoundary from '../../shared/panel-error-boundary.vue';
 import Series from './series.vue';
 import ShadowEdit from './shadow-edit.vue';
 import DeviceTags from './tags.vue';
@@ -169,20 +179,20 @@ function onOpenAvailability() {
   }).open();
 }
 
-/** 后端 `ts` 为 epoch 毫秒（Long 序列化成字符串）⇒ 展示前 `Number()`。 */
-function toMillis(ts?: null | number | string): null | number {
-  if (ts === null || ts === undefined || ts === '') {
-    return null;
+/** 影子值 → 展示文本：空值给 `-`，对象给格式化 JSON（避免 `[object Object]` 撑破布局）。 */
+function shadowValueText(value: unknown): string {
+  if (value === null || value === undefined) {
+    return '-';
   }
-  const millis = Number(ts);
-  return Number.isFinite(millis) ? millis : null;
-}
-
-function formatTs(ts?: null | number | string): string {
-  const millis = toMillis(ts);
-  return millis === null
-    ? '-'
-    : dayjs(millis).format('YYYY-MM-DD HH:mm:ss.SSS');
+  if (typeof value === 'object') {
+    try {
+      return prettyJson(JSON.stringify(value));
+    } catch {
+      return String(value);
+    }
+  }
+  const text = String(value);
+  return text.trim() === '' ? '-' : text;
 }
 
 /** 秒 → 可读时长（与可用率抽屉同一算法口径，只做展示）。 */
@@ -279,7 +289,7 @@ async function reloadEvents() {
 function shadowRows(map?: Record<string, unknown>) {
   return Object.entries(map ?? {}).map(([key, value]) => ({
     key,
-    value: value === null || value === undefined ? '' : String(value),
+    value: shadowValueText(value),
   }));
 }
 
@@ -366,29 +376,32 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
 });
 </script>
 <template>
-  <Drawer class="w-[1100px]">
+  <Drawer class="w-[1100px] max-w-[calc(100vw-40px)]">
     <Spin :spinning="loading">
       <Tabs :animated="false">
         <!-- ===== 概览 ===== -->
         <Tabs.TabPane key="overview" :tab="$t('page.iot.device.tabOverview')">
-          <Descriptions :column="2" bordered size="small">
+          <Descriptions
+            :column="{ lg: 2, md: 1, sm: 1, xs: 1 }"
+            bordered
+            size="small"
+          >
             <DescriptionsItem :label="$t('page.iot.device.code')">
-              {{ device?.deviceCode ?? '-' }}
+              <CopyText :value="device?.deviceCode" />
             </DescriptionsItem>
             <DescriptionsItem :label="$t('page.iot.device.name')">
               {{ device?.deviceName ?? '-' }}
             </DescriptionsItem>
             <DescriptionsItem :label="$t('page.iot.device.onlineStatus')">
-              <Tag
-                :color="
-                  device?.onlineStatus === 'online' ? 'success' : 'default'
-                "
-              >
-                {{ device?.onlineStatus ?? 'unknown' }}
+              <Tag :color="onlineStatusColor(device?.onlineStatus)">
+                {{ onlineStatusLabel(device?.onlineStatus) }}
               </Tag>
             </DescriptionsItem>
             <DescriptionsItem :label="$t('page.iot.device.lastSeenAt')">
-              {{ device?.lastSeenAt ?? '-' }}
+              <!-- 绝对时间为主、相对时间为辅：只看「3 分钟前」判断不了跨天/时钟口径 -->
+              <Tooltip :title="formatRelativeTime(device?.lastSeenAt)">
+                {{ formatDateTime(device?.lastSeenAt) }}
+              </Tooltip>
             </DescriptionsItem>
             <!--
               启停位：与在线状态分两行展示，避免被读成同一件事——
@@ -421,10 +434,10 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
               </template>
             </DescriptionsItem>
             <DescriptionsItem :label="$t('page.iot.device.protocol')">
-              {{ device?.protocol ?? '-' }}
+              {{ protocolLabel(device?.protocol) }}
             </DescriptionsItem>
             <DescriptionsItem :label="$t('page.iot.device.endpoint')" :span="2">
-              {{ device?.endpoint ?? '-' }}
+              <CopyText :value="device?.endpoint" :wrap="true" />
             </DescriptionsItem>
             <DescriptionsItem :label="$t('page.iot.device.remark')" :span="2">
               {{ device?.remark || '-' }}
@@ -464,10 +477,10 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
                     :key="item.propertyId"
                     class="border-t"
                   >
-                    <td class="py-1">{{ item.propertyId }}</td>
-                    <td class="py-1">{{ item.value ?? '-' }}</td>
-                    <td class="py-1">{{ item.quality ?? '-' }}</td>
-                    <td class="py-1">{{ formatTs(item.ts) }}</td>
+                    <td class="py-1">{{ item.propertyId || '-' }}</td>
+                    <td class="py-1">{{ item.value || '-' }}</td>
+                    <td class="py-1">{{ qualityLabel(item.quality) }}</td>
+                    <td class="py-1">{{ formatDateTime(item.ts) }}</td>
                   </tr>
                 </tbody>
               </table>
@@ -548,7 +561,7 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
                     </span>
                   </div>
                   <div class="text-xs text-muted-foreground">
-                    {{ event.eventTs ?? '-' }}
+                    {{ formatDateTime(event.eventTs) }}
                   </div>
                 </TimelineItem>
               </Timeline>
@@ -586,14 +599,16 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
                       :key="row.key"
                       class="border-t"
                     >
-                      <td class="py-1">{{ row.key }}</td>
-                      <td class="py-1">{{ row.value }}</td>
+                      <td class="py-1 break-all">{{ row.key }}</td>
+                      <td class="py-1 break-all whitespace-pre-wrap">
+                        {{ row.value }}
+                      </td>
                     </tr>
                   </tbody>
                 </table>
                 <div class="mt-1 text-xs text-muted-foreground">
                   {{ $t('page.iot.shadow.reportTs') }}:
-                  {{ shadow?.reportTs ?? '-' }}
+                  {{ formatDateTime(shadow?.reportTs) }}
                 </div>
               </template>
             </div>
@@ -619,14 +634,16 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
                     :key="row.key"
                     class="border-t"
                   >
-                    <td class="py-1">{{ row.key }}</td>
-                    <td class="py-1">{{ row.value }}</td>
+                    <td class="py-1 break-all">{{ row.key }}</td>
+                    <td class="py-1 break-all whitespace-pre-wrap">
+                      {{ row.value }}
+                    </td>
                   </tr>
                 </tbody>
               </table>
               <div class="mt-1 text-xs text-muted-foreground">
                 {{ $t('page.iot.shadow.desiredTs') }}:
-                {{ shadow?.desiredTs ?? '-' }}
+                {{ formatDateTime(shadow?.desiredTs) }}
               </div>
             </div>
           </div>
@@ -728,14 +745,15 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
                     {{ event.eventName || event.eventCode }}
                   </span>
                   <span class="text-xs text-muted-foreground">
-                    {{ event.eventTs ?? '-' }}
+                    {{ formatDateTime(event.eventTs) }}
                   </span>
                 </div>
                 <div
                   v-if="event.params"
-                  class="mt-1 text-xs break-all text-muted-foreground"
+                  class="mt-1 text-xs break-all whitespace-pre-wrap text-muted-foreground"
                 >
-                  {{ $t('page.iot.event.params') }}: {{ event.params }}
+                  {{ $t('page.iot.event.params') }}:
+                  {{ prettyJson(event.params) }}
                 </div>
               </TimelineItem>
             </Timeline>
@@ -769,12 +787,16 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
                 :key="outage.id"
                 class="border-t"
               >
-                <td class="py-1">{{ outage.startTs }}</td>
+                <td class="py-1">{{ formatDateTime(outage.startTs) }}</td>
                 <td class="py-1">
-                  {{ outage.endTs || $t('page.iot.availability.ongoing') }}
+                  {{
+                    outage.endTs
+                      ? formatDateTime(outage.endTs)
+                      : $t('page.iot.availability.ongoing')
+                  }}
                 </td>
                 <td class="py-1">{{ human(outage.durationSec) }}</td>
-                <td class="py-1">{{ outage.reason }}</td>
+                <td class="py-1">{{ outage.reason || '-' }}</td>
               </tr>
             </tbody>
           </table>

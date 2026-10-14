@@ -3,12 +3,38 @@ import type { VxeTableGridColumns } from '#/adapter/vxe-table';
 
 import { $t } from '#/locales';
 
+import { displayOrFallback, formatDateTime } from '../shared/display';
+
 export function useColumns(): VxeTableGridColumns {
   return [
-    { field: 'groupName', title: $t('page.iot.group.name'), minWidth: 200 },
-    { field: 'sort', title: $t('page.iot.group.sort'), width: 100 },
-    { field: 'remark', title: $t('page.iot.device.remark'), minWidth: 200 },
-    { field: 'createTime', title: $t('page.iot.device.createTime'), width: 170 },
+    {
+      field: 'groupName',
+      title: $t('page.iot.group.name'),
+      minWidth: 200,
+      formatter: ({ cellValue }: { cellValue?: string }) =>
+        displayOrFallback(cellValue),
+    },
+    {
+      field: 'sort',
+      title: $t('page.iot.group.sort'),
+      width: 100,
+      formatter: ({ cellValue }: { cellValue?: number | string }) =>
+        displayOrFallback(cellValue),
+    },
+    {
+      field: 'remark',
+      title: $t('page.iot.device.remark'),
+      minWidth: 200,
+      formatter: ({ cellValue }: { cellValue?: string }) =>
+        displayOrFallback(cellValue),
+    },
+    {
+      field: 'createTime',
+      title: $t('page.iot.device.createTime'),
+      width: 170,
+      formatter: ({ cellValue }: { cellValue?: string }) =>
+        formatDateTime(cellValue),
+    },
     {
       title: $t('common.action'),
       field: 'action',

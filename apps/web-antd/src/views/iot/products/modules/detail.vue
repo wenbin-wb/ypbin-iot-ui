@@ -36,11 +36,20 @@ import {
   publishProduct,
 } from '#/api/iot';
 import { $t } from '#/locales';
-
-import PanelErrorBoundary from '../../shared/panel-error-boundary.vue';
 import { extractErrorMessage } from '#/utils/error';
 import { downloadByBlob } from '#/utils/file';
 
+import {
+  accessModeLabel,
+  dataFormatLabel,
+  dataTypeLabel,
+  formatDateTime,
+  modelStatusColor,
+  modelStatusLabel,
+  protocolLabel,
+  serviceOptionLabel,
+} from '../../shared/display';
+import PanelErrorBoundary from '../../shared/panel-error-boundary.vue';
 import ThingModelForm from './thingmodel-form.vue';
 
 /**
@@ -331,77 +340,473 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
     <Spin :spinning="loading">
       <PanelErrorBoundary title-key="page.iot.product.renderFailed">
         <Tabs v-model:active-key="activeTab" :animated="false">
-        <!-- ===== 概览 ===== -->
-        <Tabs.TabPane key="overview" :tab="$t('page.iot.product.tabOverview')">
-          <Descriptions :column="2" bordered size="small">
-            <DescriptionsItem :label="$t('page.iot.product.code')">
-              {{ product?.productCode ?? '-' }}
-            </DescriptionsItem>
-            <DescriptionsItem :label="$t('page.iot.product.name')">
-              {{ product?.productName ?? '-' }}
-            </DescriptionsItem>
-            <DescriptionsItem :label="$t('page.iot.device.protocol')">
-              {{ product?.protocol ?? '-' }}
-            </DescriptionsItem>
-            <DescriptionsItem :label="$t('page.iot.product.dataFormat')">
-              {{ product?.dataFormat ?? '-' }}
-            </DescriptionsItem>
-            <DescriptionsItem :label="$t('page.iot.product.deviceType')">
-              {{ product?.deviceType ?? '-' }}
-            </DescriptionsItem>
-            <DescriptionsItem :label="$t('page.iot.product.manufacturer')">
-              {{ product?.manufacturerName ?? '-' }}
-            </DescriptionsItem>
-            <DescriptionsItem :label="$t('page.iot.product.modelStatus')">
-              <Tag
-                :color="
-                  product?.modelStatus === 'published' ? 'success' : 'default'
-                "
-              >
-                {{ product?.modelStatus ?? '-' }}
-              </Tag>
-            </DescriptionsItem>
-            <DescriptionsItem :label="$t('page.iot.product.currentVersion')">
-              {{ product?.currentVersion ?? '-' }}
-            </DescriptionsItem>
-            <DescriptionsItem :label="$t('page.iot.device.remark')" :span="2">
-              {{ product?.remark || '-' }}
-            </DescriptionsItem>
-          </Descriptions>
+          <!-- ===== 概览 ===== -->
+          <Tabs.TabPane
+            key="overview"
+            :tab="$t('page.iot.product.tabOverview')"
+          >
+            <Descriptions :column="2" bordered size="small">
+              <DescriptionsItem :label="$t('page.iot.product.code')">
+                {{ product?.productCode ?? '-' }}
+              </DescriptionsItem>
+              <DescriptionsItem :label="$t('page.iot.product.name')">
+                {{ product?.productName ?? '-' }}
+              </DescriptionsItem>
+              <DescriptionsItem :label="$t('page.iot.device.protocol')">
+                {{ protocolLabel(product?.protocol) }}
+              </DescriptionsItem>
+              <DescriptionsItem :label="$t('page.iot.product.dataFormat')">
+                {{ dataFormatLabel(product?.dataFormat) }}
+              </DescriptionsItem>
+              <DescriptionsItem :label="$t('page.iot.product.deviceType')">
+                {{ product?.deviceType ?? '-' }}
+              </DescriptionsItem>
+              <DescriptionsItem :label="$t('page.iot.product.manufacturer')">
+                {{ product?.manufacturerName ?? '-' }}
+              </DescriptionsItem>
+              <DescriptionsItem :label="$t('page.iot.product.modelStatus')">
+                <Tag :color="modelStatusColor(product?.modelStatus)">
+                  {{ modelStatusLabel(product?.modelStatus) }}
+                </Tag>
+              </DescriptionsItem>
+              <DescriptionsItem :label="$t('page.iot.product.currentVersion')">
+                {{ product?.currentVersion ?? '-' }}
+              </DescriptionsItem>
+              <DescriptionsItem :label="$t('page.iot.device.remark')" :span="2">
+                {{ product?.remark || '-' }}
+              </DescriptionsItem>
+            </Descriptions>
 
-          <div class="mt-4 flex flex-wrap gap-2">
-            <Button
-              v-access:code="['iot:product:tsl-export']"
-              @click="onExportTsl"
-            >
-              {{ $t('page.iot.product.tslExport') }}
-            </Button>
-            <Button
-              v-access:code="['iot:product:tsl-import']"
-              @click="activeTab = 'tsl'"
-            >
-              {{ $t('page.iot.product.tslImport') }}
-            </Button>
-            <Popconfirm
-              :title="$t('page.iot.product.newDraftConfirm')"
-              @confirm="onNewDraft"
-            >
-              <Button v-access:code="['iot:product:update']" v-if="!isDraft">
-                {{ $t('page.iot.product.newDraft') }}
-              </Button>
-            </Popconfirm>
-            <Popconfirm
-              :title="$t('page.iot.product.publishConfirm')"
-              @confirm="onPublish"
-            >
+            <div class="mt-4 flex flex-wrap gap-2">
               <Button
-                v-access:code="['iot:product:publish']"
-                type="primary"
-                v-if="isDraft"
+                v-access:code="['iot:product:tsl-export']"
+                @click="onExportTsl"
               >
-                {{ $t('page.iot.product.publish') }}
+                {{ $t('page.iot.product.tslExport') }}
               </Button>
-            </Popconfirm>
+              <Button
+                v-access:code="['iot:product:tsl-import']"
+                @click="activeTab = 'tsl'"
+              >
+                {{ $t('page.iot.product.tslImport') }}
+              </Button>
+              <Popconfirm
+                :title="$t('page.iot.product.newDraftConfirm')"
+                @confirm="onNewDraft"
+              >
+                <Button v-access:code="['iot:product:update']" v-if="!isDraft">
+                  {{ $t('page.iot.product.newDraft') }}
+                </Button>
+              </Popconfirm>
+              <Popconfirm
+                :title="$t('page.iot.product.publishConfirm')"
+                @confirm="onPublish"
+              >
+                <Button
+                  v-access:code="['iot:product:publish']"
+                  type="primary"
+                  v-if="isDraft"
+                >
+                  {{ $t('page.iot.product.publish') }}
+                </Button>
+              </Popconfirm>
+              <Button
+                v-access:code="['iot:device:create']"
+                type="primary"
+                @click="onAddDevice"
+              >
+                {{ $t('page.iot.product.addDevice') }}
+              </Button>
+            </div>
+          </Tabs.TabPane>
+
+          <!-- ===== 物模型 ===== -->
+          <Tabs.TabPane key="model" :tab="$t('page.iot.product.tabThingModel')">
+            <Alert
+              v-if="modelError"
+              :message="modelError"
+              class="mb-3"
+              show-icon
+              type="error"
+            />
+
+            <Alert
+              v-if="product && !isDraft"
+              :message="$t('page.iot.product.readonlyPublished')"
+              class="mb-3"
+              show-icon
+              type="info"
+            />
+            <div v-if="product && !isDraft" class="mb-3 flex flex-wrap gap-2">
+              <Popconfirm
+                :title="$t('page.iot.product.newDraftConfirm')"
+                @confirm="onNewDraft"
+              >
+                <Button v-access:code="['iot:product:update']" type="primary">
+                  {{ $t('page.iot.product.newDraft') }}
+                </Button>
+              </Popconfirm>
+              <Button @click="activeTab = 'tsl'">
+                {{ $t('page.iot.product.tabTsl') }}
+              </Button>
+            </div>
+
+            <div class="mb-2 flex items-center gap-2">
+              <span class="font-semibold">
+                {{ $t('page.iot.product.service') }}
+              </span>
+              <Button
+                v-access:code="['iot:product:update']"
+                v-if="isDraft"
+                size="small"
+                type="primary"
+                @click="openEditor('service', null)"
+              >
+                {{ $t('page.iot.product.addService') }}
+              </Button>
+            </div>
+            <Empty
+              v-if="services.length === 0"
+              :description="$t('page.iot.product.noService')"
+            />
+            <table v-else class="w-full text-sm">
+              <thead>
+                <tr class="text-left text-gray-500">
+                  <th class="py-1">{{ $t('page.iot.product.serviceId') }}</th>
+                  <th class="py-1">{{ $t('page.iot.product.serviceName') }}</th>
+                  <th class="py-1">
+                    {{ $t('page.iot.product.serviceOption') }}
+                  </th>
+                  <th class="py-1">{{ $t('page.iot.product.description') }}</th>
+                  <th class="py-1">{{ $t('common.action') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="service in services"
+                  :key="service.id"
+                  class="border-t"
+                  :class="
+                    service.id === selectedServiceId ? 'bg-blue-50' : undefined
+                  "
+                >
+                  <td class="py-1">
+                    <Button type="link" @click="onSelectService(service.id)">
+                      {{ service.serviceId }}
+                    </Button>
+                  </td>
+                  <td class="py-1">{{ service.serviceName }}</td>
+                  <td class="py-1">
+                    {{ serviceOptionLabel(service.serviceOption) }}
+                  </td>
+                  <td class="py-1">{{ service.description || '-' }}</td>
+                  <td class="py-1">
+                    <Button
+                      v-if="isDraft"
+                      v-access:code="['iot:product:update']"
+                      size="small"
+                      type="link"
+                      @click="openEditor('service', service)"
+                    >
+                      {{ $t('common.edit') }}
+                    </Button>
+                    <Popconfirm
+                      :title="
+                        $t('ui.actionMessage.deleteConfirm', [
+                          service.serviceId,
+                        ])
+                      "
+                      @confirm="onDeleteService(service)"
+                    >
+                      <Button
+                        v-access:code="['iot:product:update']"
+                        v-if="isDraft"
+                        danger
+                        size="small"
+                        type="link"
+                      >
+                        {{ $t('common.delete') }}
+                      </Button>
+                    </Popconfirm>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <template v-if="selectedService">
+              <div class="mt-4 mb-2 text-sm text-muted-foreground">
+                {{ $t('page.iot.product.currentService') }}：
+                {{ selectedService.serviceId }}（{{
+                  selectedService.serviceName
+                }}）
+              </div>
+
+              <!-- 属性 -->
+              <div class="mb-1 flex items-center gap-2">
+                <span class="font-semibold">
+                  {{ $t('page.iot.product.property') }}
+                </span>
+                <Button
+                  v-if="isDraft"
+                  v-access:code="['iot:product:update']"
+                  size="small"
+                  @click="openEditor('property', null)"
+                >
+                  {{ $t('page.iot.product.addProperty') }}
+                </Button>
+              </div>
+              <Empty
+                v-if="properties.length === 0"
+                :description="$t('page.iot.product.noProperty')"
+              />
+              <table v-else class="w-full text-sm">
+                <thead>
+                  <tr class="text-left text-gray-500">
+                    <th class="py-1">{{ $t('page.iot.point.identifier') }}</th>
+                    <th class="py-1">
+                      {{ $t('page.iot.product.propertyName') }}
+                    </th>
+                    <th class="py-1">{{ $t('page.iot.point.dataType') }}</th>
+                    <th class="py-1">{{ $t('page.iot.point.accessMode') }}</th>
+                    <th class="py-1">{{ $t('page.iot.point.unit') }}</th>
+                    <th class="py-1">{{ $t('page.iot.product.required') }}</th>
+                    <th class="py-1">{{ $t('common.action') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in properties" :key="row.id" class="border-t">
+                    <td class="py-1">{{ row.identifier }}</td>
+                    <td class="py-1">{{ row.propertyName }}</td>
+                    <td class="py-1">{{ dataTypeLabel(row.dataType) }}</td>
+                    <td class="py-1">{{ accessModeLabel(row.accessMode) }}</td>
+                    <td class="py-1">{{ row.unit || '-' }}</td>
+                    <td class="py-1">
+                      {{ row.required ? $t('common.yes') : $t('common.no') }}
+                    </td>
+                    <td class="py-1">
+                      <Button
+                        v-access:code="['iot:product:update']"
+                        v-if="isDraft"
+                        size="small"
+                        type="link"
+                        @click="openEditor('property', row)"
+                      >
+                        {{ $t('common.edit') }}
+                      </Button>
+                      <Popconfirm
+                        :title="
+                          $t('ui.actionMessage.deleteConfirm', [row.identifier])
+                        "
+                        @confirm="onDeleteProperty(row)"
+                      >
+                        <Button
+                          v-access:code="['iot:product:update']"
+                          v-if="isDraft"
+                          danger
+                          size="small"
+                          type="link"
+                        >
+                          {{ $t('common.delete') }}
+                        </Button>
+                      </Popconfirm>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <!-- 命令 -->
+              <div class="mt-4 mb-1 flex items-center gap-2">
+                <span class="font-semibold">
+                  {{ $t('page.iot.product.command') }}
+                </span>
+                <Button
+                  v-if="isDraft"
+                  v-access:code="['iot:product:update']"
+                  size="small"
+                  @click="openEditor('command', null)"
+                >
+                  {{ $t('page.iot.product.addCommand') }}
+                </Button>
+              </div>
+              <Empty
+                v-if="commands.length === 0"
+                :description="$t('page.iot.product.noCommand')"
+              />
+              <table v-else class="w-full text-sm">
+                <thead>
+                  <tr class="text-left text-gray-500">
+                    <th class="py-1">{{ $t('page.iot.point.identifier') }}</th>
+                    <th class="py-1">
+                      {{ $t('page.iot.product.commandName') }}
+                    </th>
+                    <th class="py-1">{{ $t('page.iot.product.timeoutMs') }}</th>
+                    <th class="py-1">{{ $t('common.action') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in commands" :key="row.id" class="border-t">
+                    <td class="py-1">{{ row.identifier }}</td>
+                    <td class="py-1">{{ row.commandName }}</td>
+                    <td class="py-1">{{ row.timeoutMs ?? '-' }}</td>
+                    <td class="py-1">
+                      <Button
+                        v-access:code="['iot:product:update']"
+                        v-if="isDraft"
+                        size="small"
+                        type="link"
+                        @click="openEditor('command', row)"
+                      >
+                        {{ $t('common.edit') }}
+                      </Button>
+                      <Popconfirm
+                        :title="
+                          $t('ui.actionMessage.deleteConfirm', [row.identifier])
+                        "
+                        @confirm="onDeleteCommand(row)"
+                      >
+                        <Button
+                          v-access:code="['iot:product:update']"
+                          v-if="isDraft"
+                          danger
+                          size="small"
+                          type="link"
+                        >
+                          {{ $t('common.delete') }}
+                        </Button>
+                      </Popconfirm>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <!-- 事件 -->
+              <div class="mt-4 mb-1 flex items-center gap-2">
+                <span class="font-semibold">
+                  {{ $t('page.iot.product.event') }}
+                </span>
+                <Button
+                  v-if="isDraft"
+                  v-access:code="['iot:product:update']"
+                  size="small"
+                  @click="openEditor('event', null)"
+                >
+                  {{ $t('page.iot.product.addEvent') }}
+                </Button>
+              </div>
+              <Empty
+                v-if="events.length === 0"
+                :description="$t('page.iot.product.noEvent')"
+              />
+              <table v-else class="w-full text-sm">
+                <thead>
+                  <tr class="text-left text-gray-500">
+                    <th class="py-1">{{ $t('page.iot.point.identifier') }}</th>
+                    <th class="py-1">{{ $t('page.iot.product.eventName') }}</th>
+                    <th class="py-1">{{ $t('page.iot.point.dataType') }}</th>
+                    <th class="py-1">{{ $t('page.iot.point.unit') }}</th>
+                    <th class="py-1">{{ $t('common.action') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in events" :key="row.id" class="border-t">
+                    <td class="py-1">{{ row.identifier }}</td>
+                    <td class="py-1">{{ row.eventName }}</td>
+                    <td class="py-1">{{ dataTypeLabel(row.dataType) }}</td>
+                    <td class="py-1">{{ row.unit || '-' }}</td>
+                    <td class="py-1">
+                      <Button
+                        v-access:code="['iot:product:update']"
+                        v-if="isDraft"
+                        size="small"
+                        type="link"
+                        @click="openEditor('event', row)"
+                      >
+                        {{ $t('common.edit') }}
+                      </Button>
+                      <Popconfirm
+                        :title="
+                          $t('ui.actionMessage.deleteConfirm', [row.identifier])
+                        "
+                        @confirm="onDeleteEvent(row)"
+                      >
+                        <Button
+                          v-access:code="['iot:product:update']"
+                          v-if="isDraft"
+                          danger
+                          size="small"
+                          type="link"
+                        >
+                          {{ $t('common.delete') }}
+                        </Button>
+                      </Popconfirm>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </template>
+          </Tabs.TabPane>
+
+          <!-- ===== TSL ===== -->
+          <Tabs.TabPane key="tsl" :tab="$t('page.iot.product.tabTsl')">
+            <Alert
+              :message="$t('page.iot.product.tslHint')"
+              class="mb-3"
+              show-icon
+              type="info"
+            />
+            <div class="mb-2 flex gap-2">
+              <Button
+                v-access:code="['iot:product:tsl-export']"
+                @click="onExportTsl"
+              >
+                {{ $t('page.iot.product.tslExport') }}
+              </Button>
+              <Button
+                v-access:code="['iot:product:tsl-import']"
+                v-if="isDraft"
+                type="primary"
+                @click="onImportTsl"
+              >
+                {{ $t('page.iot.product.tslImport') }}
+              </Button>
+            </div>
+            <textarea
+              v-model="tslText"
+              class="h-[360px] w-full rounded border p-2 font-mono text-xs"
+              :placeholder="$t('page.iot.product.tslPlaceholder')"
+            ></textarea>
+            <Alert
+              v-if="tslError"
+              :message="tslError"
+              class="mt-2"
+              show-icon
+              type="error"
+            />
+            <Alert
+              v-if="tslErrors.length > 0"
+              class="mt-2"
+              show-icon
+              type="error"
+            >
+              <template #message>
+                <div>{{ $t('page.iot.product.tslImportFailed') }}</div>
+                <ul class="ml-4 list-disc">
+                  <li v-for="(item, index) in tslErrors" :key="index">
+                    {{ item }}
+                  </li>
+                </ul>
+              </template>
+            </Alert>
+          </Tabs.TabPane>
+
+          <!-- ===== 设备 ===== -->
+          <Tabs.TabPane key="devices" :tab="$t('page.iot.product.tabDevices')">
+            <Alert
+              :message="$t('page.iot.product.deviceTabHint')"
+              class="mb-3"
+              show-icon
+              type="warning"
+            />
             <Button
               v-access:code="['iot:device:create']"
               type="primary"
@@ -409,430 +814,40 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
             >
               {{ $t('page.iot.product.addDevice') }}
             </Button>
-          </div>
-        </Tabs.TabPane>
+          </Tabs.TabPane>
 
-        <!-- ===== 物模型 ===== -->
-        <Tabs.TabPane key="model" :tab="$t('page.iot.product.tabThingModel')">
-          <Alert
-            v-if="modelError"
-            :message="modelError"
-            class="mb-3"
-            show-icon
-            type="error"
-          />
-
-          <Alert
-            v-if="product && !isDraft"
-            :message="$t('page.iot.product.readonlyPublished')"
-            class="mb-3"
-            show-icon
-            type="info"
-          />
-          <div v-if="product && !isDraft" class="mb-3 flex flex-wrap gap-2">
-            <Popconfirm
-              :title="$t('page.iot.product.newDraftConfirm')"
-              @confirm="onNewDraft"
-            >
-              <Button v-access:code="['iot:product:update']" type="primary">
-                {{ $t('page.iot.product.newDraft') }}
-              </Button>
-            </Popconfirm>
-            <Button @click="activeTab = 'tsl'">
-              {{ $t('page.iot.product.tabTsl') }}
-            </Button>
-          </div>
-
-          <div class="mb-2 flex items-center gap-2">
-            <span class="font-semibold">
-              {{ $t('page.iot.product.service') }}
-            </span>
-            <Button
-              v-access:code="['iot:product:update']"
-              v-if="isDraft"
-              size="small"
-              type="primary"
-              @click="openEditor('service', null)"
-            >
-              {{ $t('page.iot.product.addService') }}
-            </Button>
-          </div>
-          <Empty
-            v-if="services.length === 0"
-            :description="$t('page.iot.product.noService')"
-          />
-          <table v-else class="w-full text-sm">
-            <thead>
-              <tr class="text-left text-gray-500">
-                <th class="py-1">{{ $t('page.iot.product.serviceId') }}</th>
-                <th class="py-1">{{ $t('page.iot.product.serviceName') }}</th>
-                <th class="py-1">{{ $t('page.iot.product.serviceOption') }}</th>
-                <th class="py-1">{{ $t('page.iot.product.description') }}</th>
-                <th class="py-1">{{ $t('common.action') }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="service in services"
-                :key="service.id"
-                class="border-t"
-                :class="
-                  service.id === selectedServiceId ? 'bg-blue-50' : undefined
-                "
-              >
-                <td class="py-1">
-                  <Button type="link" @click="onSelectService(service.id)">
-                    {{ service.serviceId }}
-                  </Button>
-                </td>
-                <td class="py-1">{{ service.serviceName }}</td>
-                <td class="py-1">{{ service.serviceOption }}</td>
-                <td class="py-1">{{ service.description || '-' }}</td>
-                <td class="py-1">
-                  <Button
-                    v-if="isDraft"
-                    v-access:code="['iot:product:update']"
-                    size="small"
-                    type="link"
-                    @click="openEditor('service', service)"
-                  >
-                    {{ $t('common.edit') }}
-                  </Button>
-                  <Popconfirm
-                    :title="
-                      $t('ui.actionMessage.deleteConfirm', [service.serviceId])
-                    "
-                    @confirm="onDeleteService(service)"
-                  >
-                    <Button
-                      v-access:code="['iot:product:update']"
-                      v-if="isDraft"
-                      danger
-                      size="small"
-                      type="link"
-                    >
-                      {{ $t('common.delete') }}
-                    </Button>
-                  </Popconfirm>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-          <template v-if="selectedService">
-            <div class="mt-4 mb-2 text-sm text-muted-foreground">
-              {{ $t('page.iot.product.currentService') }}：
-              {{ selectedService.serviceId }}（{{
-                selectedService.serviceName
-              }}）
-            </div>
-
-            <!-- 属性 -->
-            <div class="mb-1 flex items-center gap-2">
-              <span class="font-semibold">
-                {{ $t('page.iot.product.property') }}
-              </span>
-              <Button
-                v-if="isDraft"
-                v-access:code="['iot:product:update']"
-                size="small"
-                @click="openEditor('property', null)"
-              >
-                {{ $t('page.iot.product.addProperty') }}
-              </Button>
-            </div>
-            <Empty
-              v-if="properties.length === 0"
-              :description="$t('page.iot.product.noProperty')"
-            />
-            <table v-else class="w-full text-sm">
-              <thead>
-                <tr class="text-left text-gray-500">
-                  <th class="py-1">{{ $t('page.iot.point.identifier') }}</th>
-                  <th class="py-1">
-                    {{ $t('page.iot.product.propertyName') }}
-                  </th>
-                  <th class="py-1">{{ $t('page.iot.point.dataType') }}</th>
-                  <th class="py-1">{{ $t('page.iot.point.accessMode') }}</th>
-                  <th class="py-1">{{ $t('page.iot.point.unit') }}</th>
-                  <th class="py-1">{{ $t('page.iot.product.required') }}</th>
-                  <th class="py-1">{{ $t('common.action') }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in properties" :key="row.id" class="border-t">
-                  <td class="py-1">{{ row.identifier }}</td>
-                  <td class="py-1">{{ row.propertyName }}</td>
-                  <td class="py-1">{{ row.dataType }}</td>
-                  <td class="py-1">{{ row.accessMode }}</td>
-                  <td class="py-1">{{ row.unit || '-' }}</td>
-                  <td class="py-1">
-                    {{ row.required ? $t('common.yes') : $t('common.no') }}
-                  </td>
-                  <td class="py-1">
-                    <Button
-                      v-access:code="['iot:product:update']"
-                      v-if="isDraft"
-                      size="small"
-                      type="link"
-                      @click="openEditor('property', row)"
-                    >
-                      {{ $t('common.edit') }}
-                    </Button>
-                    <Popconfirm
-                      :title="
-                        $t('ui.actionMessage.deleteConfirm', [row.identifier])
-                      "
-                      @confirm="onDeleteProperty(row)"
-                    >
-                      <Button
-                        v-access:code="['iot:product:update']"
-                        v-if="isDraft"
-                        danger
-                        size="small"
-                        type="link"
-                      >
-                        {{ $t('common.delete') }}
-                      </Button>
-                    </Popconfirm>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-
-            <!-- 命令 -->
-            <div class="mt-4 mb-1 flex items-center gap-2">
-              <span class="font-semibold">
-                {{ $t('page.iot.product.command') }}
-              </span>
-              <Button
-                v-if="isDraft"
-                v-access:code="['iot:product:update']"
-                size="small"
-                @click="openEditor('command', null)"
-              >
-                {{ $t('page.iot.product.addCommand') }}
-              </Button>
-            </div>
-            <Empty
-              v-if="commands.length === 0"
-              :description="$t('page.iot.product.noCommand')"
-            />
-            <table v-else class="w-full text-sm">
-              <thead>
-                <tr class="text-left text-gray-500">
-                  <th class="py-1">{{ $t('page.iot.point.identifier') }}</th>
-                  <th class="py-1">{{ $t('page.iot.product.commandName') }}</th>
-                  <th class="py-1">{{ $t('page.iot.product.timeoutMs') }}</th>
-                  <th class="py-1">{{ $t('common.action') }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in commands" :key="row.id" class="border-t">
-                  <td class="py-1">{{ row.identifier }}</td>
-                  <td class="py-1">{{ row.commandName }}</td>
-                  <td class="py-1">{{ row.timeoutMs ?? '-' }}</td>
-                  <td class="py-1">
-                    <Button
-                      v-access:code="['iot:product:update']"
-                      v-if="isDraft"
-                      size="small"
-                      type="link"
-                      @click="openEditor('command', row)"
-                    >
-                      {{ $t('common.edit') }}
-                    </Button>
-                    <Popconfirm
-                      :title="
-                        $t('ui.actionMessage.deleteConfirm', [row.identifier])
-                      "
-                      @confirm="onDeleteCommand(row)"
-                    >
-                      <Button
-                        v-access:code="['iot:product:update']"
-                        v-if="isDraft"
-                        danger
-                        size="small"
-                        type="link"
-                      >
-                        {{ $t('common.delete') }}
-                      </Button>
-                    </Popconfirm>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-
-            <!-- 事件 -->
-            <div class="mt-4 mb-1 flex items-center gap-2">
-              <span class="font-semibold">
-                {{ $t('page.iot.product.event') }}
-              </span>
-              <Button
-                v-if="isDraft"
-                v-access:code="['iot:product:update']"
-                size="small"
-                @click="openEditor('event', null)"
-              >
-                {{ $t('page.iot.product.addEvent') }}
-              </Button>
-            </div>
-            <Empty
-              v-if="events.length === 0"
-              :description="$t('page.iot.product.noEvent')"
-            />
-            <table v-else class="w-full text-sm">
-              <thead>
-                <tr class="text-left text-gray-500">
-                  <th class="py-1">{{ $t('page.iot.point.identifier') }}</th>
-                  <th class="py-1">{{ $t('page.iot.product.eventName') }}</th>
-                  <th class="py-1">{{ $t('page.iot.point.dataType') }}</th>
-                  <th class="py-1">{{ $t('page.iot.point.unit') }}</th>
-                  <th class="py-1">{{ $t('common.action') }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in events" :key="row.id" class="border-t">
-                  <td class="py-1">{{ row.identifier }}</td>
-                  <td class="py-1">{{ row.eventName }}</td>
-                  <td class="py-1">{{ row.dataType }}</td>
-                  <td class="py-1">{{ row.unit || '-' }}</td>
-                  <td class="py-1">
-                    <Button
-                      v-access:code="['iot:product:update']"
-                      v-if="isDraft"
-                      size="small"
-                      type="link"
-                      @click="openEditor('event', row)"
-                    >
-                      {{ $t('common.edit') }}
-                    </Button>
-                    <Popconfirm
-                      :title="
-                        $t('ui.actionMessage.deleteConfirm', [row.identifier])
-                      "
-                      @confirm="onDeleteEvent(row)"
-                    >
-                      <Button
-                        v-access:code="['iot:product:update']"
-                        v-if="isDraft"
-                        danger
-                        size="small"
-                        type="link"
-                      >
-                        {{ $t('common.delete') }}
-                      </Button>
-                    </Popconfirm>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </template>
-        </Tabs.TabPane>
-
-        <!-- ===== TSL ===== -->
-        <Tabs.TabPane key="tsl" :tab="$t('page.iot.product.tabTsl')">
-          <Alert
-            :message="$t('page.iot.product.tslHint')"
-            class="mb-3"
-            show-icon
-            type="info"
-          />
-          <div class="mb-2 flex gap-2">
-            <Button
-              v-access:code="['iot:product:tsl-export']"
-              @click="onExportTsl"
-            >
-              {{ $t('page.iot.product.tslExport') }}
-            </Button>
-            <Button
-              v-access:code="['iot:product:tsl-import']"
-              v-if="isDraft"
-              type="primary"
-              @click="onImportTsl"
-            >
-              {{ $t('page.iot.product.tslImport') }}
-            </Button>
-          </div>
-          <textarea
-            v-model="tslText"
-            class="h-[360px] w-full rounded border p-2 font-mono text-xs"
-            :placeholder="$t('page.iot.product.tslPlaceholder')"
-          ></textarea>
-          <Alert
-            v-if="tslError"
-            :message="tslError"
-            class="mt-2"
-            show-icon
-            type="error"
-          />
-          <Alert
-            v-if="tslErrors.length > 0"
-            class="mt-2"
-            show-icon
-            type="error"
+          <!-- ===== 版本 ===== -->
+          <Tabs.TabPane
+            key="versions"
+            :tab="$t('page.iot.product.tabVersions')"
           >
-            <template #message>
-              <div>{{ $t('page.iot.product.tslImportFailed') }}</div>
-              <ul class="ml-4 list-disc">
-                <li v-for="(item, index) in tslErrors" :key="index">
-                  {{ item }}
-                </li>
-              </ul>
-            </template>
-          </Alert>
-        </Tabs.TabPane>
-
-        <!-- ===== 设备 ===== -->
-        <Tabs.TabPane key="devices" :tab="$t('page.iot.product.tabDevices')">
-          <Alert
-            :message="$t('page.iot.product.deviceTabHint')"
-            class="mb-3"
-            show-icon
-            type="warning"
-          />
-          <Button
-            v-access:code="['iot:device:create']"
-            type="primary"
-            @click="onAddDevice"
-          >
-            {{ $t('page.iot.product.addDevice') }}
-          </Button>
-        </Tabs.TabPane>
-
-        <!-- ===== 版本 ===== -->
-        <Tabs.TabPane key="versions" :tab="$t('page.iot.product.tabVersions')">
-          <Empty
-            v-if="versions.length === 0"
-            :description="$t('common.noData')"
-          />
-          <table v-else class="w-full text-sm">
-            <thead>
-              <tr class="text-left text-gray-500">
-                <th class="py-1">{{ $t('page.iot.product.versionNo') }}</th>
-                <th class="py-1">{{ $t('page.iot.product.modelStatus') }}</th>
-                <th class="py-1">{{ $t('page.iot.product.publishedAt') }}</th>
-                <th class="py-1">{{ $t('common.remark') }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="row in versions" :key="row.id" class="border-t">
-                <td class="py-1">{{ row.versionNo }}</td>
-                <td class="py-1">
-                  <Tag
-                    :color="
-                      row.modelStatus === 'published' ? 'success' : 'default'
-                    "
-                  >
-                    {{ row.modelStatus }}
-                  </Tag>
-                </td>
-                <td class="py-1">{{ row.publishedAt ?? '-' }}</td>
-                <td class="py-1">{{ row.remark || '-' }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </Tabs.TabPane>
+            <Empty
+              v-if="versions.length === 0"
+              :description="$t('common.noData')"
+            />
+            <table v-else class="w-full text-sm">
+              <thead>
+                <tr class="text-left text-gray-500">
+                  <th class="py-1">{{ $t('page.iot.product.versionNo') }}</th>
+                  <th class="py-1">{{ $t('page.iot.product.modelStatus') }}</th>
+                  <th class="py-1">{{ $t('page.iot.product.publishedAt') }}</th>
+                  <th class="py-1">{{ $t('common.remark') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in versions" :key="row.id" class="border-t">
+                  <td class="py-1">{{ row.versionNo }}</td>
+                  <td class="py-1">
+                    <Tag :color="modelStatusColor(row.modelStatus)">
+                      {{ modelStatusLabel(row.modelStatus) }}
+                    </Tag>
+                  </td>
+                  <td class="py-1">{{ formatDateTime(row.publishedAt) }}</td>
+                  <td class="py-1">{{ row.remark || '-' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </Tabs.TabPane>
         </Tabs>
       </PanelErrorBoundary>
     </Spin>

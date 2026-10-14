@@ -197,8 +197,16 @@ export function useInstanceColumns(): VxeTableGridColumns {
       field: 'severity',
       title: $t('page.iot.alert.severityField'),
       width: 90,
+      // 裸枚举码 CRITICAL/WARNING/INFO 不直接上屏（与规则页签同一码表）
+      slots: { default: 'severity' },
     },
-    { field: 'state', title: $t('page.iot.alert.stateField'), width: 100 },
+    {
+      field: 'state',
+      title: $t('page.iot.alert.stateField'),
+      width: 100,
+      // 裸枚举码 FIRING/PENDING/ACKED/RESOLVED 不直接上屏
+      slots: { default: 'state' },
+    },
     { field: 'deviceName', title: $t('page.iot.device.name'), minWidth: 140 },
     { field: 'propertyId', title: $t('page.iot.alert.property'), width: 140 },
     {
@@ -211,7 +219,13 @@ export function useInstanceColumns(): VxeTableGridColumns {
       title: $t('page.iot.alert.threshold'),
       width: 110,
     },
-    { field: 'startTs', title: $t('page.iot.alert.startTs'), width: 170 },
+    {
+      field: 'startTs',
+      title: $t('page.iot.alert.startTs'),
+      width: 170,
+      // 原始时间串统一走 shared/display.formatDateTime（ISO/空格分隔都能读）
+      slots: { default: 'startTs' },
+    },
     {
       field: 'durationSeconds',
       title: $t('page.iot.alert.duration'),
@@ -343,7 +357,12 @@ export function useRuleColumns(): VxeTableGridColumns {
       title: $t('page.iot.alert.activeCount'),
       width: 110,
     },
-    { field: 'updateTime', title: $t('page.iot.alert.updateTime'), width: 170 },
+    {
+      field: 'updateTime',
+      title: $t('page.iot.alert.updateTime'),
+      width: 170,
+      slots: { default: 'updateTime' },
+    },
     {
       align: 'center',
       field: 'action',

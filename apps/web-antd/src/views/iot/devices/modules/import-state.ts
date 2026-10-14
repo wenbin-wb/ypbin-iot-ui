@@ -14,6 +14,7 @@
  */
 
 import { DEVICE_IMPORT_FRONTEND_LIMITS } from '#/api/iot';
+import { $t } from '#/locales';
 
 /**
  * 批次状态码（与后端 `DeviceImportStatus` 对齐的**具名常量**）。
@@ -63,12 +64,30 @@ export function resolveImportListState(
   return itemCount > 0 ? 'ready' : 'empty';
 }
 
+/** 前端校验失败结论：只带 i18n key 与参数，文案由 {@link resolveImportFileCheckMessage} 解析。 */
+export interface ImportFileCheckFailed {
+  ok: false;
+  /** i18n 键（`page.iot.device.import.validation.*`）。 */
+  messageKey: string;
+  /** 插值参数（按 key 定义顺序传入；文件大小已由 {@link formatFileSize} 预格式化）。 */
+  params?: Array<number | string>;
+}
+
 /** 前端校验结论。 */
-export interface ImportFileCheckResult {
-  /** 是否通过（false 时 `message` 一定非空）。 */
-  ok: boolean;
-  /** 面向用户的人话原因（直接渲染到 Alert，不需要页面再拼文案）。 */
-  message: string;
+export type ImportFileCheckResult = ImportFileCheckFailed | { ok: true };
+
+/**
+ * 把文件校验结论解析成面向用户的文案（成功返回空串）。
+ *
+ * 页面必须经此渲染错误，不得直接展示 `messageKey`（那会把 i18n 键暴露给用户）。
+ *
+ * @param check 校验结论
+ * @returns 本地化错误文案；通过时为空串
+ */
+export function resolveImportFileCheckMessage(
+  check: ImportFileCheckResult,
+): string {
+  return check.ok ? '' : $t(check.messageKey, check.params ?? []);
 }
 
 /**
@@ -90,22 +109,39 @@ export function checkImportFile(file: File): ImportFileCheckResult {
   const extensionOk = DEVICE_IMPORT_FRONTEND_LIMITS.allowedExtensions.some(
     (extension) => name.endsWith(extension),
   );
+  const extensions =
+    DEVICE_IMPORT_FRONTEND_LIMITS.allowedExtensions.join(' / ');
   if (!extensionOk) {
-    return {
-      ok: false,
-      message: `只支持 CSV 文件（${DEVICE_IMPORT_FRONTEND_LIMITS.allowedExtensions.join(' / ')}），当前文件：${file.name || '（无文件名）'}`,
-    };
+    const fileName = file.name || '';
+    return fileName
+      ? {
+          messageKey: 'page.iot.device.import.validation.fileType',
+          ok: false,
+          params: [extensions, fileName],
+        }
+      : {
+          messageKey: 'page.iot.device.import.validation.fileTypeNoName',
+          ok: false,
+          params: [extensions],
+        };
   }
   if (file.size > DEVICE_IMPORT_FRONTEND_LIMITS.maxBytes) {
     return {
+      messageKey: 'page.iot.device.import.validation.fileTooLarge',
       ok: false,
-      message: `文件 ${formatFileSize(file.size)} 超过上限 ${formatFileSize(DEVICE_IMPORT_FRONTEND_LIMITS.maxBytes)}，请拆分成多个文件分批导入`,
+      params: [
+        formatFileSize(file.size),
+        formatFileSize(DEVICE_IMPORT_FRONTEND_LIMITS.maxBytes),
+      ],
     };
   }
   if (file.size === 0) {
-    return { ok: false, message: '文件是空的（0 字节），请检查是否选错了文件' };
+    return {
+      messageKey: 'page.iot.device.import.validation.fileEmpty',
+      ok: false,
+    };
   }
-  return { ok: true, message: '' };
+  return { ok: true };
 }
 
 /**

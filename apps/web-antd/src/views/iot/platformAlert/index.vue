@@ -7,7 +7,7 @@ import { computed, ref } from 'vue';
 import { useAccess } from '@vben/access';
 import { Page } from '@vben/common-ui';
 
-import { Select, Tag } from 'ant-design-vue';
+import { Select, Tag, Tooltip } from 'ant-design-vue';
 
 import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getPlatformAlerts } from '#/api/iot';
@@ -16,12 +16,16 @@ import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
 
 import {
+  formatDateTime,
+  platformHealthRuleLabelKey,
+  prettyJson,
+} from '../shared/display';
+import ListErrorAlert from '../shared/list-error-alert.vue';
+import {
   platformAlertSeverityColor,
   platformAlertSeverityLabelKey,
   platformAlertStateColor,
   platformAlertStateLabelKey,
-  snapshotLabel,
-  tsLabel,
 } from './platform-alert-state';
 
 /**
@@ -51,6 +55,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
         field: 'ruleCode',
         title: $t('page.iot.platformAlert.rule'),
         minWidth: 180,
+        slots: { default: 'ruleCode' },
       },
       {
         field: 'severity',
@@ -131,69 +136,101 @@ function reloadOnFilter() {
 
 <template>
   <!-- 架构对齐：补上 auto-content-height（此前高度链与其它页不一致） -->
-  <Page v-if="canView" auto-content-height>
-    <div class="mb-3 flex items-center gap-3">
-      <div class="font-semibold">
-        {{ $t('page.iot.platformAlert.title') }}
+  <Page auto-content-height>
+    <template v-if="canView">
+      <div class="mb-3 flex items-center gap-3">
+        <div class="font-semibold">
+          {{ $t('page.iot.platformAlert.title') }}
+        </div>
+        <Select
+          v-model:value="stateFilter"
+          allow-clear
+          :placeholder="$t('page.iot.platformAlert.allStates')"
+          class="w-40"
+          @change="reloadOnFilter"
+        >
+          <Select.Option value="PENDING">
+            {{ $t('page.iot.platformAlert.state.pending') }}
+          </Select.Option>
+          <Select.Option value="FIRING">
+            {{ $t('page.iot.platformAlert.state.firing') }}
+          </Select.Option>
+          <Select.Option value="RESOLVED">
+            {{ $t('page.iot.platformAlert.state.resolved') }}
+          </Select.Option>
+        </Select>
+        <Select
+          v-model:value="severityFilter"
+          allow-clear
+          :placeholder="$t('page.iot.platformAlert.allSeverities')"
+          class="w-40"
+          @change="reloadOnFilter"
+        >
+          <Select.Option value="CRITICAL">
+            {{ $t('page.iot.platformAlert.severity.critical') }}
+          </Select.Option>
+          <Select.Option value="WARNING">
+            {{ $t('page.iot.platformAlert.severity.warning') }}
+          </Select.Option>
+        </Select>
       </div>
-      <Select
-        v-model:value="stateFilter"
-        allow-clear
-        :placeholder="$t('page.iot.platformAlert.allStates')"
-        class="w-40"
-        @change="reloadOnFilter"
-      >
-        <Select.Option value="PENDING">
-          {{ $t('page.iot.platformAlert.state.pending') }}
-        </Select.Option>
-        <Select.Option value="FIRING">
-          {{ $t('page.iot.platformAlert.state.firing') }}
-        </Select.Option>
-        <Select.Option value="RESOLVED">
-          {{ $t('page.iot.platformAlert.state.resolved') }}
-        </Select.Option>
-      </Select>
-      <Select
-        v-model:value="severityFilter"
-        allow-clear
-        :placeholder="$t('page.iot.platformAlert.allSeverities')"
-        class="w-40"
-        @change="reloadOnFilter"
-      >
-        <Select.Option value="CRITICAL">
-          {{ $t('page.iot.platformAlert.severity.critical') }}
-        </Select.Option>
-        <Select.Option value="WARNING">
-          {{ $t('page.iot.platformAlert.severity.warning') }}
-        </Select.Option>
-      </Select>
-    </div>
 
-    <Grid>
-      <template #severity="{ row }">
-        <Tag :color="platformAlertSeverityColor(row.severity)">
-          {{ $t(platformAlertSeverityLabelKey(row.severity)) }}
-        </Tag>
-      </template>
-      <template #state="{ row }">
-        <Tag :color="platformAlertStateColor(row.state)">
-          {{ $t(platformAlertStateLabelKey(row.state)) }}
-        </Tag>
-      </template>
-      <template #snapshot="{ row }">
-        <span class="font-mono text-xs">
-          {{ snapshotLabel(row.metricSnapshot) }}
-        </span>
-      </template>
-      <template #startTs="{ row }">
-        {{ tsLabel(row.startTs) }}
-      </template>
-      <template #resolvedTs="{ row }">
-        {{ tsLabel(row.resolvedTs) }}
-      </template>
-    </Grid>
+      <!-- 失败态挂在表格之外：vxe 的 #empty 分不清「加载失败」与「真的没有告警」。 -->
+      <ListErrorAlert
+        :error="listError"
+        :title="$t('page.iot.platformAlert.loadFailed')"
+      />
 
-    <div v-if="!canView" class="p-4 text-sm text-muted-foreground">
+      <Grid>
+        <template #empty>
+          <!-- 失败时由上方 ListErrorAlert 承担，不得再声称「暂无告警」。 -->
+          <span v-if="!listError" class="text-muted-foreground">
+            {{ $t('page.iot.platformAlert.empty') }}
+          </span>
+        </template>
+
+        <template #ruleCode="{ row }">
+          <!-- 规则名走码表，原码放 tooltip 便于排障（未知码由 helper 给「未知规则」）。 -->
+          <Tooltip :title="row.ruleCode || undefined">
+            <span class="cursor-help">
+              {{ $t(platformHealthRuleLabelKey(row.ruleCode)) }}
+            </span>
+          </Tooltip>
+        </template>
+
+        <template #severity="{ row }">
+          <Tag :color="platformAlertSeverityColor(row.severity)">
+            {{ $t(platformAlertSeverityLabelKey(row.severity)) }}
+          </Tag>
+        </template>
+        <template #state="{ row }">
+          <Tag :color="platformAlertStateColor(row.state)">
+            {{ $t(platformAlertStateLabelKey(row.state)) }}
+          </Tag>
+        </template>
+        <template #snapshot="{ row }">
+          <!-- 快照原样存 JSON：单元格只给可滚动的限高窗口，完整美化 JSON 放 tooltip。 -->
+          <Tooltip v-if="row.metricSnapshot" placement="topLeft">
+            <template #title>
+              <pre
+                class="m-0 max-h-80 max-w-[480px] overflow-auto whitespace-pre-wrap text-xs"
+                >{{ prettyJson(row.metricSnapshot) }}</pre>
+            </template>
+            <pre
+              class="m-0 max-h-16 max-w-[240px] cursor-help overflow-auto whitespace-pre-wrap break-all text-xs"
+              >{{ prettyJson(row.metricSnapshot) }}</pre>
+          </Tooltip>
+          <span v-else class="text-muted-foreground">-</span>
+        </template>
+        <template #startTs="{ row }">
+          {{ formatDateTime(row.startTs) }}
+        </template>
+        <template #resolvedTs="{ row }">
+          {{ formatDateTime(row.resolvedTs) }}
+        </template>
+      </Grid>
+    </template>
+    <div v-else class="p-4 text-sm text-muted-foreground">
       {{ $t('page.iot.platformAlert.noPermission') }}
     </div>
   </Page>

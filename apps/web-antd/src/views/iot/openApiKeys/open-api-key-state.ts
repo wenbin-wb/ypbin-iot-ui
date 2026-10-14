@@ -104,16 +104,6 @@ export function openApiKeyStatusLabelKey(status?: null | number): string {
     : 'page.iot.openApiKey.disabled';
 }
 
-/** 时间展示（缺席显示 '-'）。 */
-export function openApiKeyTimeLabel(value?: null | string): string {
-  return value ? String(value) : '-';
-}
-
-/** 作用域展示（空数组显示 '-'，否则逗号连接）。 */
-export function openApiKeyScopesLabel(scopes?: null | string[]): string {
-  return scopes && scopes.length > 0 ? scopes.join(', ') : '-';
-}
-
 /** 用量进度（0–100 clamp；配额不限/未知时回 0，调用方按不限/未知展示，不画进度）。 */
 export function openApiKeyUsagePercent(
   usedToday?: null | number | string,

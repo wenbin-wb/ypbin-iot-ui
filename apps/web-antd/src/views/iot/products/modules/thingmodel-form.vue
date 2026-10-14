@@ -14,15 +14,18 @@ import {
   createEvent,
   createProperty,
   createService,
-  IOT_ACCESS_MODES,
-  IOT_DATA_TYPES,
-  IOT_SERVICE_OPTIONS,
   updateCommand,
   updateEvent,
   updateProperty,
   updateService,
 } from '#/api/iot';
 import { $t } from '#/locales';
+
+import {
+  accessModeOptions,
+  dataTypeOptions,
+  serviceOptionOptions,
+} from '../../shared/display';
 
 /**
  * 物模型元素编辑器：服务 / 属性 / 命令 / 事件四类的增删改**共用一个弹窗**。
@@ -67,7 +70,7 @@ function serviceSchema(): FormSchema[] {
     {
       component: 'Select',
       componentProps: {
-        options: IOT_SERVICE_OPTIONS.map((value) => ({ label: value, value })),
+        options: serviceOptionOptions(),
       },
       fieldName: 'serviceOption',
       label: $t('page.iot.product.serviceOption'),
@@ -109,7 +112,7 @@ function propertySchema(): FormSchema[] {
     {
       component: 'Select',
       componentProps: {
-        options: IOT_DATA_TYPES.map((value) => ({ label: value, value })),
+        options: dataTypeOptions(),
       },
       fieldName: 'dataType',
       label: $t('page.iot.point.dataType'),
@@ -118,7 +121,7 @@ function propertySchema(): FormSchema[] {
     {
       component: 'Select',
       componentProps: {
-        options: IOT_ACCESS_MODES.map((value) => ({ label: value, value })),
+        options: accessModeOptions(),
       },
       fieldName: 'accessMode',
       label: $t('page.iot.point.accessMode'),
@@ -249,7 +252,7 @@ function eventSchema(): FormSchema[] {
     {
       component: 'Select',
       componentProps: {
-        options: IOT_DATA_TYPES.map((value) => ({ label: value, value })),
+        options: dataTypeOptions(),
       },
       fieldName: 'dataType',
       label: $t('page.iot.point.dataType'),

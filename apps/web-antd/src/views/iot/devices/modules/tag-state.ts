@@ -1,5 +1,7 @@
 import type { IotDeviceTagApi } from '#/api/iot';
 
+import { $t } from '#/locales';
+
 /**
  * 设备标签页的**纯逻辑**（表单校验 + 状态判定），零 vue/antdv 依赖，可直接单测。
  *
@@ -13,11 +15,28 @@ export const TAG_KEY_MAX = 64;
 /** 标签值最大长度（后端 @Size(255)）。 */
 export const TAG_VALUE_MAX = 255;
 
+/** 校验失败结论：只带 i18n key 与参数，文案由 {@link resolveTagFormCheckMessage} 在渲染时解析。 */
+export interface TagFormCheckFailed {
+  ok: false;
+  /** i18n 键（`page.iot.tag.validation.*`）。 */
+  messageKey: string;
+  /** 插值参数（按 key 定义顺序传入）。 */
+  params?: Array<number | string>;
+}
+
 /** 表单校验结论。 */
-export interface TagFormCheck {
-  ok: boolean;
-  /** 面向用户的原因（ok=false 时非空）。 */
-  message: string;
+export type TagFormCheck = TagFormCheckFailed | { ok: true };
+
+/**
+ * 把校验结论解析成面向用户的文案（成功返回空串）。
+ *
+ * 页面必须经此渲染错误，不得直接展示 `messageKey`（那会把 i18n 键暴露给用户）。
+ *
+ * @param check 校验结论
+ * @returns 本地化错误文案；通过时为空串
+ */
+export function resolveTagFormCheckMessage(check: TagFormCheck): string {
+  return check.ok ? '' : $t(check.messageKey, check.params ?? []);
 }
 
 /**
@@ -31,18 +50,32 @@ export function checkTagForm(tagKey: string, tagValue: string): TagFormCheck {
   const key = (tagKey ?? '').trim();
   const value = (tagValue ?? '').trim();
   if (key === '') {
-    return { ok: false, message: '标签键不能为空' };
+    return {
+      messageKey: 'page.iot.tag.validation.keyRequired',
+      ok: false,
+    };
   }
   if (value === '') {
-    return { ok: false, message: '标签值不能为空' };
+    return {
+      messageKey: 'page.iot.tag.validation.valueRequired',
+      ok: false,
+    };
   }
   if (key.length > TAG_KEY_MAX) {
-    return { ok: false, message: `标签键超过 ${TAG_KEY_MAX} 字符限制` };
+    return {
+      messageKey: 'page.iot.tag.validation.keyTooLong',
+      ok: false,
+      params: [TAG_KEY_MAX],
+    };
   }
   if (value.length > TAG_VALUE_MAX) {
-    return { ok: false, message: `标签值超过 ${TAG_VALUE_MAX} 字符限制` };
+    return {
+      messageKey: 'page.iot.tag.validation.valueTooLong',
+      ok: false,
+      params: [TAG_VALUE_MAX],
+    };
   }
-  return { ok: true, message: '' };
+  return { ok: true };
 }
 
 /**

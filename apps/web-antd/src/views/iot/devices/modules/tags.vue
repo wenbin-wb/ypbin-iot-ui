@@ -28,6 +28,7 @@ import { extractErrorMessage } from '#/utils/error';
 import {
   checkTagForm,
   normalizeTagForm,
+  resolveTagFormCheckMessage,
   resolveTagListState,
   tagDisplayKey,
 } from './tag-state';
@@ -115,7 +116,7 @@ async function load() {
 async function save() {
   const check = checkTagForm(formKey.value, formValue.value);
   if (!check.ok) {
-    message.error(check.message);
+    message.error(resolveTagFormCheckMessage(check));
     return;
   }
   const payload = normalizeTagForm(formKey.value, formValue.value);
@@ -224,7 +225,7 @@ onMounted(() => {
           />
         </div>
         <div v-if="!formOk" class="text-xs text-red-500">
-          {{ checkTagForm(formKey, formValue).message }}
+          {{ resolveTagFormCheckMessage(checkTagForm(formKey, formValue)) }}
         </div>
       </div>
     </Modal>

@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import type { MaintenanceWindowRow } from './data';
+
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { IotMaintenanceApi } from '#/api/iot';
 
@@ -7,7 +9,7 @@ import { ref } from 'vue';
 import { Page, useVbenDrawer } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
-import { Alert, Button, message } from 'ant-design-vue';
+import { Button, message } from 'ant-design-vue';
 
 import { useVbenVxeGrid, VbenTableAction } from '#/adapter/vxe-table';
 import {
@@ -20,16 +22,16 @@ import { extractErrorMessage } from '#/utils/error';
 
 import EmptyGuide from '../onboarding/modules/empty-guide.vue';
 import OnboardingGuide from '../onboarding/modules/guide.vue';
-
-import { useColumns } from './data';
+import { maintenanceState } from '../shared/display';
+import ListErrorAlert from '../shared/list-error-alert.vue';
+import { useColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
 
-/**
- * 列表行 = 后端窗口 DTO + 前端补上的 `deviceName`。
- * 名称是**展示层**的加工结果（后端契约不变），故不进 `api/iot/maintenance.ts` 的 DTO。
- */
-type MaintenanceWindowRow = IotMaintenanceApi.MaintenanceWindowDto & {
-  deviceName: string;
+/** 列表查询参数（字段与后端 `getMaintenanceWindowList` 契约同名）。 */
+type MaintenanceWindowQuery = {
+  deviceId?: string;
+  from?: string;
+  to?: string;
 };
 
 const [FormDrawer, FormDrawerApi] = useVbenDrawer({ connectedComponent: Form });
@@ -42,8 +44,10 @@ const [GuideDrawer, GuideDrawerApi] = useVbenDrawer();
  * N+1 规避：先收齐本页所有 deviceId，**一次批量**解析（内部按页拉取、命中即停），
  * 绝不按行发请求；没有 deviceId 的窗口直接短路成「租户全部设备」，也不发多余请求。
  */
-async function loadWindowRows(): Promise<MaintenanceWindowRow[]> {
-  const rows = await getMaintenanceWindowList({});
+async function loadWindowRows(
+  params: MaintenanceWindowQuery,
+): Promise<MaintenanceWindowRow[]> {
+  const rows = await getMaintenanceWindowList(params);
   const deviceIds = rows
     .map((row) => row.deviceId)
     .filter((id): id is string => !!id);
@@ -60,6 +64,7 @@ async function loadWindowRows(): Promise<MaintenanceWindowRow[]> {
     deviceName: row.deviceId
       ? (names[row.deviceId] ?? row.deviceId)
       : $t('page.iot.maintenance.tenantWide'),
+    maintenanceState: maintenanceState(row.startTs, row.endTs),
   }));
 }
 
@@ -73,6 +78,10 @@ async function loadWindowRows(): Promise<MaintenanceWindowRow[]> {
 const listError = ref('');
 
 const [Grid, gridApi] = useVbenVxeGrid({
+  formOptions: {
+    schema: useGridFormSchema(),
+    submitOnChange: true,
+  },
   gridOptions: {
     columns: useColumns(),
     height: 'auto',
@@ -80,9 +89,9 @@ const [Grid, gridApi] = useVbenVxeGrid({
     pagerConfig: { enabled: false },
     proxyConfig: {
       ajax: {
-        query: async () => {
+        query: async (_params, formValues: MaintenanceWindowQuery) => {
           try {
-            const rows = await loadWindowRows();
+            const rows = await loadWindowRows(formValues ?? {});
             listError.value = '';
             return rows;
           } catch (error) {
@@ -97,7 +106,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
       },
     },
     rowConfig: { keyField: 'id' },
-    toolbarConfig: { custom: true, export: false, refresh: true, zoom: true },
+    toolbarConfig: {
+      custom: true,
+      export: false,
+      refresh: true,
+      search: true,
+      zoom: true,
+    },
   } as VxeTableGridOptions<MaintenanceWindowRow>,
 });
 
@@ -122,14 +137,11 @@ function openGuide() {
       <OnboardingGuide @done="gridApi.query()" />
     </GuideDrawer>
     <!-- 失败态必须挂在表格之外：真实 vxe 只在表体无行时渲染 `#empty` 槽，
-         「已有数据后刷新失败」时槽不渲染 ⇒ 放槽里的失败提示会看不见。 -->
-    <Alert
-      v-if="listError"
-      class="mb-2"
-      :description="listError"
-      :message="$t('page.iot.maintenance.listLoadFailed')"
-      show-icon
-      type="error"
+         「已有数据后刷新失败」时槽不渲染 ⇒ 放槽里的失败提示会看不见。
+         统一走 shared/list-error-alert.vue。 -->
+    <ListErrorAlert
+      :error="listError"
+      :title="$t('page.iot.maintenance.listLoadFailed')"
     />
     <Grid>
       <template #toolbar-tools>
@@ -148,7 +160,7 @@ function openGuide() {
 
       <!-- 空态引导：维护窗口为空时说明「为什么是空的 + 下一步点哪里」 -->
       <template #empty>
-        <!-- 失败时由上方 Alert 承担失败态，这里不得再声称「没有数据」 -->
+        <!-- 失败时由上方 ListErrorAlert 承担失败态，这里不得再声称「没有数据」 -->
         <EmptyGuide
           v-if="!listError"
           :reason="$t('page.iot.maintenance.emptyReason')"

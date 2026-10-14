@@ -223,6 +223,54 @@
       "notifyExtraEmailsHint": "For mailboxes that are not system users (e.g. a shared alert group); if left empty, email only uses platform fallback mailboxes (nothing is delivered if none is configured).",
       "notifyUnrecognized": "These legacy entries are neither users nor emails; they are kept as-is (the platform will not send to them): {0}"
     },
+    "display": {
+      "unknown": "Unknown",
+      "unknownWithValue": "Unknown ({0})",
+      "copy": "Copy",
+      "copySuccess": "Copied",
+      "copyFailed": "Copy failed",
+      "yes": "Yes",
+      "no": "No",
+      "protocol": {
+        "modbus": "Modbus TCP",
+        "tcp": "TCP passthrough",
+        "mqtt": "MQTT",
+        "opcua": "OPC UA"
+      },
+      "onlineStatus": {
+        "online": "Online",
+        "offline": "Offline",
+        "unknown": "Unknown"
+      },
+      "modelStatus": {
+        "draft": "Draft",
+        "published": "Published"
+      },
+      "dataFormat": {
+        "json": "JSON",
+        "binary": "Binary"
+      },
+      "maintenanceState": {
+        "upcoming": "Not started",
+        "ongoing": "Ongoing",
+        "ended": "Ended",
+        "unknown": "Unknown"
+      },
+      "time": {
+        "justNow": "Just now",
+        "minutesAgo": "{0} min ago",
+        "hoursAgo": "{0} h ago",
+        "daysAgo": "{0} d ago"
+      },
+      "quality": {
+        "good": "Valid",
+        "uncertain": "Uncertain",
+        "bad": "Bad",
+        "stale": "Stale",
+        "notConnected": "Not connected",
+        "configError": "Config error"
+      }
+    },
     "title": "IoT Platform",
     "device": {
       "title": "Devices",
@@ -314,7 +362,13 @@
         "rowListLoadFailed": "Failed to load row details",
         "filterAll": "All",
         "filterSuccess": "Succeeded only",
-        "filterFailed": "Failed only"
+        "filterFailed": "Failed only",
+        "validation": {
+          "fileType": "Only CSV/TXT files are supported ({0}). Current file: {1}",
+          "fileTypeNoName": "Only CSV/TXT files are supported ({0}). The current file name is unavailable.",
+          "fileTooLarge": "File {0} exceeds the {1} limit; split it into multiple files and import in batches.",
+          "fileEmpty": "The file is empty (0 bytes); check whether you selected the wrong file."
+        }
       },
       "trace": {
         "title": "Message Trace",
@@ -374,7 +428,12 @@
         "adviceUpPartialAction2": "If counts keep mismatching, check the batch's discard detail in the application log and the propertyid.unmapped / propertyid.orphan metrics.",
         "adviceUpDeviceNotFoundSummary": "The device declared in the payload does not exist (or belongs to no tenant); no readings were persisted.",
         "adviceUpDeviceNotFoundAction1": "Verify the deviceId/deviceCode the device reports matches the platform registration (including tenant ownership), fix the device-side config, then verify from \"Online debug\"."
-      }
+      },
+      "searchKeyword": "Keyword",
+      "searchKeywordPlaceholder": "Device name / code",
+      "protocolFilterPlaceholder": "All protocols",
+      "onlineStatusFilterPlaceholder": "All online statuses",
+      "productFilterPlaceholder": "All products"
     },
     "event": {
       "title": "Runtime events",
@@ -464,7 +523,15 @@
       "readonlyPublished": "The thing model of a published product is READ-ONLY (services/properties/commands/events can be listed and the TSL exported); editing requires creating a new draft first (the write APIs require draft state).",
       "readonlyEditBlocked": "This product is published and its thing model is read-only; create a new draft before editing.",
       "emptyReason": "This tenant has no products yet: a product represents a device model, and the thing model (services/properties/commands/events) belongs to it. Devices can only bind published products, so devices come after this list has data.",
-      "listLoadFailed": "Failed to load the product list"
+      "listLoadFailed": "Failed to load the product list",
+      "searchKeyword": "Keyword",
+      "searchKeywordPlaceholder": "Product name / code",
+      "protocolPlaceholder": "Select access protocol",
+      "modelStatusFilterPlaceholder": "All model statuses",
+      "serviceOptionMaster": "Master service",
+      "serviceOptionMandatory": "Mandatory service",
+      "serviceOptionOptional": "Optional service",
+      "codePlaceholder": "e.g. meter-01"
     },
     "group": {
       "title": "Device groups",
@@ -584,7 +651,16 @@
       "close": "Close window",
       "closeConfirm": "Closed windows no longer count as maintenance. Continue?",
       "emptyReason": "No maintenance windows yet: a window excludes planned downtime (servicing, part replacement) from availability statistics. Without one, that downtime is counted as an outage and lowers availability.",
-      "listLoadFailed": "Failed to load the maintenance window list"
+      "listLoadFailed": "Failed to load the maintenance window list",
+      "searchDevicePlaceholder": "All devices",
+      "searchStart": "From",
+      "searchEnd": "To",
+      "status": "Status",
+      "duration": "Duration",
+      "durationDays": "{0} d",
+      "durationHours": "{0} h",
+      "durationMinutes": "{0} min",
+      "durationLessThanMinute": "< 1 min"
     },
     "onboarding": {
       "title": "Onboarding guide",
@@ -650,14 +726,21 @@
       "credential": "Has credentials",
       "pending": "Pending integration",
       "noticeTitle": "Some columns have no trustworthy data source yet",
-      "noticeText": "The Devices, Last reported and Has credentials columns are intentionally left blank and marked Pending integration: the IoT service exposes no cross-tenant aggregation or credential endpoint, so this page never fills in guessed values. Enabling those columns requires a new backend aggregation API. The Tenant column shows the raw tenantId; resolving tenant names needs the sys_tenant API, which the IoT service does not expose, so it is pending integration too.",
+      "noticeText": "The Devices, Last reported and Has credentials columns are intentionally left blank and marked Pending integration: the IoT service exposes no cross-tenant aggregation or credential endpoint, so this page never fills in guessed values. Enabling those columns requires a new backend aggregation API. Tenant names are now resolved through the system tenant API; if that lookup fails, the name column is marked as name pending with a visible notice instead of showing only the raw tenantId.",
       "change": {
         "created": "First-time onboarding",
         "revived": "Onboarding resumed",
         "updated": "Access switch updated"
       },
       "listLoadFailed": "Failed to load the tenant onboarding ledger",
-      "emptyHint": "No tenant onboarding records yet: a tenant appears here after its first onboarding."
+      "emptyHint": "No tenant onboarding records yet: a tenant appears here after its first onboarding.",
+      "tenantName": "Tenant name",
+      "tenantId": "Tenant ID",
+      "tenantSearchPlaceholder": "Search tenant name / ID",
+      "tenantNamePending": "(name pending)",
+      "tenantNameLoadFailed": "Failed to load tenant names",
+      "tenantNameLoadFailedDesc": "The ledger is still usable by tenant ID; the name column is marked as name pending (no invented names, no blanked ledger). Check whether the current account may query platform tenants, or retry later. API error: {0}",
+      "searchEmptyHint": "No tenant matches \"{0}\": try another name or tenantId, or clear the search box to see all."
     },
     "point": {
       "title": "Point mapping",
@@ -749,7 +832,39 @@
       "rwWrite": "Write (W)",
       "rwReadWrite": "Read/Write (RW)",
       "enableSwitch": "Enable mapping",
-      "offsetValue": "Offset"
+      "offsetValue": "Offset",
+      "validation": {
+        "propertyRequired": "Related property/command is required",
+        "refTypeRequired": "Reference type is required",
+        "addressTypeRequired": "Address type is required",
+        "rwRequired": "Read/write permission is required",
+        "rawAddressRequired": "Protocol address is required",
+        "rawAddressTooLong": "Protocol address exceeds the {0}-character limit",
+        "pollIntervalNonNegativeInteger": "Polling interval must be a non-negative integer (milliseconds)",
+        "scaleFactorNumber": "Scale factor must be a number",
+        "offsetValueNumber": "Offset value must be a number",
+        "registerFormatInvalid": "Register value format must be one of int, float, double, bits, or string",
+        "stringWordCountRequired": "Register count is required ({0}..{1})",
+        "stringWordCountRange": "String register count must be an integer from {0} to {1}",
+        "doubleWordCount": "Double precision always uses {0} registers (wordCount must be {0})",
+        "wordCountInvalid": "Register width must be 1 (16-bit) or 2 (32-bit)",
+        "signedInvalid": "Numeric sign must be signed (true) or unsigned (false)",
+        "bitOffsetRequired": "Bit-field start offset is required (0..{0})",
+        "bitLengthRequired": "Bit-field length is required (1..16 - offset)",
+        "bitOffsetRange": "Bit-field start offset must be an integer from 0 to {0}",
+        "bitLengthMin": "Bit-field length must be an integer of at least 1",
+        "bitsOverflow": "Bit field out of range: start + length must not exceed {0} (currently {1} + {2} = {3})",
+        "byteOrderInvalid": "Byte order must be big or little"
+      },
+      "dataTypeInt": "Integer",
+      "dataTypeLong": "Long",
+      "dataTypeDecimal": "Decimal",
+      "dataTypeString": "String",
+      "dataTypeBool": "Boolean",
+      "dataTypeEnum": "Enum",
+      "dataTypeDateTime": "DateTime",
+      "dataTypeJsonObject": "JSON object",
+      "dataTypeArray": "Array"
     },
     "shadow": {
       "get": "Read shadow",
@@ -767,7 +882,11 @@
       "desiredHint": "desired is the target config pushed to the device (replaces whole map).",
       "desiredSaved": "Desired saved",
       "desiredFailed": "Failed to save desired",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "validation": {
+        "jsonInvalid": "Not valid JSON",
+        "objectRequired": "Desired value must be a JSON object (key-value pairs), not an array, number, or null"
+      }
     },
     "tag": {
       "title": "Device Tags",
@@ -789,7 +908,13 @@
       "deleteFailed": "Failed to delete tag",
       "deleteConfirm": "Delete tag \"{0}\"?",
       "cancel": "Cancel",
-      "okText": "OK"
+      "okText": "OK",
+      "validation": {
+        "keyRequired": "Tag key is required",
+        "valueRequired": "Tag value is required",
+        "keyTooLong": "Tag key exceeds the {0}-character limit",
+        "valueTooLong": "Tag value exceeds the {0}-character limit"
+      }
     },
     "credential": {
       "get": "View device credential",
@@ -921,7 +1046,10 @@
       "resendFailed": "Resend failed",
       "resendNotAllowed": "Only failed/timed-out commands can be resent",
       "renderFailed": "The online-debug panel failed to render (caught, not swallowed): full error below",
-      "total": "{0} in total"
+      "total": "{0} in total",
+      "sourceConsole": "Console",
+      "sourceRule": "Rule engine",
+      "sourceApi": "Open API"
     },
     "platformAlert": {
       "title": "Platform Alerts",
@@ -948,6 +1076,17 @@
         "critical": "Critical",
         "warning": "Warning",
         "unknown": "Unknown"
+      },
+      "ruleLabel": {
+        "evaluatorStalled": "Alert evaluator stalled",
+        "evaluatorRoundFailed": "Alert evaluation rounds failing",
+        "notifyFailing": "Alert notification delivery failing",
+        "ingestDropping": "Inbound readings dropped",
+        "ledgerBumpFailing": "Ledger version bump failing",
+        "reconcileDeferred": "Config reconciliation deferred by time budget",
+        "tickSlow": "Ingestion tick too slow",
+        "instanceUnreachable": "Access node metrics report interrupted",
+        "unknown": "Unknown rule"
       }
     },
     "openApiKey": {
@@ -988,7 +1127,17 @@
       "copyFailed": "Copy failed",
       "issueResult": "Issue result (plaintext shown once)",
       "oneTime": "The plaintext secret is shown only once. Copy it now",
-      "secretHint": "List shows only the prefix; full secret is never shown again"
+      "secretHint": "List shows only the prefix; full secret is never shown again",
+      "scope": {
+        "deviceList": "Read device list",
+        "deviceLatest": "Read latest device values",
+        "seriesGet": "Read time-series data",
+        "alertList": "Read alerts",
+        "productList": "Read products",
+        "availabilityGet": "Read availability and outages",
+        "debugSend": "Send debug commands (high risk)",
+        "unknown": "Unknown scope"
+      }
     },
     "overview": {
       "overview": "Access Nodes & Metrics",

@@ -1,5 +1,7 @@
 import type { IotPointApi } from '#/api/iot';
 
+import { $t } from '#/locales';
+
 /**
  * 点位映射表单的**纯逻辑**（枚举/校验/payload 构建/回显），零 vue 依赖可单测。
  *
@@ -172,11 +174,28 @@ export interface PointForm {
   enabled: boolean;
 }
 
+/** 校验失败结论：只带 i18n key 与参数，文案由 {@link resolvePointFormCheckMessage} 在渲染时解析。 */
+export interface PointFormCheckFailed {
+  ok: false;
+  /** i18n 键（`page.iot.point.validation.*`）。 */
+  messageKey: string;
+  /** 插值参数（按 key 定义顺序传入）。 */
+  params?: Array<number | string>;
+}
+
 /** 校验结论。 */
-export interface PointFormCheck {
-  ok: boolean;
-  /** ok=false 时非空。 */
-  message: string;
+export type PointFormCheck = PointFormCheckFailed | { ok: true };
+
+/**
+ * 把校验结论解析成面向用户的文案（成功返回空串）。
+ *
+ * 页面必须经此渲染错误，不得直接展示 `messageKey`（那会把 i18n 键暴露给用户）。
+ *
+ * @param check 校验结论
+ * @returns 本地化错误文案；通过时为空串
+ */
+export function resolvePointFormCheckMessage(check: PointFormCheck): string {
+  return check.ok ? '' : $t(check.messageKey, check.params ?? []);
 }
 
 /**
@@ -262,50 +281,79 @@ function isOptionalNumber(text?: string): boolean {
 /** 校验表单（与后端 @NotBlank/@NotNull/@Size/@Min 同口径）。 */
 export function validatePointForm(form: PointForm): PointFormCheck {
   if (!form.propertyId || form.propertyId.trim() === '') {
-    return { ok: false, message: '关联属性/命令不能为空' };
+    return {
+      messageKey: 'page.iot.point.validation.propertyRequired',
+      ok: false,
+    };
   }
   if (!form.refType || form.refType.trim() === '') {
-    return { ok: false, message: '关联类型不能为空' };
+    return {
+      messageKey: 'page.iot.point.validation.refTypeRequired',
+      ok: false,
+    };
   }
   if (!form.addressType || form.addressType.trim() === '') {
-    return { ok: false, message: '地址类型不能为空' };
+    return {
+      messageKey: 'page.iot.point.validation.addressTypeRequired',
+      ok: false,
+    };
   }
   if (!form.rw || form.rw.trim() === '') {
-    return { ok: false, message: '读写权限不能为空' };
+    return {
+      messageKey: 'page.iot.point.validation.rwRequired',
+      ok: false,
+    };
   }
   const address = (form.rawAddress ?? '').trim();
   if (address === '') {
-    return { ok: false, message: '协议内地址不能为空' };
+    return {
+      messageKey: 'page.iot.point.validation.rawAddressRequired',
+      ok: false,
+    };
   }
   if (address.length > POINT_RAW_ADDRESS_MAX) {
     return {
+      messageKey: 'page.iot.point.validation.rawAddressTooLong',
       ok: false,
-      message: `协议内地址超过 ${POINT_RAW_ADDRESS_MAX} 字符限制`,
+      params: [POINT_RAW_ADDRESS_MAX],
     };
   }
   if (form.pollIntervalMs !== undefined && form.pollIntervalMs !== '') {
     const interval = Number(form.pollIntervalMs);
     if (!Number.isInteger(interval) || interval < 0) {
-      return { ok: false, message: '采集周期必须是非负整数（毫秒）' };
+      return {
+        messageKey: 'page.iot.point.validation.pollIntervalNonNegativeInteger',
+        ok: false,
+      };
     }
   }
   if (!isOptionalNumber(form.scaleFactor)) {
-    return { ok: false, message: '缩放因子必须是数字' };
+    return {
+      messageKey: 'page.iot.point.validation.scaleFactorNumber',
+      ok: false,
+    };
   }
   if (!isOptionalNumber(form.offsetValue)) {
-    return { ok: false, message: '偏移量必须是数字' };
+    return {
+      messageKey: 'page.iot.point.validation.offsetValueNumber',
+      ok: false,
+    };
   }
   if (!isPointRegisterFormat(form.registerFormat)) {
     return {
+      messageKey: 'page.iot.point.validation.registerFormatInvalid',
       ok: false,
-      message: '寄存器值形态只能是 int / float / bits / string',
     };
   }
   if (form.registerFormat === 'string') {
     // string：wordCount 语义是「寄存器个数」（1..32），不是 v1 的 1|2。
     const countText = (form.wordCount ?? '').trim();
     if (countText === '') {
-      return { ok: false, message: '寄存器个数不能为空（1..32）' };
+      return {
+        messageKey: 'page.iot.point.validation.stringWordCountRequired',
+        ok: false,
+        params: [POINT_STRING_WORD_COUNT_MIN, POINT_STRING_WORD_COUNT_MAX],
+      };
     }
     const count = Number(countText);
     if (
@@ -314,8 +362,9 @@ export function validatePointForm(form: PointForm): PointFormCheck {
       count > POINT_STRING_WORD_COUNT_MAX
     ) {
       return {
+        messageKey: 'page.iot.point.validation.stringWordCountRange',
         ok: false,
-        message: `字符串形态的寄存器个数必须是 ${POINT_STRING_WORD_COUNT_MIN}..${POINT_STRING_WORD_COUNT_MAX} 的整数`,
+        params: [POINT_STRING_WORD_COUNT_MIN, POINT_STRING_WORD_COUNT_MAX],
       };
     }
   } else if (form.registerFormat === 'double') {
@@ -324,8 +373,9 @@ export function validatePointForm(form: PointForm): PointFormCheck {
       String(form.wordCount ?? '').trim() !== String(POINT_DOUBLE_WORD_COUNT)
     ) {
       return {
+        messageKey: 'page.iot.point.validation.doubleWordCount',
         ok: false,
-        message: `双精度浮点固定占 ${POINT_DOUBLE_WORD_COUNT} 个寄存器（wordCount 必须为 ${POINT_DOUBLE_WORD_COUNT}）`,
+        params: [POINT_DOUBLE_WORD_COUNT],
       };
     }
   } else if (
@@ -334,19 +384,32 @@ export function validatePointForm(form: PointForm): PointFormCheck {
     form.wordCount !== '1' &&
     form.wordCount !== '2'
   ) {
-    return { ok: false, message: '寄存器宽度只能是 1（16 位）或 2（32 位）' };
+    return {
+      messageKey: 'page.iot.point.validation.wordCountInvalid',
+      ok: false,
+    };
   }
   if (form.signed !== true && form.signed !== false) {
-    return { ok: false, message: '数值符号必须是有符号(true)/无符号(false)' };
+    return {
+      messageKey: 'page.iot.point.validation.signedInvalid',
+      ok: false,
+    };
   }
   if (form.registerFormat === 'bits') {
     const offsetText = (form.bitOffset ?? '').trim();
     const lengthText = (form.bitLength ?? '').trim();
     if (offsetText === '') {
-      return { ok: false, message: '位域的起始位不能为空（0..15）' };
+      return {
+        messageKey: 'page.iot.point.validation.bitOffsetRequired',
+        ok: false,
+        params: [POINT_BIT_OFFSET_MAX],
+      };
     }
     if (lengthText === '') {
-      return { ok: false, message: '位域的位宽不能为空（1..16-起始位）' };
+      return {
+        messageKey: 'page.iot.point.validation.bitLengthRequired',
+        ok: false,
+      };
     }
     const offset = Number(offsetText);
     const length = Number(lengthText);
@@ -356,17 +419,22 @@ export function validatePointForm(form: PointForm): PointFormCheck {
       offset > POINT_BIT_OFFSET_MAX
     ) {
       return {
+        messageKey: 'page.iot.point.validation.bitOffsetRange',
         ok: false,
-        message: `位域起始位必须是 0..${POINT_BIT_OFFSET_MAX} 的整数`,
+        params: [POINT_BIT_OFFSET_MAX],
       };
     }
     if (!Number.isInteger(length) || length < 1) {
-      return { ok: false, message: '位域位宽必须是不小于 1 的整数' };
+      return {
+        messageKey: 'page.iot.point.validation.bitLengthMin',
+        ok: false,
+      };
     }
     if (offset + length > POINT_REGISTER_BITS) {
       return {
+        messageKey: 'page.iot.point.validation.bitsOverflow',
         ok: false,
-        message: `位域越界：起始位 + 位宽不能超过 ${POINT_REGISTER_BITS}（当前 ${offset} + ${length} = ${offset + length}）`,
+        params: [POINT_REGISTER_BITS, offset, length, offset + length],
       };
     }
   }
@@ -376,9 +444,12 @@ export function validatePointForm(form: PointForm): PointFormCheck {
     form.byteOrder !== 'big' &&
     form.byteOrder !== 'little'
   ) {
-    return { ok: false, message: '字序只能是 big 或 little' };
+    return {
+      messageKey: 'page.iot.point.validation.byteOrderInvalid',
+      ok: false,
+    };
   }
-  return { ok: true, message: '' };
+  return { ok: true };
 }
 
 /**

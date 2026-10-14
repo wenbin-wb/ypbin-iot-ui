@@ -25,6 +25,8 @@ import {
 import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
 
+import CopyText from '../../shared/copy-text.vue';
+import { formatDateTime } from '../../shared/display';
 import {
   brokerLabel,
   canReissue,
@@ -219,7 +221,7 @@ onMounted(() => {
         </Tag>
         <span>
           {{ $t('page.iot.credential.username') }}:
-          {{ credential?.username ?? '-' }}
+          <CopyText :value="credential?.username" />
         </span>
         <span>
           {{ $t('page.iot.credential.version') }}:
@@ -228,7 +230,7 @@ onMounted(() => {
       </div>
       <div class="text-xs text-muted-foreground">
         {{ $t('page.iot.credential.issuedAt') }}:
-        {{ credential?.credentialIssuedAt ?? '-' }}
+        {{ formatDateTime(credential?.credentialIssuedAt) }}
       </div>
     </div>
 
@@ -252,7 +254,7 @@ onMounted(() => {
     <div class="mt-3 space-y-2 text-sm">
       <div>
         {{ $t('page.iot.credential.username') }}:
-        <span class="font-mono">{{ issuedResult?.username }}</span>
+        <CopyText :value="issuedResult?.username" />
       </div>
       <div>
         {{ $t('page.iot.credential.password') }}:
@@ -271,7 +273,7 @@ onMounted(() => {
       </div>
       <div>
         {{ $t('page.iot.credential.issuedAt') }}:
-        {{ issuedResult?.credentialIssuedAt ?? '-' }}
+        {{ formatDateTime(issuedResult?.credentialIssuedAt) }}
       </div>
       <div v-if="connection" class="border-t pt-2">
         <div class="font-semibold">
@@ -280,17 +282,17 @@ onMounted(() => {
         <div>
           {{ $t('page.iot.credential.broker') }}: {{ brokerLabel(connection) }}
         </div>
-        <div>
+        <div class="flex items-center gap-1">
           {{ $t('page.iot.credential.clientId') }}:
-          <span class="font-mono">{{ connection.clientId }}</span>
+          <CopyText :value="connection.clientId" />
         </div>
-        <div>
+        <div class="flex items-center gap-1">
           {{ $t('page.iot.credential.topicUp') }}:
-          <span class="font-mono">{{ connection.topicUpPrefix }}</span>
+          <CopyText :value="connection.topicUpPrefix" />
         </div>
-        <div>
+        <div class="flex items-center gap-1">
           {{ $t('page.iot.credential.topicDown') }}:
-          <span class="font-mono">{{ connection.topicDownPrefix }}</span>
+          <CopyText :value="connection.topicDownPrefix" />
         </div>
       </div>
     </div>
@@ -305,7 +307,7 @@ onMounted(() => {
     <div class="space-y-2 text-sm">
       <div>
         {{ $t('page.iot.credential.username') }}:
-        {{ credential?.username ?? '-' }}
+        <CopyText :value="credential?.username" />
       </div>
       <div>
         {{ $t('page.iot.credential.version') }}:
@@ -313,11 +315,11 @@ onMounted(() => {
       </div>
       <div>
         {{ $t('page.iot.credential.issuedAt') }}:
-        {{ credential?.credentialIssuedAt ?? '-' }}
+        {{ formatDateTime(credential?.credentialIssuedAt) }}
       </div>
       <div>
         {{ $t('page.iot.credential.revokedAt') }}:
-        {{ credential?.credentialRevokedAt ?? '-' }}
+        {{ formatDateTime(credential?.credentialRevokedAt) }}
       </div>
       <div class="border-t pt-2">
         <div class="font-semibold">
@@ -328,17 +330,17 @@ onMounted(() => {
             {{ $t('page.iot.credential.broker') }}:
             {{ brokerLabel(connection) }}
           </div>
-          <div>
+          <div class="flex items-center gap-1">
             {{ $t('page.iot.credential.clientId') }}:
-            <span class="font-mono">{{ connection.clientId }}</span>
+            <CopyText :value="connection.clientId" />
           </div>
-          <div>
+          <div class="flex items-center gap-1">
             {{ $t('page.iot.credential.topicUp') }}:
-            <span class="font-mono">{{ connection.topicUpPrefix }}</span>
+            <CopyText :value="connection.topicUpPrefix" />
           </div>
-          <div>
+          <div class="flex items-center gap-1">
             {{ $t('page.iot.credential.topicDown') }}:
-            <span class="font-mono">{{ connection.topicDownPrefix }}</span>
+            <CopyText :value="connection.topicDownPrefix" />
           </div>
           <div
             v-if="!connection.emqxEnabled"

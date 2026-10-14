@@ -1,3 +1,5 @@
+import { $t } from '#/locales';
+
 /**
  * 设备影子「期望值」编辑的**纯逻辑**（JSON 解析/校验/格式化/合并），零依赖可单测。
  *
@@ -6,13 +8,35 @@
  * 是"做错了看不出"的部分 —— 抽成纯函数在 jsdom 外穷举。
  */
 
-/** JSON 解析结论。 */
-export interface DesiredParseResult {
-  ok: boolean;
+/** JSON 解析失败结论：只带 i18n key 与参数，文案由 {@link resolveDesiredParseMessage} 解析。 */
+export interface DesiredParseFailed {
+  ok: false;
+  /** i18n 键（`page.iot.shadow.validation.*`）。 */
+  messageKey: string;
+  /** 插值参数（按 key 定义顺序传入）。 */
+  params?: Array<number | string>;
+}
+
+/** JSON 解析成功结论（value 一定是对象）。 */
+export interface DesiredParseSucceeded {
+  ok: true;
   /** 解析出的对象（ok=true 时非空引用）。 */
-  value?: Record<string, unknown>;
-  /** 面向用户的原因（ok=false 时非空）。 */
-  message: string;
+  value: Record<string, unknown>;
+}
+
+/** JSON 解析结论。 */
+export type DesiredParseResult = DesiredParseFailed | DesiredParseSucceeded;
+
+/**
+ * 把解析结论解析成面向用户的文案（成功返回空串）。
+ *
+ * 页面必须经此渲染错误，不得直接展示 `messageKey`（那会把 i18n 键暴露给用户）。
+ *
+ * @param result 解析结论
+ * @returns 本地化错误文案；通过时为空串
+ */
+export function resolveDesiredParseMessage(result: DesiredParseResult): string {
+  return result.ok ? '' : $t(result.messageKey, result.params ?? []);
 }
 
 /**
@@ -28,22 +52,24 @@ export function parseDesiredJson(text: string): DesiredParseResult {
   const raw = (text ?? '').trim();
   if (raw === '') {
     // 空文本按"清空 desired"处理：给 {} 而不是报错（清空是合法意图）
-    return { ok: true, value: {}, message: '' };
+    return { ok: true, value: {} };
   }
   let value: unknown;
   try {
     value = JSON.parse(raw);
   } catch {
-    return { ok: false, message: '不是合法的 JSON', value: undefined };
+    return {
+      messageKey: 'page.iot.shadow.validation.jsonInvalid',
+      ok: false,
+    };
   }
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return {
+      messageKey: 'page.iot.shadow.validation.objectRequired',
       ok: false,
-      message: '期望值必须是 JSON 对象（键值对），不能是数组/数字/null',
-      value: undefined,
     };
   }
-  return { ok: true, value: value as Record<string, unknown>, message: '' };
+  return { ok: true, value: value as Record<string, unknown> };
 }
 
 /**

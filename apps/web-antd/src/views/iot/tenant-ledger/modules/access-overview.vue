@@ -15,6 +15,8 @@ import { getAccessOverview } from '#/api/iot/accessOverview';
 import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
 
+import { formatDateTime } from '../../shared/display';
+
 interface Row {
   key: string;
   accessNode: string;
@@ -72,8 +74,16 @@ async function load() {
           ? $t('page.iot.overview.unlimited')
           : String(node.maxTenants),
       holding: toText(node.holdingCount),
-      earliestExpire: toText(node.leaseExpireMin),
-      lastRegistered: toText(node.lastRegisteredAt),
+      // 后端是 LocalDateTime（不是 epoch 秒）：格式化成 yyyy-MM-dd HH:mm:ss；
+      // null/未上报仍回落「暂无数据」，不渲染假日期。
+      earliestExpire: formatDateTime(
+        node.leaseExpireMin,
+        $t('page.iot.overview.noData'),
+      ),
+      lastRegistered: formatDateTime(
+        node.lastRegisteredAt,
+        $t('page.iot.overview.noData'),
+      ),
       leaseAlive: leaseAliveText(node.leaseAlive),
       leaseRemaining: toText(node.leaseRemainingSec),
     }));
@@ -169,6 +179,8 @@ onMounted(load);
       </Descriptions>
     </Card>
     <Card :title="$t('page.iot.overview.overview')">
+      <!-- vben-ui-dev-exempt: R3 只读 7 列固定概览，无分页/搜索/选择/行操作，且既有用例锁
+           antd Table 的 .ant-table-tbody 结构；改用 vxe 需重构高度链且收益为负，故保留。 -->
       <Table
         :columns="[
           {

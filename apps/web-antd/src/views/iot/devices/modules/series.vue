@@ -51,6 +51,7 @@ import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
 import { downloadByBlob } from '#/utils/file';
 
+import { displayOrFallback, qualityLabel } from '../../shared/display';
 import {
   buildChartModel,
   buildCsv,
@@ -744,7 +745,7 @@ function onExport(): void {
 }
 </script>
 <template>
-  <Drawer class="w-[960px]">
+  <Drawer class="w-[960px] max-w-[calc(100vw-40px)]">
     <div class="mb-3 text-sm text-muted-foreground">
       {{ $t('page.iot.series.device') }}：{{ deviceLabel || '-' }}
     </div>
@@ -1021,8 +1022,8 @@ function onExport(): void {
                   >
                     <td v-if="multiSeries" class="py-1">{{ row.name }}</td>
                     <td class="py-1">{{ row.ts }}</td>
-                    <td class="py-1">{{ row.value || '-' }}</td>
-                    <td class="py-1">{{ row.quality || '-' }}</td>
+                    <td class="py-1">{{ displayOrFallback(row.value) }}</td>
+                    <td class="py-1">{{ qualityLabel(row.quality) }}</td>
                   </tr>
                 </tbody>
               </table>

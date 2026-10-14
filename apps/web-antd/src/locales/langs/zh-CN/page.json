@@ -223,6 +223,54 @@
       "notifyExtraEmailsHint": "用于非系统用户的邮箱（如公共告警组）；留空时邮件仅走平台兜底邮箱（未配置则不送达）。",
       "notifyUnrecognized": "以下历史条目既不是用户也不是邮箱，将原样保留（平台不会向它们发送）：{0}"
     },
+    "display": {
+      "unknown": "未知",
+      "unknownWithValue": "未知（{0}）",
+      "copy": "复制",
+      "copySuccess": "已复制",
+      "copyFailed": "复制失败",
+      "yes": "是",
+      "no": "否",
+      "protocol": {
+        "modbus": "Modbus TCP",
+        "tcp": "TCP 透传",
+        "mqtt": "MQTT",
+        "opcua": "OPC UA"
+      },
+      "onlineStatus": {
+        "online": "在线",
+        "offline": "离线",
+        "unknown": "未知"
+      },
+      "modelStatus": {
+        "draft": "草稿",
+        "published": "已发布"
+      },
+      "dataFormat": {
+        "json": "JSON",
+        "binary": "二进制"
+      },
+      "maintenanceState": {
+        "upcoming": "未开始",
+        "ongoing": "进行中",
+        "ended": "已结束",
+        "unknown": "未知"
+      },
+      "time": {
+        "justNow": "刚刚",
+        "minutesAgo": "{0} 分钟前",
+        "hoursAgo": "{0} 小时前",
+        "daysAgo": "{0} 天前"
+      },
+      "quality": {
+        "good": "有效",
+        "uncertain": "不确定",
+        "bad": "坏值",
+        "stale": "陈旧",
+        "notConnected": "未连接",
+        "configError": "配置错误"
+      }
+    },
     "title": "IoT 平台",
     "device": {
       "title": "设备台账",
@@ -314,7 +362,13 @@
         "rowListLoadFailed": "明细加载失败",
         "filterAll": "全部",
         "filterSuccess": "仅成功",
-        "filterFailed": "仅失败"
+        "filterFailed": "仅失败",
+        "validation": {
+          "fileType": "只支持 CSV/TXT 文件（{0}），当前文件：{1}",
+          "fileTypeNoName": "只支持 CSV/TXT 文件（{0}），当前文件名不可用",
+          "fileTooLarge": "文件 {0} 超过上限 {1}，请拆分成多个文件分批导入",
+          "fileEmpty": "文件是空的（0 字节），请检查是否选错了文件"
+        }
       },
       "trace": {
         "title": "消息跟踪",
@@ -374,7 +428,12 @@
         "adviceUpPartialAction2": "若条数持续不符，查应用日志中该批的丢弃明细与 propertyid.unmapped / propertyid.orphan 指标。",
         "adviceUpDeviceNotFoundSummary": "报文声明的设备不存在（或不在任何租户），后端未落库任何读数。",
         "adviceUpDeviceNotFoundAction1": "核对设备上报的 deviceId/deviceCode 与平台登记是否一致（含租户归属），修正设备侧配置后用「在线调试」验证链路。"
-      }
+      },
+      "searchKeyword": "关键词",
+      "searchKeywordPlaceholder": "设备名称 / 编码",
+      "protocolFilterPlaceholder": "全部协议",
+      "onlineStatusFilterPlaceholder": "全部在线状态",
+      "productFilterPlaceholder": "全部产品"
     },
     "event": {
       "title": "运行期事件",
@@ -464,7 +523,15 @@
       "readonlyPublished": "已发布产品的物模型为**只读**（可查看服务/属性/命令/事件，也可导出 TSL）；编辑需要先「新建草稿」（后端写接口要求草稿态）。",
       "readonlyEditBlocked": "该产品已发布，物模型只读；编辑请先「新建草稿」。",
       "emptyReason": "该租户还没有产品：产品是「同型号设备的集合」，物模型（服务/属性/命令/事件）挂在产品上；设备只能绑定已发布的产品，所以这里有数据之后才能添加设备。",
-      "listLoadFailed": "产品列表加载失败"
+      "listLoadFailed": "产品列表加载失败",
+      "searchKeyword": "关键词",
+      "searchKeywordPlaceholder": "产品名称 / 编码",
+      "protocolPlaceholder": "选择接入协议",
+      "modelStatusFilterPlaceholder": "全部物模型状态",
+      "serviceOptionMaster": "主服务",
+      "serviceOptionMandatory": "必选服务",
+      "serviceOptionOptional": "可选服务",
+      "codePlaceholder": "如 meter-01"
     },
     "group": {
       "title": "设备分组",
@@ -584,7 +651,16 @@
       "close": "关闭窗口",
       "closeConfirm": "关闭后该时段不再从可用率里排除，确认关闭？",
       "emptyReason": "还没有维护窗口：维护窗口用于把计划停机（检修、换件）从可用率统计里排除；不声明的话这段停机就会算成断档、拉低可用率。",
-      "listLoadFailed": "维护窗口列表加载失败"
+      "listLoadFailed": "维护窗口列表加载失败",
+      "searchDevicePlaceholder": "全部设备",
+      "searchStart": "开始时间",
+      "searchEnd": "结束时间",
+      "status": "状态",
+      "duration": "时长",
+      "durationDays": "{0} 天",
+      "durationHours": "{0} 小时",
+      "durationMinutes": "{0} 分钟",
+      "durationLessThanMinute": "不足 1 分钟"
     },
     "onboarding": {
       "title": "接入向导",
@@ -650,14 +726,21 @@
       "credential": "是否有凭据",
       "pending": "待接入",
       "noticeTitle": "部分列暂无可信数据源",
-      "noticeText": "「设备数」「最近上报」「是否有凭据」三列留空并标注「待接入」：IoT 服务未提供跨租户聚合与凭据接口，本页不填充任何推测值，补齐这三列需要后端新增聚合接口。「租户」列显示的是 tenantId；租户名称需 sys_tenant 接口，IoT 服务未暴露，同样待接入。",
+      "noticeText": "「设备数」「最近上报」「是否有凭据」三列留空并标注「待接入」：IoT 服务未提供跨租户聚合与凭据接口，本页不填充任何推测值，补齐这三列需要后端新增聚合接口。租户名称已改用系统租户接口解析；解析失败时名称列会标注「名称待接入」并给出可见提示（不再只显示裸 tenantId）。",
       "change": {
         "created": "首次接入",
         "revived": "恢复接入",
         "updated": "仅更新开关"
       },
       "listLoadFailed": "租户接入台账加载失败",
-      "emptyHint": "还没有租户接入记录：租户首次接入后会在这里出现。"
+      "emptyHint": "还没有租户接入记录：租户首次接入后会在这里出现。",
+      "tenantName": "租户名称",
+      "tenantId": "租户 ID",
+      "tenantSearchPlaceholder": "搜索租户名称 / ID",
+      "tenantNamePending": "（名称待接入）",
+      "tenantNameLoadFailed": "租户名称加载失败",
+      "tenantNameLoadFailedDesc": "台账仍可按租户 ID 正常查看；名称列暂以「名称待接入」标注（不伪造名称、也不清空台账）。请确认当前账号是否有平台租户查询权限，或稍后重试。接口返回：{0}",
+      "searchEmptyHint": "没有匹配「{0}」的租户：请换租户名或 tenantId 关键字，或清空搜索框查看全部。"
     },
     "point": {
       "title": "点位映射",
@@ -749,7 +832,39 @@
       "rwWrite": "只写（W）",
       "rwReadWrite": "读写（RW）",
       "enableSwitch": "启用映射",
-      "offsetValue": "偏移量"
+      "offsetValue": "偏移量",
+      "validation": {
+        "propertyRequired": "关联属性/命令不能为空",
+        "refTypeRequired": "关联类型不能为空",
+        "addressTypeRequired": "地址类型不能为空",
+        "rwRequired": "读写权限不能为空",
+        "rawAddressRequired": "协议内地址不能为空",
+        "rawAddressTooLong": "协议内地址超过 {0} 字符限制",
+        "pollIntervalNonNegativeInteger": "采集周期必须是非负整数（毫秒）",
+        "scaleFactorNumber": "缩放因子必须是数字",
+        "offsetValueNumber": "偏移量必须是数字",
+        "registerFormatInvalid": "寄存器值形态只能是 int / float / double / bits / string",
+        "stringWordCountRequired": "寄存器个数不能为空（{0}..{1}）",
+        "stringWordCountRange": "字符串形态的寄存器个数必须是 {0}..{1} 的整数",
+        "doubleWordCount": "双精度浮点固定占 {0} 个寄存器（wordCount 必须为 {0}）",
+        "wordCountInvalid": "寄存器宽度只能是 1（16 位）或 2（32 位）",
+        "signedInvalid": "数值符号必须是有符号(true)/无符号(false)",
+        "bitOffsetRequired": "位域的起始位不能为空（0..{0}）",
+        "bitLengthRequired": "位域的位宽不能为空（1..16-起始位）",
+        "bitOffsetRange": "位域起始位必须是 0..{0} 的整数",
+        "bitLengthMin": "位域位宽必须是不小于 1 的整数",
+        "bitsOverflow": "位域越界：起始位 + 位宽不能超过 {0}（当前 {1} + {2} = {3}）",
+        "byteOrderInvalid": "字序只能是 big 或 little"
+      },
+      "dataTypeInt": "整型",
+      "dataTypeLong": "长整型",
+      "dataTypeDecimal": "小数",
+      "dataTypeString": "字符串",
+      "dataTypeBool": "布尔",
+      "dataTypeEnum": "枚举",
+      "dataTypeDateTime": "日期时间",
+      "dataTypeJsonObject": "JSON 对象",
+      "dataTypeArray": "数组"
     },
     "shadow": {
       "get": "读取影子",
@@ -767,7 +882,11 @@
       "desiredHint": "desired 是平台将下发给设备的目标配置（整体替换）。",
       "desiredSaved": "期望值已保存",
       "desiredFailed": "期望值保存失败",
-      "cancel": "取消"
+      "cancel": "取消",
+      "validation": {
+        "jsonInvalid": "不是合法的 JSON",
+        "objectRequired": "期望值必须是 JSON 对象（键值对），不能是数组/数字/null"
+      }
     },
     "tag": {
       "title": "设备标签",
@@ -789,7 +908,13 @@
       "deleteFailed": "删除失败",
       "deleteConfirm": "确定删除标签「{0}」吗？",
       "cancel": "取消",
-      "okText": "确定"
+      "okText": "确定",
+      "validation": {
+        "keyRequired": "标签键不能为空",
+        "valueRequired": "标签值不能为空",
+        "keyTooLong": "标签键超过 {0} 字符限制",
+        "valueTooLong": "标签值超过 {0} 字符限制"
+      }
     },
     "credential": {
       "get": "查看设备凭据",
@@ -921,7 +1046,10 @@
       "resendFailed": "重发失败",
       "resendNotAllowed": "只有失败/超时的指令可以重发",
       "renderFailed": "在线调试页渲染失败（已捕获，未静默吞掉）：下面是完整错误",
-      "total": "共 {0} 条"
+      "total": "共 {0} 条",
+      "sourceConsole": "控制台",
+      "sourceRule": "规则联动",
+      "sourceApi": "开放接口"
     },
     "platformAlert": {
       "title": "平台自告警",
@@ -948,6 +1076,17 @@
         "critical": "严重",
         "warning": "警告",
         "unknown": "未知"
+      },
+      "ruleLabel": {
+        "evaluatorStalled": "告警评估器停摆",
+        "evaluatorRoundFailed": "告警评估轮次失败",
+        "notifyFailing": "告警通知投递失败",
+        "ingestDropping": "入站读数被丢弃",
+        "ledgerBumpFailing": "台账版本号推进失败",
+        "reconcileDeferred": "配置对账被时间预算推迟",
+        "tickSlow": "采集调度 tick 过慢",
+        "instanceUnreachable": "接入节点指标上报中断",
+        "unknown": "未知规则"
       }
     },
     "openApiKey": {
@@ -988,7 +1127,17 @@
       "copyFailed": "复制失败",
       "issueResult": "签发结果（明文仅此一次）",
       "oneTime": "Secret 明文只显示一次，关闭后无法再查看，请立即复制保存",
-      "secretHint": "列表页仅展示前缀，完整 Secret 不会二次回显"
+      "secretHint": "列表页仅展示前缀，完整 Secret 不会二次回显",
+      "scope": {
+        "deviceList": "读取设备列表",
+        "deviceLatest": "读取设备最新值",
+        "seriesGet": "读取历史曲线",
+        "alertList": "读取告警列表",
+        "productList": "读取产品列表",
+        "availabilityGet": "读取可用率与断档",
+        "debugSend": "下发调试指令（高危）",
+        "unknown": "未知作用域"
+      }
     },
     "overview": {
       "overview": "接入节点与指标",

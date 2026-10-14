@@ -5,10 +5,8 @@ import {
   isOpenApiKeyEnabled,
   normalizeOpenApiKeyForm,
   OPEN_API_ALLOWED_SCOPES,
-  openApiKeyScopesLabel,
   openApiKeyStatusColor,
   openApiKeyStatusLabelKey,
-  openApiKeyTimeLabel,
   openApiKeyUsageKind,
   openApiKeyUsageLabel,
   openApiKeyUsagePercent,
@@ -101,18 +99,6 @@ describe('status helpers', () => {
   it('白名单与后端 7 项对齐', () => {
     expect(OPEN_API_ALLOWED_SCOPES).toHaveLength(7);
     expect(OPEN_API_ALLOWED_SCOPES).toContain('iot:debug:send');
-  });
-});
-
-describe('label helpers', () => {
-  it('时间缺席显示 -', () => {
-    expect(openApiKeyTimeLabel(undefined)).toBe('-');
-    expect(openApiKeyTimeLabel('2026-10-01')).toBe('2026-10-01');
-  });
-
-  it('空作用域显示 -', () => {
-    expect(openApiKeyScopesLabel([])).toBe('-');
-    expect(openApiKeyScopesLabel(['iot:series:get'])).toBe('iot:series:get');
   });
 });
 

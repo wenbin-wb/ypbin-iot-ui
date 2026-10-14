@@ -33,6 +33,7 @@ import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
 import { downloadBlobSafe } from '#/utils/file';
 
+import { formatDateTime } from '../../shared/display';
 import {
   batchStatusColor,
   batchStatusLabelKey,
@@ -40,6 +41,7 @@ import {
   formatFileSize,
   hasFailedRows,
   IMPORT_ROW_RESULT,
+  resolveImportFileCheckMessage,
   resolveImportListState,
   rowResultLabelKey,
   sortBatchesByRecent,
@@ -325,7 +327,7 @@ const beforeUpload: UploadProps['beforeUpload'] = (file) => {
   const check = checkImportFile(file as unknown as File);
   if (!check.ok) {
     // 前端校验失败**不弹 toast**：留在页面上的 Alert 更持久，用户改完能对照着看
-    fileCheckError.value = check.message;
+    fileCheckError.value = resolveImportFileCheckMessage(check);
     return false;
   }
   void doUpload(file as unknown as File);
@@ -573,7 +575,7 @@ defineExpose({ onOpen });
             </Tag>
           </template>
           <template v-else-if="column.dataIndex === 'createTime'">
-            {{ record.createTime || '-' }}
+            {{ formatDateTime(record.createTime) }}
           </template>
         </template>
         <!--

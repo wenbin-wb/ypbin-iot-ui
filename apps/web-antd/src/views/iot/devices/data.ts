@@ -5,18 +5,43 @@ import type { IotDeviceApi } from '#/api/iot';
 import { getPublishedProductOptions } from '#/api/iot';
 import { $t } from '#/locales';
 
+import {
+  formatDateTime,
+  onlineStatusColor,
+  onlineStatusOptions,
+  protocolLabel,
+  protocolOptions,
+} from '../shared/display';
+
 /** 设备台账列表列（可用率/历史曲线入口放在操作列：逐台设备的数据面查询是「可用率与断档」能力的核心观感）。 */
 export function useColumns(): VxeTableGridColumns {
   return [
     { field: 'deviceCode', title: $t('page.iot.device.code'), minWidth: 140 },
     { field: 'deviceName', title: $t('page.iot.device.name'), minWidth: 160 },
-    { field: 'protocol', title: $t('page.iot.device.protocol'), width: 110 },
+    {
+      field: 'protocol',
+      title: $t('page.iot.device.protocol'),
+      width: 110,
+      // 接口传的是码（modbus/tcp/mqtt/opcua），列里必须显示统一中文名；
+      // 未知码由 display.ts 原样露出「未知（原码）」，不猜成已知协议。
+      formatter: ({ cellValue }: { cellValue?: string }) =>
+        protocolLabel(cellValue),
+    },
     { field: 'endpoint', title: $t('page.iot.device.endpoint'), minWidth: 200 },
     {
       field: 'onlineStatus',
       title: $t('page.iot.device.onlineStatus'),
       width: 110,
-      cellRender: { name: 'CellTag' },
+      // 在线状态用 CellTag 着色展示：禁止把 online/offline 裸码直接渲染到列里；
+      // label/color 统一取自 shared/display，避免本页再抄一份映射（口径漂移）。
+      cellRender: {
+        name: 'CellTag',
+        options: onlineStatusOptions().map((item) => ({
+          color: onlineStatusColor(item.value),
+          label: item.label,
+          value: item.value,
+        })),
+      },
     },
     {
       // 启停开关：此前设备没有停用写入口，用户要停采只能**删设备**或**删映射**，
@@ -31,6 +56,10 @@ export function useColumns(): VxeTableGridColumns {
       field: 'lastSeenAt',
       title: $t('page.iot.device.lastSeenAt'),
       width: 170,
+      // 后端时间形态不统一（epoch / ISO / `yyyy-MM-dd HH:mm:ss`），统一走展示层格式化；
+      // 空值/非法值显示 `-`，不把 `Invalid Date` 或原始串直接贴给用户。
+      formatter: ({ cellValue }: { cellValue?: string }) =>
+        formatDateTime(cellValue),
     },
     {
       // 活动告警标记（设备台账列表加一列/一个标记）：
@@ -44,13 +73,16 @@ export function useColumns(): VxeTableGridColumns {
       field: 'createTime',
       title: $t('page.iot.device.createTime'),
       width: 170,
+      formatter: ({ cellValue }: { cellValue?: string }) =>
+        formatDateTime(cellValue),
     },
     {
       title: $t('common.action'),
       field: 'action',
       fixed: 'right',
-      // 5 个带图标+文字的按钮（告警 / 可用率 / 历史曲线 / 编辑 / 删除）排在一行，220 会被省略号截断
-      width: 460,
+      // 详情/编辑留在行内；告警/可用率/历史曲线/删除收进「更多」下拉。
+      // 6 个 icon+文字按钮横排即使给到 460 宽也会被省略号截断，收窄到 220 后一屏可读。
+      width: 220,
       align: 'center',
       slots: { default: 'action' },
     },
@@ -96,12 +128,8 @@ export function useFormSchema(): FormSchema[] {
     {
       component: 'Select',
       componentProps: {
-        options: [
-          { label: 'Modbus TCP', value: 'modbus' },
-          { label: 'TCP 透传', value: 'tcp' },
-          { label: 'MQTT', value: 'mqtt' },
-          { label: 'OPC UA', value: 'opcua' },
-        ],
+        // 与搜索表单共用 display.ts 的同一份协议选项，避免表单/筛选两处口径不一致
+        options: protocolOptions(),
         placeholder: $t('page.iot.device.protocolPlaceholder'),
       },
       defaultValue: 'modbus',
@@ -124,6 +152,36 @@ export function useFormSchema(): FormSchema[] {
       componentProps: { maxlength: 255 },
       fieldName: 'remark',
       label: $t('page.iot.device.remark'),
+    },
+  ];
+}
+
+/**
+ * 设备台账搜索表单。
+ *
+ * 字段名与后端 `IotDeviceQuery` 完全一致（`keyword` / `protocol`），查询时原样透传，
+ * 不在页面里做改名映射（铁律 7）。协议选项复用 shared/display，避免硬编码中文。
+ */
+export function useGridFormSchema(): FormSchema[] {
+  return [
+    {
+      component: 'Input',
+      componentProps: {
+        allowClear: true,
+        placeholder: $t('page.iot.device.searchKeywordPlaceholder'),
+      },
+      fieldName: 'keyword',
+      label: $t('page.iot.device.searchKeyword'),
+    },
+    {
+      component: 'Select',
+      componentProps: {
+        allowClear: true,
+        options: protocolOptions(),
+        placeholder: $t('page.iot.device.protocolFilterPlaceholder'),
+      },
+      fieldName: 'protocol',
+      label: $t('page.iot.device.protocol'),
     },
   ];
 }

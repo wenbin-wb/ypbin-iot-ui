@@ -2,7 +2,15 @@ import { createApp, defineComponent, h, nextTick } from 'vue';
 
 import { registerAccessDirective } from '@vben/access';
 
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
 import MaintenancePage from './index.vue';
 
@@ -19,22 +27,26 @@ import MaintenancePage from './index.vue';
  * 用真实 vue-i18n（不 mock `#/locales`）。
  */
 
-const { captured, drawerApis, gridApiMock, gridStub, mockApi } = vi.hoisted(() => ({
-  captured: { options: null as any },
-  /** useVbenDrawer 调用顺序：0=表单，1=接入向导抽屉。 */
-  drawerApis: [] as any[],
-  gridApiMock: { query: vi.fn() },
-  gridStub: { renderAction: false, renderEmpty: false, row: null as any },
-  mockApi: {
-    closeMaintenanceWindow: vi.fn(),
-    getDeviceNameMap: vi.fn(),
-    getMaintenanceWindowList: vi.fn(),
-  },
-}));
+const { captured, drawerApis, gridApiMock, gridStub, mockApi } = vi.hoisted(
+  () => ({
+    captured: { options: null as any },
+    /** useVbenDrawer 调用顺序：0=表单，1=接入向导抽屉。 */
+    drawerApis: [] as any[],
+    gridApiMock: { query: vi.fn() },
+    gridStub: { renderAction: false, renderEmpty: false, row: null as any },
+    mockApi: {
+      closeMaintenanceWindow: vi.fn(),
+      getDeviceNameMap: vi.fn(),
+      getMaintenanceWindowList: vi.fn(),
+    },
+  }),
+);
 
 vi.mock('#/api/iot', () => ({
   closeMaintenanceWindow: (...args: unknown[]) =>
     mockApi.closeMaintenanceWindow(...args),
+  // data.ts 的搜索 schema（ApiSelect.api）在模块加载时取这个函数引用，mock 必须提供
+  getDeviceOptions: vi.fn(),
   getDeviceNameMap: (...args: unknown[]) => mockApi.getDeviceNameMap(...args),
   getMaintenanceWindowList: (...args: unknown[]) =>
     mockApi.getMaintenanceWindowList(...args),
@@ -117,7 +129,11 @@ function bizFailure(code: number, message: string) {
 }
 
 const OPEN_WINDOW = { deviceId: 'd-1', endTs: undefined, id: 'w-1' };
-const CLOSED_WINDOW = { deviceId: 'd-1', endTs: '2026-01-02 00:00:00', id: 'w-2' };
+const CLOSED_WINDOW = {
+  deviceId: 'd-1',
+  endTs: '2026-01-02 00:00:00',
+  id: 'w-2',
+};
 
 let mounted: undefined | { app: { unmount: () => void } };
 
@@ -132,10 +148,10 @@ async function mountPage() {
   return container;
 }
 
-async function runQuery() {
+async function runQuery(formValues?: Record<string, unknown>) {
   const query = captured.options?.gridOptions?.proxyConfig?.ajax?.query;
   expect(query, '页面没有把 ajax.query 交给表格').toBeTypeOf('function');
-  return await query({ page: { currentPage: 1, pageSize: 10 } });
+  return await query({ page: { currentPage: 1, pageSize: 10 } }, formValues);
 }
 
 beforeEach(() => {
@@ -197,24 +213,110 @@ describe('maintenance/index.vue 三态', () => {
     const rows = await runQuery();
 
     expect(rows).toEqual([
-      { deviceId: 'd-1', deviceName: '产线 A 网关', id: 'w-1' },
-      { deviceName: '租户全部设备', id: 'w-2' },
+      {
+        deviceId: 'd-1',
+        deviceName: '产线 A 网关',
+        id: 'w-1',
+        maintenanceState: 'unknown',
+      },
+      { deviceName: '租户全部设备', id: 'w-2', maintenanceState: 'unknown' },
     ]);
+    // 搜索条件透传给后端（本用例未传筛选时为空对象，不夹带 page 等无关参数）
+    expect(mockApi.getMaintenanceWindowList).toHaveBeenCalledWith({});
     // N+1 规避：一次批量（只带本页出现过的 deviceId），绝不按行发请求
     expect(mockApi.getDeviceNameMap).toHaveBeenCalledTimes(1);
     expect(mockApi.getDeviceNameMap).toHaveBeenCalledWith(['d-1']);
   });
 
   it('★ 设备名解析失败 ⇒ 回落到裸 deviceId，**整页列表照旧成功**（不引入新的权限依赖）', async () => {
-    mockApi.getMaintenanceWindowList.mockResolvedValue([{ deviceId: 'd-1', id: 'w-1' }]);
-    mockApi.getDeviceNameMap.mockRejectedValue(bizFailure(40_303, '无设备列表权限'));
+    mockApi.getMaintenanceWindowList.mockResolvedValue([
+      { deviceId: 'd-1', id: 'w-1' },
+    ]);
+    mockApi.getDeviceNameMap.mockRejectedValue(
+      bizFailure(40_303, '无设备列表权限'),
+    );
 
     const container = await mountPage();
     await expect(runQuery()).resolves.toEqual([
-      { deviceId: 'd-1', deviceName: 'd-1', id: 'w-1' },
+      {
+        deviceId: 'd-1',
+        deviceName: 'd-1',
+        id: 'w-1',
+        maintenanceState: 'unknown',
+      },
     ]);
     await nextTick();
     expect(container.innerHTML).not.toContain('维护窗口列表加载失败');
+  });
+});
+
+describe('maintenance/index.vue 筛选与列展示', () => {
+  it('★ 搜索表单字段 = deviceId/from/to，筛选值真实透传给 getMaintenanceWindowList', async () => {
+    mockApi.getMaintenanceWindowList.mockResolvedValue([]);
+
+    await mountPage();
+    const schema = captured.options?.formOptions?.schema as any[];
+    expect(schema.map((item) => item.fieldName)).toEqual([
+      'deviceId',
+      'from',
+      'to',
+    ]);
+    expect(schema[0]?.component).toBe('ApiSelect');
+
+    await runQuery({
+      deviceId: 'd-1',
+      from: '2026-01-01 00:00:00',
+      to: '2026-01-02 00:00:00',
+    });
+    expect(mockApi.getMaintenanceWindowList).toHaveBeenCalledWith({
+      deviceId: 'd-1',
+      from: '2026-01-01 00:00:00',
+      to: '2026-01-02 00:00:00',
+    });
+  });
+
+  it('★ 状态/时长/source 列走 shared/display 中文展示：不出现原始码', async () => {
+    const { useColumns } = await import('./data');
+    const columns = useColumns() as any[];
+    const column = (field: string) =>
+      columns.find((item) => item.field === field);
+
+    const state = column('maintenanceState');
+    expect(state?.cellRender?.name).toBe('CellTag');
+    expect(state?.cellRender?.options?.map((item: any) => item.label)).toEqual([
+      '进行中',
+      '已结束',
+      '未开始',
+      '未知',
+    ]);
+    expect(state?.cellRender?.options?.map((item: any) => item.color)).toEqual([
+      'processing',
+      'success',
+      'warning',
+      'default',
+    ]);
+
+    const duration = column('duration')?.formatter;
+    expect(
+      duration?.({
+        row: { endTs: '2026-01-02 01:30:00', startTs: '2026-01-01 00:00:00' },
+      }),
+    ).toBe('1 天 1 小时 30 分钟');
+    expect(
+      duration?.({ row: { endTs: '', startTs: '2026-01-01 00:00:00' } }),
+    ).toContain('天');
+
+    const source = column('source')?.formatter;
+    expect(source?.({ cellValue: 'LEASE_HANDOVER' })).toBe('租约交接');
+    expect(source?.({ cellValue: 'MANUAL' })).toBe('人工维护');
+    expect(source?.({ cellValue: 'AUTO' })).toBe('未知（AUTO）');
+
+    expect(
+      column('startTs')?.formatter?.({ cellValue: '2026-01-01T00:00:00' }),
+    ).toBe('2026-01-01 00:00:00');
+    expect(column('endTs')?.formatter?.({ cellValue: undefined })).toBe(
+      '进行中',
+    );
   });
 });
 
@@ -241,13 +343,17 @@ describe('maintenance/index.vue 交互', () => {
 
   it('关闭失败 ⇒ **不得**刷新（不能把失败当成功）', async () => {
     mockApi.getMaintenanceWindowList.mockResolvedValue([OPEN_WINDOW]);
-    mockApi.closeMaintenanceWindow.mockRejectedValue(bizFailure(50_001, '已结束'));
+    mockApi.closeMaintenanceWindow.mockRejectedValue(
+      bizFailure(50_001, '已结束'),
+    );
     gridStub.renderAction = true;
     gridStub.row = OPEN_WINDOW;
 
     const container = await mountPage();
     (
-      container.querySelector('button[data-action="关闭窗口"]') as HTMLButtonElement
+      container.querySelector(
+        'button[data-action="关闭窗口"]',
+      ) as HTMLButtonElement
     ).click();
     await nextTick();
     await Promise.resolve();
@@ -262,7 +368,9 @@ describe('maintenance/index.vue 交互', () => {
     gridStub.row = CLOSED_WINDOW;
 
     const container = await mountPage();
-    expect(container.querySelector('button[data-action="关闭窗口"]')).toBeNull();
+    expect(
+      container.querySelector('button[data-action="关闭窗口"]'),
+    ).toBeNull();
   });
 
   it('工具栏「接入向导」⇒ 打开向导抽屉', async () => {

@@ -1,4 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import type { PointFormCheckFailed } from './point-mapping-state';
+
+import { createApp } from 'vue';
+
+import { i18n } from '@vben/locales';
+
+import { beforeAll, describe, expect, it } from 'vitest';
 
 import {
   applyRegisterFormat,
@@ -16,9 +22,23 @@ import {
   POINT_STRING_WORD_COUNT_MAX,
   POINT_STRING_WORD_COUNT_MIN,
   registerDecodeSegments,
+  resolvePointFormCheckMessage,
   resolvePointListState,
   validatePointForm,
 } from './point-mapping-state';
+
+/** 真实 i18n：只初始化一次（`$t` 就是 `i18n.global.t`）。 */
+beforeAll(async () => {
+  const { setupI18n } = await import('#/locales');
+  const app = createApp({ render: () => null });
+  await setupI18n(app, { defaultLocale: 'zh-CN' });
+  // en-US 语言包与生产同源合并；缺键/编译不过会让下面的英文断言直接红
+  const mod = (await import('#/locales/langs/en-US/page.json')) as {
+    default?: Record<string, unknown>;
+  };
+  const pageDict = (mod.default ?? mod) as { iot: Record<string, unknown> };
+  i18n.global.mergeLocaleMessage('en-US', { page: pageDict });
+});
 
 /**
  * 点位映射表单纯逻辑用例。
@@ -1078,5 +1098,255 @@ describe('resolvePointListState（错误优先于空）', () => {
 
   it('有数据 ready', () => {
     expect(resolvePointListState(false, '', 2)).toBe('ready');
+  });
+});
+
+/**
+ * 校验消息 i18n 用例：一条规则 = 一个 messageKey + 一组 params，
+ * 中文/英文都经真实 vue-i18n 解析（页面不得直接渲染 key、纯逻辑不得内嵌中文）。
+ */
+interface PointValidationCase {
+  en: string;
+  form: () => ReturnType<typeof validForm>;
+  key: string;
+  name: string;
+  params?: Array<number | string>;
+  zh: string;
+}
+
+const pointValidationCases: PointValidationCase[] = [
+  {
+    en: 'Related property/command is required',
+    form: () => ({ ...validForm(), propertyId: '' }),
+    key: 'page.iot.point.validation.propertyRequired',
+    name: 'propertyId 必填',
+    zh: '关联属性/命令不能为空',
+  },
+  {
+    en: 'Reference type is required',
+    form: () => ({ ...validForm(), refType: '' }),
+    key: 'page.iot.point.validation.refTypeRequired',
+    name: 'refType 必填',
+    zh: '关联类型不能为空',
+  },
+  {
+    en: 'Address type is required',
+    form: () => ({ ...validForm(), addressType: '' }),
+    key: 'page.iot.point.validation.addressTypeRequired',
+    name: 'addressType 必填',
+    zh: '地址类型不能为空',
+  },
+  {
+    en: 'Read/write permission is required',
+    form: () => ({ ...validForm(), rw: '' }),
+    key: 'page.iot.point.validation.rwRequired',
+    name: 'rw 必填',
+    zh: '读写权限不能为空',
+  },
+  {
+    en: 'Protocol address is required',
+    form: () => ({ ...validForm(), rawAddress: '   ' }),
+    key: 'page.iot.point.validation.rawAddressRequired',
+    name: 'rawAddress 必填',
+    zh: '协议内地址不能为空',
+  },
+  {
+    en: `Protocol address exceeds the ${POINT_RAW_ADDRESS_MAX}-character limit`,
+    form: () => ({
+      ...validForm(),
+      rawAddress: 'x'.repeat(POINT_RAW_ADDRESS_MAX + 1),
+    }),
+    key: 'page.iot.point.validation.rawAddressTooLong',
+    name: 'rawAddress 超长',
+    params: [POINT_RAW_ADDRESS_MAX],
+    zh: `协议内地址超过 ${POINT_RAW_ADDRESS_MAX} 字符限制`,
+  },
+  {
+    en: 'Polling interval must be a non-negative integer (milliseconds)',
+    form: () => ({ ...validForm(), pollIntervalMs: '-1' }),
+    key: 'page.iot.point.validation.pollIntervalNonNegativeInteger',
+    name: 'pollIntervalMs 非负整数',
+    zh: '采集周期必须是非负整数（毫秒）',
+  },
+  {
+    en: 'Scale factor must be a number',
+    form: () => ({ ...validForm(), scaleFactor: 'abc' }),
+    key: 'page.iot.point.validation.scaleFactorNumber',
+    name: 'scaleFactor 数字',
+    zh: '缩放因子必须是数字',
+  },
+  {
+    en: 'Offset value must be a number',
+    form: () => ({ ...validForm(), offsetValue: '--' }),
+    key: 'page.iot.point.validation.offsetValueNumber',
+    name: 'offsetValue 数字',
+    zh: '偏移量必须是数字',
+  },
+  {
+    en: 'Register value format must be one of int, float, double, bits, or string',
+    form: () => ({ ...validForm(), registerFormat: 'bool' }),
+    key: 'page.iot.point.validation.registerFormatInvalid',
+    name: 'registerFormat 非法',
+    zh: '寄存器值形态只能是 int / float / double / bits / string',
+  },
+  {
+    en: `Register count is required (${POINT_STRING_WORD_COUNT_MIN}..${POINT_STRING_WORD_COUNT_MAX})`,
+    form: () => ({
+      ...validForm(),
+      registerFormat: 'string',
+      wordCount: '',
+    }),
+    key: 'page.iot.point.validation.stringWordCountRequired',
+    name: 'string 寄存器个数必填',
+    params: [POINT_STRING_WORD_COUNT_MIN, POINT_STRING_WORD_COUNT_MAX],
+    zh: `寄存器个数不能为空（${POINT_STRING_WORD_COUNT_MIN}..${POINT_STRING_WORD_COUNT_MAX}）`,
+  },
+  {
+    en: `String register count must be an integer from ${POINT_STRING_WORD_COUNT_MIN} to ${POINT_STRING_WORD_COUNT_MAX}`,
+    form: () => ({
+      ...validForm(),
+      registerFormat: 'string',
+      wordCount: '33',
+    }),
+    key: 'page.iot.point.validation.stringWordCountRange',
+    name: 'string 寄存器个数越界',
+    params: [POINT_STRING_WORD_COUNT_MIN, POINT_STRING_WORD_COUNT_MAX],
+    zh: `字符串形态的寄存器个数必须是 ${POINT_STRING_WORD_COUNT_MIN}..${POINT_STRING_WORD_COUNT_MAX} 的整数`,
+  },
+  {
+    en: `Double precision always uses ${POINT_DOUBLE_WORD_COUNT} registers (wordCount must be ${POINT_DOUBLE_WORD_COUNT})`,
+    form: () => ({
+      ...validForm(),
+      registerFormat: 'double',
+      wordCount: '3',
+    }),
+    key: 'page.iot.point.validation.doubleWordCount',
+    name: 'double wordCount 固定 4',
+    params: [POINT_DOUBLE_WORD_COUNT],
+    zh: `双精度浮点固定占 ${POINT_DOUBLE_WORD_COUNT} 个寄存器（wordCount 必须为 ${POINT_DOUBLE_WORD_COUNT}）`,
+  },
+  {
+    en: 'Register width must be 1 (16-bit) or 2 (32-bit)',
+    form: () => ({ ...validForm(), wordCount: '3' }),
+    key: 'page.iot.point.validation.wordCountInvalid',
+    name: 'int wordCount 1|2',
+    zh: '寄存器宽度只能是 1（16 位）或 2（32 位）',
+  },
+  {
+    en: 'Numeric sign must be signed (true) or unsigned (false)',
+    form: () => ({ ...validForm(), signed: 0 as never }),
+    key: 'page.iot.point.validation.signedInvalid',
+    name: 'signed boolean',
+    zh: '数值符号必须是有符号(true)/无符号(false)',
+  },
+  {
+    en: `Bit-field start offset is required (0..${POINT_BIT_OFFSET_MAX})`,
+    form: () => ({
+      ...validForm(),
+      bitOffset: '',
+      bitLength: '1',
+      registerFormat: 'bits',
+    }),
+    key: 'page.iot.point.validation.bitOffsetRequired',
+    name: 'bits 起始位必填',
+    params: [POINT_BIT_OFFSET_MAX],
+    zh: `位域的起始位不能为空（0..${POINT_BIT_OFFSET_MAX}）`,
+  },
+  {
+    en: 'Bit-field length is required (1..16 - offset)',
+    form: () => ({
+      ...validForm(),
+      bitOffset: '0',
+      bitLength: '',
+      registerFormat: 'bits',
+    }),
+    key: 'page.iot.point.validation.bitLengthRequired',
+    name: 'bits 位宽必填',
+    zh: '位域的位宽不能为空（1..16-起始位）',
+  },
+  {
+    en: `Bit-field start offset must be an integer from 0 to ${POINT_BIT_OFFSET_MAX}`,
+    form: () => ({
+      ...validForm(),
+      bitOffset: '16',
+      bitLength: '1',
+      registerFormat: 'bits',
+    }),
+    key: 'page.iot.point.validation.bitOffsetRange',
+    name: 'bits 起始位越界',
+    params: [POINT_BIT_OFFSET_MAX],
+    zh: `位域起始位必须是 0..${POINT_BIT_OFFSET_MAX} 的整数`,
+  },
+  {
+    en: 'Bit-field length must be an integer of at least 1',
+    form: () => ({
+      ...validForm(),
+      bitOffset: '0',
+      bitLength: '0',
+      registerFormat: 'bits',
+    }),
+    key: 'page.iot.point.validation.bitLengthMin',
+    name: 'bits 位宽小于 1',
+    zh: '位域位宽必须是不小于 1 的整数',
+  },
+  {
+    en: `Bit field out of range: start + length must not exceed ${POINT_REGISTER_BITS} (currently 15 + 2 = 17)`,
+    form: () => ({
+      ...validForm(),
+      bitOffset: '15',
+      bitLength: '2',
+      registerFormat: 'bits',
+    }),
+    key: 'page.iot.point.validation.bitsOverflow',
+    name: 'bits 越界',
+    params: [POINT_REGISTER_BITS, 15, 2, 17],
+    zh: `位域越界：起始位 + 位宽不能超过 ${POINT_REGISTER_BITS}（当前 15 + 2 = 17）`,
+  },
+  {
+    en: 'Byte order must be big or little',
+    form: () => ({ ...validForm(), byteOrder: 'abcd' }),
+    key: 'page.iot.point.validation.byteOrderInvalid',
+    name: 'byteOrder big|little',
+    zh: '字序只能是 big 或 little',
+  },
+];
+
+describe('validatePointForm 的 i18n 结论（纯逻辑不内嵌文案）', () => {
+  it.each(pointValidationCases)(
+    '$name：messageKey 与 params 结构化返回',
+    ({ form, key, params }) => {
+      const result = validatePointForm(form());
+      expect(result).toMatchObject({ messageKey: key, ok: false });
+      const failed = result as PointFormCheckFailed;
+      expect([...(failed.params ?? [])]).toStrictEqual([...(params ?? [])]);
+    },
+  );
+
+  it('通过时只有 ok:true，不携带任何消息', () => {
+    expect(validatePointForm(validForm())).toStrictEqual({ ok: true });
+  });
+});
+
+describe('resolvePointFormCheckMessage（真实 vue-i18n，不 mock #/locales）', () => {
+  it.each(pointValidationCases)('zh-CN：$name', ({ form, zh }) => {
+    expect(resolvePointFormCheckMessage(validatePointForm(form()))).toBe(zh);
+  });
+
+  it('en-US：全部规则同 key 同参数给出英文文案（不回落中文）', () => {
+    const previous = i18n.global.locale.value;
+    try {
+      i18n.global.locale.value = 'en-US' as never;
+      const actual = pointValidationCases.map(({ form, name }) => [
+        name,
+        resolvePointFormCheckMessage(validatePointForm(form())),
+      ]);
+      const expected = pointValidationCases.map(({ en, name }) => [name, en]);
+      expect(actual).toStrictEqual(expected);
+      expect(resolvePointFormCheckMessage(validatePointForm(validForm()))).toBe(
+        '',
+      );
+    } finally {
+      i18n.global.locale.value = previous as never;
+    }
   });
 });
