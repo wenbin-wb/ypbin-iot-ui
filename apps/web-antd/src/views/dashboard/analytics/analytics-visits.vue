@@ -3,8 +3,9 @@ import type { EchartsUIType } from '@vben/plugins/echarts';
 
 import type { IotDashboardApi } from '#/api/dashboard/iot-overview';
 
-import { onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 
+import { Inbox } from '@vben/icons';
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 
 import { $t } from '#/locales';
@@ -18,6 +19,9 @@ const props = defineProps<{
 
 const chartRef = ref<EchartsUIType>();
 const { renderEcharts } = useEcharts(chartRef);
+
+/** 空数据时不渲染画布，改为友好空态：空数组会让图表区看起来像坏掉的白块。 */
+const hasData = computed(() => props.points.length > 0);
 
 const ONLINE_COLOR = '#0066f5';
 const OFFLINE_COLOR = '#f2547b';
@@ -113,9 +117,16 @@ onMounted(() => {
   renderChart(props.points);
 });
 
-watch(() => props.points, renderChart, { deep: true });
+watch(() => props.points, renderChart, { deep: true, flush: 'post' });
 </script>
 
 <template>
-  <EchartsUI ref="chartRef" />
+  <EchartsUI v-if="hasData" ref="chartRef" />
+  <div
+    v-else
+    class="flex h-[300px] flex-col items-center justify-center gap-2 text-sm text-muted-foreground"
+  >
+    <Inbox class="size-8 opacity-50" />
+    <span>{{ $t('page.dashboard.chartEmptyTrend') }}</span>
+  </div>
 </template>

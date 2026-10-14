@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import type { DisplayValue } from '../../shared/display';
+
 import type { IotCommandApi, IotThingModelApi } from '#/api/iot';
 
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
@@ -38,6 +40,13 @@ import {
 import { $t } from '#/locales';
 import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
+
+import CopyText from '../../shared/copy-text.vue';
+import {
+  formatDateTime,
+  formatRelativeTime,
+  prettyJson,
+} from '../../shared/display';
 
 /**
  * 「在线调试」页签：选动作 → 填参数 → 下发 → 轮询看状态与回执。
@@ -360,6 +369,28 @@ function statusText(statusCode?: string): string {
       return statusCode
         ? `${$t('page.iot.debug.unknownStatus')}（${statusCode}）`
         : '-';
+    }
+  }
+}
+
+/**
+ * 来源码（后端 `CommandSource`）→ 文案。
+ *
+ * 未知码不伪装成已知值，按「未知（原码）」展示（与 shared/display.ts 同一口径）。
+ */
+function sourceText(source?: string): string {
+  switch (source) {
+    case 'api': {
+      return $t('page.iot.debug.sourceApi');
+    }
+    case 'console': {
+      return $t('page.iot.debug.sourceConsole');
+    }
+    case 'rule': {
+      return $t('page.iot.debug.sourceRule');
+    }
+    default: {
+      return source ? $t('page.iot.display.unknownWithValue', [source]) : '-';
     }
   }
 }
@@ -835,15 +866,9 @@ function displayValue(value: unknown): string {
   return String(value);
 }
 
-function prettyJson(text?: string): string {
-  if (!text) {
-    return '-';
-  }
-  try {
-    return JSON.stringify(JSON.parse(text), null, 2);
-  } catch {
-    return text;
-  }
+/** 时间字段 → 展示文本：统一走 shared/display；解析不了的原始值原样露出，不显示成空白。 */
+function displayTime(value?: DisplayValue): string {
+  return formatDateTime(value, displayValue(value));
 }
 
 /** 本批高亮：最近一次下发产生的记录在列表里标出来，避免 N 条看着像孤立记录。 */
@@ -1048,9 +1073,9 @@ const batchSummary = computed(() => {
             {{ $t('page.iot.debug.rawEnvelope') }}:
             <span class="font-mono">{{ sendError.code || '-' }}</span>
           </div>
-          <pre class="mt-1 text-xs break-all whitespace-pre-wrap">{{
-            sendError.raw
-          }}</pre>
+          <pre
+            class="mt-1 max-h-[240px] overflow-auto text-xs break-all whitespace-pre-wrap"
+            >{{ sendError.raw }}</pre>
         </template>
       </Alert>
     </div>
@@ -1088,8 +1113,10 @@ const batchSummary = computed(() => {
             :key="index"
             class="border-t"
           >
-            <td class="py-1">{{ item.identifier }}</td>
-            <td class="py-1 font-mono">{{ item.requestId ?? '-' }}</td>
+            <td class="py-1">{{ item.identifier || '-' }}</td>
+            <td class="py-1">
+              <CopyText :value="item.requestId" />
+            </td>
             <td class="py-1">
               <Tag v-if="item.error" color="error">
                 {{ $t('page.iot.debug.sendFailed') }}
@@ -1155,9 +1182,9 @@ const batchSummary = computed(() => {
             {{ $t('page.iot.debug.rawEnvelope') }}:
             <span class="font-mono">{{ historyError.code || '-' }}</span>
           </div>
-          <pre class="mt-1 text-xs break-all whitespace-pre-wrap">{{
-            historyError.raw
-          }}</pre>
+          <pre
+            class="mt-1 max-h-[240px] overflow-auto text-xs break-all whitespace-pre-wrap"
+            >{{ historyError.raw }}</pre>
         </template>
       </Alert>
 
@@ -1176,9 +1203,9 @@ const batchSummary = computed(() => {
               {{ $t('page.iot.debug.rawEnvelope') }}:
               <span class="font-mono">{{ pollError.code || '-' }}</span>
             </div>
-            <pre class="mt-1 text-xs break-all whitespace-pre-wrap">{{
-              pollError.raw
-            }}</pre>
+            <pre
+              class="mt-1 max-h-[240px] overflow-auto text-xs break-all whitespace-pre-wrap"
+              >{{ pollError.raw }}</pre>
           </template>
         </Alert>
 
@@ -1192,11 +1219,17 @@ const batchSummary = computed(() => {
           size="small"
         >
           <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'kind'">
+            <template v-if="column.key === 'createTime'">
+              <!-- 绝对时间为主、相对时间为辅：排障时先看「多久前」再核对精确时刻 -->
+              <Tooltip :title="formatRelativeTime(record.createTime)">
+                {{ formatDateTime(record.createTime) }}
+              </Tooltip>
+            </template>
+            <template v-else-if="column.key === 'kind'">
               {{ kindText(record.kind) }}
             </template>
             <template v-else-if="column.key === 'identifier'">
-              {{ record.identifier }}
+              {{ record.identifier || '-' }}
               <Tag v-if="batchRequestIds.has(record.requestId)" color="blue">
                 {{ $t('page.iot.debug.batchTag') }}
               </Tag>
@@ -1237,7 +1270,7 @@ const batchSummary = computed(() => {
           <template #expandedRowRender="{ record }">
             <Descriptions :column="2" bordered size="small">
               <DescriptionsItem :label="$t('page.iot.debug.requestId')">
-                <span class="font-mono">{{ record.requestId }}</span>
+                <CopyText :value="record.requestId" />
                 <Tag
                   v-if="batchRequestIds.has(record.requestId)"
                   class="ml-1"
@@ -1247,16 +1280,18 @@ const batchSummary = computed(() => {
                 </Tag>
               </DescriptionsItem>
               <DescriptionsItem :label="$t('page.iot.debug.topic')">
-                {{ record.topic || '-' }}
+                <CopyText :value="record.topic" />
               </DescriptionsItem>
               <DescriptionsItem :label="$t('page.iot.debug.createTime')">
-                {{ record.createTime || '-' }}
+                <Tooltip :title="formatRelativeTime(record.createTime)">
+                  {{ formatDateTime(record.createTime) }}
+                </Tooltip>
               </DescriptionsItem>
               <DescriptionsItem :label="$t('page.iot.debug.sentAt')">
-                {{ record.sentAt || '-' }}
+                {{ formatDateTime(record.sentAt) }}
               </DescriptionsItem>
               <DescriptionsItem :label="$t('page.iot.debug.finishedAt')">
-                {{ record.finishedAt || '-' }}
+                {{ formatDateTime(record.finishedAt) }}
               </DescriptionsItem>
               <DescriptionsItem :label="$t('page.iot.debug.retryCount')">
                 {{ record.retryCount ?? 0 }}
@@ -1274,7 +1309,7 @@ const batchSummary = computed(() => {
                 {{ record.emqxMessageId || '-' }}
               </DescriptionsItem>
               <DescriptionsItem :label="$t('page.iot.debug.source')">
-                {{ record.source || '-' }}
+                {{ sourceText(record.source) }}
               </DescriptionsItem>
             </Descriptions>
 
@@ -1298,10 +1333,10 @@ const batchSummary = computed(() => {
                 {{ displayValue(replyOf(record)?.data) }}
               </DescriptionsItem>
               <DescriptionsItem :label="$t('page.iot.debug.replyTs')">
-                {{ displayValue(replyOf(record)?.ts) }}
+                {{ displayTime(replyOf(record)?.ts) }}
               </DescriptionsItem>
               <DescriptionsItem :label="$t('page.iot.debug.replyReceivedAt')">
-                {{ displayValue(replyOf(record)?.receivedAt) }}
+                {{ displayTime(replyOf(record)?.receivedAt) }}
               </DescriptionsItem>
             </Descriptions>
             <Alert
@@ -1317,16 +1352,16 @@ const batchSummary = computed(() => {
             <div class="mt-2 font-semibold">
               {{ $t('page.iot.debug.payload') }}
             </div>
-            <pre class="text-xs break-all whitespace-pre-wrap">{{
-              prettyJson(record.payload)
-            }}</pre>
+            <pre
+              class="max-h-[280px] overflow-auto text-xs break-all whitespace-pre-wrap"
+              >{{ prettyJson(record.payload) }}</pre>
 
             <div class="mt-2 font-semibold">
               {{ $t('page.iot.debug.replyPayload') }}
             </div>
-            <pre class="text-xs break-all whitespace-pre-wrap">{{
-              prettyJson(record.replyPayload)
-            }}</pre>
+            <pre
+              class="max-h-[280px] overflow-auto text-xs break-all whitespace-pre-wrap"
+              >{{ prettyJson(record.replyPayload) }}</pre>
           </template>
         </Table>
 

@@ -11,6 +11,13 @@ export namespace IotDeviceApi {
     protocol: string;
     endpoint: string;
     productId?: string;
+    /**
+     * 所属产品名（后端 `@RefText("product")` 注解翻译）。
+     *
+     * ⚠️ 旧后端/并行开发期可能不返回 ⇒ 展示方必须回落 `productId`（再兜底 `-`），
+     * 不得把缺失当成「未绑定产品」（那会与真实的空 productId 混淆）。
+     */
+    productIdName?: string;
     productVersion?: string;
     onlineStatus?: string;
     /**
@@ -30,6 +37,8 @@ export namespace IotDeviceApi {
     keyword?: string;
     page?: number;
     pageSize?: number;
+    /** 按所属产品过滤（后端 `IotDeviceQuery.productId`）。 */
+    productId?: string;
     protocol?: string;
   }
 

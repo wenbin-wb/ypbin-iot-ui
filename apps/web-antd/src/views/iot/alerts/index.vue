@@ -26,15 +26,15 @@ import {
   getAlertPage,
   getAlertRulePage,
   getAlertSummary,
+  getDeviceOptions,
   setAlertRulesEnabled,
   silenceAlerts,
 } from '#/api/iot';
 import { $t } from '#/locales';
-
-import PanelErrorBoundary from '../shared/panel-error-boundary.vue';
 import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
 
+import { formatDateTime } from '../shared/display';
 import {
   ALERT_INSTANCE_FILTER_DEFAULTS,
   ALERT_INSTANCE_FILTER_PAGE,
@@ -44,7 +44,9 @@ import {
   pickFilterFields,
   saveFilterIfChanged,
 } from '../shared/list-filter';
+import PanelErrorBoundary from '../shared/panel-error-boundary.vue';
 import { detectRunawayGrowth, RUNAWAY_HEIGHT } from './alerts-layout';
+import { channelLabel } from './channel';
 import {
   conditionText,
   eventLabelKey,
@@ -113,6 +115,37 @@ const router = useRouter();
 const presetDeviceId = ref(
   typeof route.query.deviceId === 'string' ? route.query.deviceId : '',
 );
+
+/** 入口提示里展示的设备名（解析失败回落为空串，模板再回落 deviceId）。 */
+const presetDeviceName = ref('');
+
+/** 设备名可用则用名，否则回落裸 ID —— 两种形态都是页面已知的事实。 */
+const presetDeviceLabel = computed(
+  () => presetDeviceName.value || presetDeviceId.value,
+);
+
+/**
+ * 设备入口的 deviceId → 设备名（展示增强，失败回落显示 deviceId）。
+ *
+ * 用 `getDeviceOptions` 一次拉 200 条建映射，绝不按行发请求；设备名只影响入口提示，
+ * 解析失败不影响列表与筛选，但必须 `console.warn` 留痕，不能静默吞掉。
+ */
+async function resolvePresetDeviceName() {
+  const id = presetDeviceId.value;
+  if (!id) {
+    return;
+  }
+  try {
+    const options = await getDeviceOptions();
+    const hit = (options ?? []).find((device) => device.id === id);
+    presetDeviceName.value = hit?.deviceName || hit?.deviceCode || '';
+  } catch (error) {
+    console.warn(
+      '[iot/alerts] 设备名称解析失败，入口提示回落显示 deviceId',
+      error,
+    );
+  }
+}
 
 /** 顶部计数（**一次聚合查询**给出，不拿列表长度当计数）。 */
 const summary = ref<IotAlertApi.SummaryResp>();
@@ -479,6 +512,8 @@ let stopHeightWatch: (() => void) | undefined;
 
 onMounted(() => {
   void reloadSummary();
+  // 设备台账跳转带 ?deviceId=xxx：提示里显示设备名，找不到/解析失败回落裸 ID
+  void resolvePresetDeviceName();
   // 规则页签与实例页签共用同一条确定高度链，只盯实例表即可覆盖两条链的自反馈风险
   stopHeightWatch = watchGridForRunawayHeight(
     instanceGridApi as never,
@@ -507,351 +542,373 @@ onUnmounted(() => {
   <Page auto-content-height>
     <PanelErrorBoundary title-key="page.iot.alert.renderFailed">
       <Tabs v-model:active-key="activeTab" :animated="false" class="h-full">
-      <!-- ===== 告警列表 ===== -->
-      <Tabs.TabPane
-        v-if="canViewAlert"
-        key="list"
-        :tab="$t('page.iot.alert.tabList')"
-      >
-        <!-- 可关闭：否则用户无法在界面上解除「从设备台账带过来的设备过滤」（只能离开页面重进） -->
-        <Alert
-          v-if="presetDeviceId"
-          class="mb-2"
-          closable
-          :message="$t('page.iot.alert.fromDeviceEntry', [presetDeviceId])"
-          show-icon
-          type="info"
-          @close="onClearDeviceFilter"
-        />
-        <Alert
-          v-if="summaryError"
-          class="mb-2"
-          :description="summaryError"
-          :message="$t('page.iot.alert.summaryLoadFailed')"
-          show-icon
-          type="error"
-        />
-        <div v-else-if="summary" class="mb-2 text-sm">
-          <Space>
-            <Tag color="error">
-              {{
-                $t('page.iot.alert.summaryActive', [
-                  toBackendNumber(summary.activeCount),
-                ])
-              }}
-            </Tag>
-            <Tag color="warning">
-              {{
-                $t('page.iot.alert.summaryCritical', [
-                  toBackendNumber(summary.criticalCount),
-                ])
-              }}
-            </Tag>
-            <Tag color="processing">
-              {{
-                $t('page.iot.alert.summaryAcked', [
-                  toBackendNumber(summary.ackedCount),
-                ])
-              }}
-            </Tag>
-            <Tag color="success">
-              {{
-                $t('page.iot.alert.summaryResolved24h', [
-                  toBackendNumber(summary.resolvedLast24h),
-                ])
-              }}
-            </Tag>
-          </Space>
-        </div>
+        <!-- ===== 告警列表 ===== -->
+        <Tabs.TabPane
+          v-if="canViewAlert"
+          key="list"
+          :tab="$t('page.iot.alert.tabList')"
+        >
+          <!-- 可关闭：否则用户无法在界面上解除「从设备台账带过来的设备过滤」（只能离开页面重进） -->
+          <Alert
+            v-if="presetDeviceId"
+            class="mb-2"
+            closable
+            :message="$t('page.iot.alert.fromDeviceEntry', [presetDeviceLabel])"
+            show-icon
+            type="info"
+            @close="onClearDeviceFilter"
+          />
+          <Alert
+            v-if="summaryError"
+            class="mb-2"
+            :description="summaryError"
+            :message="$t('page.iot.alert.summaryLoadFailed')"
+            show-icon
+            type="error"
+          />
+          <div v-else-if="summary" class="mb-2 text-sm">
+            <Space>
+              <Tag color="error">
+                {{
+                  $t('page.iot.alert.summaryActive', [
+                    toBackendNumber(summary.activeCount),
+                  ])
+                }}
+              </Tag>
+              <Tag color="warning">
+                {{
+                  $t('page.iot.alert.summaryCritical', [
+                    toBackendNumber(summary.criticalCount),
+                  ])
+                }}
+              </Tag>
+              <Tag color="processing">
+                {{
+                  $t('page.iot.alert.summaryAcked', [
+                    toBackendNumber(summary.ackedCount),
+                  ])
+                }}
+              </Tag>
+              <Tag color="success">
+                {{
+                  $t('page.iot.alert.summaryResolved24h', [
+                    toBackendNumber(summary.resolvedLast24h),
+                  ])
+                }}
+              </Tag>
+            </Space>
+          </div>
 
-        <!--
+          <!--
           🔴 失败态**必须挂在表格之外**（不能只放 `#empty` 槽里）：真实 vxe 只在表体无行时才渲染该槽
           ⇒ 「已有数据后刷新失败」时槽不渲染、失败提示会消失、页面继续展示过期数据。
         -->
-        <Alert
-          v-if="listError"
-          class="mb-2"
-          :description="listError"
-          :message="$t('page.iot.alert.listLoadFailed')"
-          show-icon
-          type="error"
-        />
-        <!-- 失败若是「没有租户上下文」⇒ 给一条能照着做的引导（不弹原始码、不只是报错） -->
-        <Alert
-          v-if="isTenantContextError(listError)"
-          class="mb-2"
-          :message="$t('page.iot.alert.noTenantHint')"
-          show-icon
-          type="warning"
-        />
-        <InstanceGrid
-          class="flex-1 min-h-0"
-          @checkbox-change="onCheckboxChange"
-        >
-          <template #toolbar-tools>
-            <Space>
-              <Button
-                v-if="canAck"
-                :disabled="selectedIds.length === 0"
-                @click="onAck(selectedIds)"
-              >
-                {{ $t('page.iot.alert.batchAck') }}
-              </Button>
-              <Button
-                v-if="canAck"
-                :disabled="selectedIds.length === 0"
-                @click="onSilence(selectedIds, 60)"
-              >
-                {{ $t('page.iot.alert.batchSilence') }}
-              </Button>
-            </Space>
-          </template>
+          <Alert
+            v-if="listError"
+            class="mb-2"
+            :description="listError"
+            :message="$t('page.iot.alert.listLoadFailed')"
+            show-icon
+            type="error"
+          />
+          <!-- 失败若是「没有租户上下文」⇒ 给一条能照着做的引导（不弹原始码、不只是报错） -->
+          <Alert
+            v-if="isTenantContextError(listError)"
+            class="mb-2"
+            :message="$t('page.iot.alert.noTenantHint')"
+            show-icon
+            type="warning"
+          />
+          <InstanceGrid
+            class="flex-1 min-h-0"
+            @checkbox-change="onCheckboxChange"
+          >
+            <template #toolbar-tools>
+              <Space>
+                <Button
+                  v-if="canAck"
+                  :disabled="selectedIds.length === 0"
+                  @click="onAck(selectedIds)"
+                >
+                  {{ $t('page.iot.alert.batchAck') }}
+                </Button>
+                <Button
+                  v-if="canAck"
+                  :disabled="selectedIds.length === 0"
+                  @click="onSilence(selectedIds, 60)"
+                >
+                  {{ $t('page.iot.alert.batchSilence') }}
+                </Button>
+              </Space>
+            </template>
 
-          <!-- 空态引导：说明「为什么是空的 + 下一步点哪里」，而不是一张空白表格 -->
-          <template #empty>
-            <!-- 判据抽成纯函数 listSlotState：失败**绝不**画成空态（有可运行用例守门） -->
-            <Empty
-              v-if="listSlotState(listError, 0) === 'empty'"
-              :description="$t('page.iot.alert.emptyReason')"
-            />
-          </template>
+            <!-- 空态引导：说明「为什么是空的 + 下一步点哪里」，而不是一张空白表格 -->
+            <template #empty>
+              <!-- 判据抽成纯函数 listSlotState：失败**绝不**画成空态（有可运行用例守门） -->
+              <Empty
+                v-if="listSlotState(listError, 0) === 'empty'"
+                :description="$t('page.iot.alert.emptyReason')"
+              />
+            </template>
 
-          <template #duration="{ row }">
-            {{ humanSeconds(row.durationSeconds) }}
-          </template>
+            <template #severity="{ row }">
+              <Tag :color="severityColor(row.severity)">
+                {{ $t(severityLabelKey(row.severity)) }}
+              </Tag>
+            </template>
+            <template #state="{ row }">
+              <Tag :color="stateColor(row.state)">
+                {{ $t(stateLabelKey(row.state)) }}
+              </Tag>
+            </template>
+            <template #startTs="{ row }">
+              {{ formatDateTime(row.startTs) }}
+            </template>
 
-          <template #rule="{ row }">
-            <span v-if="row.outage">{{
-              $t('page.iot.alert.kind.offline')
-            }}</span>
-            <span v-else>{{ row.ruleName ?? '-' }}</span>
-          </template>
+            <template #duration="{ row }">
+              {{ humanSeconds(row.durationSeconds) }}
+            </template>
 
-          <!-- 展开行：触发值 / 阈值 / 时间线 / 投递记录 / 该点位近期曲线缩略 -->
-          <template #expand="{ row }">
-            <div class="grid grid-cols-3 gap-4 p-2 text-sm">
-              <div class="space-y-1">
-                <div>
-                  <span class="text-muted-foreground">
-                    {{ $t('page.iot.alert.triggerValue') }}:
-                  </span>
-                  <span class="font-medium">{{ row.triggerValue ?? '-' }}</span>
+            <template #rule="{ row }">
+              <span v-if="row.outage">{{
+                $t('page.iot.alert.kind.offline')
+              }}</span>
+              <span v-else>{{ row.ruleName ?? '-' }}</span>
+            </template>
+
+            <!-- 展开行：触发值 / 阈值 / 时间线 / 投递记录 / 该点位近期曲线缩略 -->
+            <template #expand="{ row }">
+              <div class="grid grid-cols-3 gap-4 p-2 text-sm">
+                <div class="space-y-1">
+                  <div>
+                    <span class="text-muted-foreground">
+                      {{ $t('page.iot.alert.triggerValue') }}:
+                    </span>
+                    <span class="font-medium">{{
+                      row.triggerValue ?? '-'
+                    }}</span>
+                  </div>
+                  <div>
+                    <span class="text-muted-foreground">
+                      {{ $t('page.iot.alert.threshold') }}:
+                    </span>
+                    <span class="font-medium">{{
+                      row.thresholdSnapshot ?? '-'
+                    }}</span>
+                  </div>
+                  <div>
+                    <span class="text-muted-foreground">
+                      {{ $t('page.iot.alert.stateField') }}:
+                    </span>
+                    <Tag :color="stateColor(row.state)">
+                      {{ $t(stateLabelKey(row.state)) }}
+                    </Tag>
+                  </div>
+                </div>
+                <div class="space-y-1">
+                  <div>
+                    {{ $t('page.iot.alert.startTs') }}:
+                    {{ formatDateTime(row.startTs) }}
+                  </div>
+                  <div>
+                    {{ $t('page.iot.alert.firingTs') }}:
+                    {{ formatDateTime(row.firingTs) }}
+                  </div>
+                  <div>
+                    {{ $t('page.iot.alert.resolvedTs') }}:
+                    {{ formatDateTime(row.resolvedTs) }}
+                  </div>
+                  <div v-if="row.reason">
+                    {{ $t('page.iot.alert.reasonField') }}:
+                    {{ $t(reasonLabelKey(row.reason)) }}
+                  </div>
+                  <div v-if="row.silenceUntil">
+                    {{ $t('page.iot.alert.silenceUntil') }}:
+                    {{ formatDateTime(row.silenceUntil) }}
+                  </div>
                 </div>
                 <div>
-                  <span class="text-muted-foreground">
-                    {{ $t('page.iot.alert.threshold') }}:
-                  </span>
-                  <span class="font-medium">{{
-                    row.thresholdSnapshot ?? '-'
-                  }}</span>
-                </div>
-                <div>
-                  <span class="text-muted-foreground">
-                    {{ $t('page.iot.alert.stateField') }}:
-                  </span>
-                  <Tag :color="stateColor(row.state)">
-                    {{ $t(stateLabelKey(row.state)) }}
-                  </Tag>
+                  <div class="mb-1 text-muted-foreground">
+                    {{ $t('page.iot.alert.curve.title') }}
+                  </div>
+                  <InstanceCurve
+                    :device-id="row.deviceId"
+                    :property-id="row.propertyId"
+                    :threshold-snapshot="row.thresholdSnapshot"
+                  />
                 </div>
               </div>
-              <div class="space-y-1">
-                <div>
-                  {{ $t('page.iot.alert.startTs') }}: {{ row.startTs ?? '-' }}
-                </div>
-                <div>
-                  {{ $t('page.iot.alert.firingTs') }}: {{ row.firingTs ?? '-' }}
-                </div>
-                <div>
-                  {{ $t('page.iot.alert.resolvedTs') }}:
-                  {{ row.resolvedTs ?? '-' }}
-                </div>
-                <div v-if="row.reason">
-                  {{ $t('page.iot.alert.reasonField') }}:
-                  {{ $t(reasonLabelKey(row.reason)) }}
-                </div>
-                <div v-if="row.silenceUntil">
-                  {{ $t('page.iot.alert.silenceUntil') }}:
-                  {{ row.silenceUntil }}
-                </div>
-              </div>
-              <div>
+              <div class="p-2 text-sm">
                 <div class="mb-1 text-muted-foreground">
-                  {{ $t('page.iot.alert.curve.title') }}
+                  {{ $t('page.iot.alert.notify.title') }}
+                  ({{ row.notifyCount ?? 0 }})
                 </div>
-                <InstanceCurve
-                  :device-id="row.deviceId"
-                  :property-id="row.propertyId"
-                  :threshold-snapshot="row.thresholdSnapshot"
-                />
+                <div
+                  v-if="(row.notifications?.length ?? 0) === 0"
+                  class="text-xs text-muted-foreground"
+                >
+                  {{ $t('page.iot.alert.notify.none') }}
+                </div>
+                <table v-else class="w-full text-xs">
+                  <thead>
+                    <tr class="text-left text-muted-foreground">
+                      <th>{{ $t('page.iot.alert.notify.channel') }}</th>
+                      <th>{{ $t('page.iot.alert.notify.target') }}</th>
+                      <th>{{ $t('page.iot.alert.notify.event') }}</th>
+                      <th>{{ $t('page.iot.alert.notify.status') }}</th>
+                      <th>{{ $t('page.iot.alert.notify.attempt') }}</th>
+                      <th>{{ $t('page.iot.alert.notify.error') }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="row2 in row.notifications" :key="row2.id">
+                      <td>{{ channelLabel(row2.channel) }}</td>
+                      <td>{{ row2.target || '-' }}</td>
+                      <td>{{ $t(eventLabelKey(row2.event)) }}</td>
+                      <td>{{ $t(notifyStatusLabelKey(row2.notifyStatus)) }}</td>
+                      <td>{{ row2.attempt ?? 0 }}</td>
+                      <td class="break-all text-red-600">
+                        {{ row2.lastError || '-' }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
-            </div>
-            <div class="p-2 text-sm">
-              <div class="mb-1 text-muted-foreground">
-                {{ $t('page.iot.alert.notify.title') }}
-                ({{ row.notifyCount ?? 0 }})
-              </div>
-              <div
-                v-if="(row.notifications?.length ?? 0) === 0"
-                class="text-xs text-muted-foreground"
-              >
-                {{ $t('page.iot.alert.notify.none') }}
-              </div>
-              <table v-else class="w-full text-xs">
-                <thead>
-                  <tr class="text-left text-muted-foreground">
-                    <th>{{ $t('page.iot.alert.notify.channel') }}</th>
-                    <th>{{ $t('page.iot.alert.notify.target') }}</th>
-                    <th>{{ $t('page.iot.alert.notify.event') }}</th>
-                    <th>{{ $t('page.iot.alert.notify.status') }}</th>
-                    <th>{{ $t('page.iot.alert.notify.attempt') }}</th>
-                    <th>{{ $t('page.iot.alert.notify.error') }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="row2 in row.notifications" :key="row2.id">
-                    <td>{{ row2.channel }}</td>
-                    <td>{{ row2.target || '-' }}</td>
-                    <td>{{ $t(eventLabelKey(row2.event)) }}</td>
-                    <td>{{ $t(notifyStatusLabelKey(row2.notifyStatus)) }}</td>
-                    <td>{{ row2.attempt ?? 0 }}</td>
-                    <td class="break-all text-red-600">
-                      {{ row2.lastError || '-' }}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </template>
+            </template>
 
-          <template #action="{ row }">
-            <VbenTableAction
-              :actions="[
-                {
-                  text: $t('page.iot.alert.ack'),
-                  icon: 'lucide:check',
-                  auth: 'iot:alert:ack',
-                  disabled: row.state !== 'FIRING',
-                  onClick: () => onAck([row.id]),
-                },
-                {
-                  text: $t('page.iot.alert.silenceOneHour'),
-                  icon: 'lucide:bell-off',
-                  auth: 'iot:alert:ack',
-                  disabled: row.state === 'RESOLVED',
-                  popConfirm: {
-                    title: $t('page.iot.alert.silenceConfirm'),
-                    confirm: () => onSilence([row.id], 60),
+            <template #action="{ row }">
+              <VbenTableAction
+                :actions="[
+                  {
+                    text: $t('page.iot.alert.ack'),
+                    icon: 'lucide:check',
+                    auth: 'iot:alert:ack',
+                    disabled: row.state !== 'FIRING',
+                    onClick: () => onAck([row.id]),
                   },
-                },
-              ]"
-              align="center"
-            />
-          </template>
-        </InstanceGrid>
-      </Tabs.TabPane>
+                  {
+                    text: $t('page.iot.alert.silenceOneHour'),
+                    icon: 'lucide:bell-off',
+                    auth: 'iot:alert:ack',
+                    disabled: row.state === 'RESOLVED',
+                    popConfirm: {
+                      title: $t('page.iot.alert.silenceConfirm'),
+                      confirm: () => onSilence([row.id], 60),
+                    },
+                  },
+                ]"
+                align="center"
+              />
+            </template>
+          </InstanceGrid>
+        </Tabs.TabPane>
 
-      <!-- ===== 告警规则 ===== -->
-      <Tabs.TabPane
-        v-if="canViewRule"
-        key="rules"
-        :tab="$t('page.iot.alert.tabRules')"
-      >
-        <Alert
-          v-if="ruleError"
-          class="mb-2"
-          :description="ruleError"
-          :message="$t('page.iot.alert.rule.listLoadFailed')"
-          show-icon
-          type="error"
-        />
-        <RuleGrid
-          class="flex-1 min-h-0"
-          @checkbox-change="onRuleCheckboxChange"
+        <!-- ===== 告警规则 ===== -->
+        <Tabs.TabPane
+          v-if="canViewRule"
+          key="rules"
+          :tab="$t('page.iot.alert.tabRules')"
         >
-          <template #toolbar-tools>
-            <Space>
-              <Button
-                v-if="canSaveRule"
-                :disabled="selectedRuleIds.length === 0"
-                @click="onToggleRule(selectedRuleIds, true)"
-              >
-                {{ $t('page.iot.alert.rule.batchEnable') }}
-              </Button>
-              <Button
-                v-if="canSaveRule"
-                :disabled="selectedRuleIds.length === 0"
-                @click="onToggleRule(selectedRuleIds, false)"
-              >
-                {{ $t('page.iot.alert.rule.batchDisable') }}
-              </Button>
-              <Button
-                v-if="canSaveRule"
-                type="primary"
-                @click="RuleDrawerApi.setData({}).open()"
-              >
-                {{ $t('page.iot.alert.rule.createTitle') }}
-              </Button>
-            </Space>
-          </template>
+          <Alert
+            v-if="ruleError"
+            class="mb-2"
+            :description="ruleError"
+            :message="$t('page.iot.alert.rule.listLoadFailed')"
+            show-icon
+            type="error"
+          />
+          <RuleGrid
+            class="flex-1 min-h-0"
+            @checkbox-change="onRuleCheckboxChange"
+          >
+            <template #toolbar-tools>
+              <Space>
+                <Button
+                  v-if="canSaveRule"
+                  :disabled="selectedRuleIds.length === 0"
+                  @click="onToggleRule(selectedRuleIds, true)"
+                >
+                  {{ $t('page.iot.alert.rule.batchEnable') }}
+                </Button>
+                <Button
+                  v-if="canSaveRule"
+                  :disabled="selectedRuleIds.length === 0"
+                  @click="onToggleRule(selectedRuleIds, false)"
+                >
+                  {{ $t('page.iot.alert.rule.batchDisable') }}
+                </Button>
+                <Button
+                  v-if="canSaveRule"
+                  type="primary"
+                  @click="RuleDrawerApi.setData({}).open()"
+                >
+                  {{ $t('page.iot.alert.rule.createTitle') }}
+                </Button>
+              </Space>
+            </template>
 
-          <template #empty>
-            <Empty
-              v-if="listSlotState(ruleError, 0) === 'empty'"
-              :description="$t('page.iot.alert.rule.emptyReason')"
-            />
-          </template>
+            <template #empty>
+              <Empty
+                v-if="listSlotState(ruleError, 0) === 'empty'"
+                :description="$t('page.iot.alert.rule.emptyReason')"
+              />
+            </template>
 
-          <template #scope="{ row }">
-            <!-- 用映射函数而不是动态拼键：未知 scopeType 会渲染出 `page.iot.alert.scope.xxx` 原始键 -->
-            {{ $t(scopeLabelKey(row.scopeType)) }}
-          </template>
-          <template #scopeTarget="{ row }">
-            {{ scopeTargetText(row) }}
-          </template>
-          <template #severity="{ row }">
-            <Tag :color="severityColor(row.severity)">
-              {{ $t(severityLabelKey(row.severity)) }}
-            </Tag>
-          </template>
-          <template #condition="{ row }">
-            <!-- 与规则列表单元格共用同一份人话（不在模板里重复实现一遍，避免两处口径漂移） -->
-            {{ conditionText(row) }}
-          </template>
-          <template #notifyRisk="{ row }">
-            <NotifyRiskTag
-              :channels="row.notifyChannels"
-              :targets="row.notifyTargets"
-            />
-          </template>
-          <template #enabled="{ row }">
-            <Tag :color="row.enabled ? 'success' : 'default'">
-              {{ row.enabled ? $t('common.enabled') : $t('common.disabled') }}
-            </Tag>
-          </template>
+            <template #scope="{ row }">
+              <!-- 用映射函数而不是动态拼键：未知 scopeType 会渲染出 `page.iot.alert.scope.xxx` 原始键 -->
+              {{ $t(scopeLabelKey(row.scopeType)) }}
+            </template>
+            <template #scopeTarget="{ row }">
+              {{ scopeTargetText(row) }}
+            </template>
+            <template #severity="{ row }">
+              <Tag :color="severityColor(row.severity)">
+                {{ $t(severityLabelKey(row.severity)) }}
+              </Tag>
+            </template>
+            <template #condition="{ row }">
+              <!-- 与规则列表单元格共用同一份人话（不在模板里重复实现一遍，避免两处口径漂移） -->
+              {{ conditionText(row) }}
+            </template>
+            <template #notifyRisk="{ row }">
+              <NotifyRiskTag
+                :channels="row.notifyChannels"
+                :targets="row.notifyTargets"
+              />
+            </template>
+            <template #enabled="{ row }">
+              <Tag :color="row.enabled ? 'success' : 'default'">
+                {{ row.enabled ? $t('common.enabled') : $t('common.disabled') }}
+              </Tag>
+            </template>
 
-          <template #action="{ row }">
-            <VbenTableAction
-              :actions="[
-                {
-                  text: $t('common.edit'),
-                  icon: 'lucide:pencil',
-                  auth: 'iot:alert:rule-save',
-                  onClick: () => RuleDrawerApi.setData({ rule: row }).open(),
-                },
-                {
-                  text: row.enabled
-                    ? $t('common.disabled')
-                    : $t('common.enabled'),
-                  icon: 'lucide:power',
-                  auth: 'iot:alert:rule-save',
-                  onClick: () => onToggleRule([row.id], !row.enabled),
-                },
-              ]"
-              align="center"
-            />
-          </template>
-        </RuleGrid>
-      </Tabs.TabPane>
+            <template #updateTime="{ row }">
+              {{ formatDateTime(row.updateTime) }}
+            </template>
+
+            <template #action="{ row }">
+              <VbenTableAction
+                :actions="[
+                  {
+                    text: $t('common.edit'),
+                    icon: 'lucide:pencil',
+                    auth: 'iot:alert:rule-save',
+                    onClick: () => RuleDrawerApi.setData({ rule: row }).open(),
+                  },
+                  {
+                    text: row.enabled
+                      ? $t('common.disabled')
+                      : $t('common.enabled'),
+                    icon: 'lucide:power',
+                    auth: 'iot:alert:rule-save',
+                    onClick: () => onToggleRule([row.id], !row.enabled),
+                  },
+                ]"
+                align="center"
+              />
+            </template>
+          </RuleGrid>
+        </Tabs.TabPane>
       </Tabs>
     </PanelErrorBoundary>
 

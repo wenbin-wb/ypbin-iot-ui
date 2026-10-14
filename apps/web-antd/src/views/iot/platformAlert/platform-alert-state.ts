@@ -74,24 +74,3 @@ export function resolvePlatformAlertListState(
   }
   return itemCount > 0 ? 'ready' : 'empty';
 }
-
-/** 时间展示（空给 -，避免 undefined）。 */
-export function tsLabel(ts?: string): string {
-  return ts || '-';
-}
-
-/** 指标快照：非空且是 JSON 对象时格式化（展示用）；空给 -。 */
-export function snapshotLabel(snapshot?: string): string {
-  if (!snapshot) {
-    return '-';
-  }
-  try {
-    const parsed = JSON.parse(snapshot) as unknown;
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return JSON.stringify(parsed);
-    }
-    return snapshot;
-  } catch {
-    return snapshot;
-  }
-}

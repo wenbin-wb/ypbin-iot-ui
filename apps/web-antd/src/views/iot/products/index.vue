@@ -7,7 +7,7 @@ import { ref } from 'vue';
 import { Page, useVbenDrawer } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
-import { Alert, Button, message } from 'ant-design-vue';
+import { Button, message } from 'ant-design-vue';
 
 import { useVbenVxeGrid, VbenTableAction } from '#/adapter/vxe-table';
 import { deleteProduct, getProductPage, publishProduct } from '#/api/iot';
@@ -17,8 +17,8 @@ import { extractErrorMessage } from '#/utils/error';
 
 import EmptyGuide from '../onboarding/modules/empty-guide.vue';
 import OnboardingGuide from '../onboarding/modules/guide.vue';
-
-import { useColumns } from './data';
+import ListErrorAlert from '../shared/list-error-alert.vue';
+import { useColumns, useGridFormSchema } from './data';
 import Detail from './modules/detail.vue';
 import Form from './modules/form.vue';
 
@@ -39,6 +39,10 @@ const [GuideDrawer, GuideDrawerApi] = useVbenDrawer();
 const listError = ref('');
 
 const [Grid, gridApi] = useVbenVxeGrid({
+  formOptions: {
+    schema: useGridFormSchema(),
+    submitOnChange: true,
+  },
   gridOptions: {
     columns: useColumns(),
     height: 'auto',
@@ -46,11 +50,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
     pagerConfig: { enabled: true },
     proxyConfig: {
       ajax: {
-        query: async ({ page }) => {
+        query: async ({ page }, formValues: IotProductApi.ProductQuery) => {
           try {
             const result = await getProductPage({
               page: page.currentPage,
               pageSize: page.pageSize,
+              ...formValues,
             });
             listError.value = '';
             // 后端 `PageResult.total` 是 `long` ⇒ 全局序列化成**字符串**（`"17"`），
@@ -68,7 +73,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
       },
     },
     rowConfig: { keyField: 'id' },
-    toolbarConfig: { custom: true, export: false, refresh: true, zoom: true },
+    toolbarConfig: {
+      custom: true,
+      export: false,
+      refresh: true,
+      search: true,
+      zoom: true,
+    },
   } as VxeTableGridOptions<IotProductApi.ProductResp>,
 });
 
@@ -115,14 +126,11 @@ function openGuide() {
       🔴 失败态**必须挂在表格之外**（不能只放 `#empty` 槽里）：
       真实 vxe 只在**表体没有行**时才渲染 `#empty` 槽 ⇒ 「已有数据后刷新失败」时旧行仍在、
       槽不渲染 ⇒ 失败提示看不见，页面继续展示**过期数据**而用户毫不知情。
+      统一走 shared/list-error-alert.vue（与设备/告警等页同一呈现）。
     -->
-    <Alert
-      v-if="listError"
-      class="mb-2"
-      :description="listError"
-      :message="$t('page.iot.product.listLoadFailed')"
-      show-icon
-      type="error"
+    <ListErrorAlert
+      :error="listError"
+      :title="$t('page.iot.product.listLoadFailed')"
     />
     <Grid>
       <template #toolbar-tools>
@@ -140,7 +148,7 @@ function openGuide() {
       </template>
 
       <!-- 空态引导：说明「为什么是空的 + 下一步点哪里」，而不是一张空白表格 -->
-      <!-- 🔴 但**失败不能画成空态**：加载失败时由上方 Alert 承担失败态，这里不得再声称「没有数据」 -->
+      <!-- 🔴 但**失败不能画成空态**：加载失败时由上方 ListErrorAlert 承担失败态，这里不得再声称「没有数据」 -->
       <template #empty>
         <EmptyGuide
           v-if="!listError"
@@ -159,6 +167,14 @@ function openGuide() {
               onClick: () => onDetail(row),
             },
             {
+              text: $t('common.edit'),
+              icon: 'lucide:edit',
+              auth: 'iot:product:update',
+              onClick: () => onEdit(row),
+            },
+          ]"
+          :dropdown-actions="[
+            {
               text: $t('page.iot.product.publish'),
               icon: 'lucide:upload',
               auth: 'iot:product:publish',
@@ -166,12 +182,6 @@ function openGuide() {
                 title: $t('page.iot.product.publishConfirm'),
                 confirm: () => onPublish(row),
               },
-            },
-            {
-              text: $t('common.edit'),
-              icon: 'lucide:edit',
-              auth: 'iot:product:update',
-              onClick: () => onEdit(row),
             },
             {
               text: $t('common.delete'),

@@ -124,6 +124,24 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
+// 设备页签的内嵌列表用桩替换：本用例只验证「宿主把 productId 接进去、按钮还在」，
+// 列表自身的查询/三态由 devices/list-states.test.ts 同类桩用例负责，避免在 detail 用例里
+// 引入真实 vxe 挂载与设备接口请求。
+vi.mock('./device-list.vue', () => ({
+  default: defineComponent({
+    name: 'DeviceListStub',
+    props: { productId: { default: '', type: String } },
+    setup(props, { expose }) {
+      expose({ reload: () => {} });
+      return () =>
+        h('div', {
+          class: 'device-list-stub',
+          'data-product-id': props.productId,
+        });
+    },
+  }),
+}));
+
 beforeAll(async () => {
   const { setupI18n } = await import('#/locales');
   const app = createApp({ render: () => null });
@@ -183,7 +201,9 @@ async function openDetail() {
 }
 
 function clickTab(container: HTMLElement, text: string) {
-  const tabs = [...container.querySelectorAll('.ant-tabs-tab')] as HTMLElement[];
+  const tabs = [
+    ...container.querySelectorAll('.ant-tabs-tab'),
+  ] as HTMLElement[];
   const tab = tabs.find((item) => item.textContent?.includes(text));
   expect(tab, `未找到页签：${text}`).toBeTruthy();
   tab?.click();
@@ -243,6 +263,22 @@ describe('products/modules/detail.vue 运行时分支', () => {
     expect(apiMock.listProperties).not.toHaveBeenCalled();
     expect(apiMock.listCommands).not.toHaveBeenCalled();
     expect(apiMock.listEvents).not.toHaveBeenCalled();
+  });
+
+  it('设备页签：内嵌 DeviceList 收到 productId，保留「添加设备」按钮，不再出现「需后端补 productId」提示', async () => {
+    const container = await openDetail();
+    clickTab(container, '设备');
+    await flush();
+
+    const stub = container.querySelector('.device-list-stub');
+    expect(stub, '设备页签未挂载 DeviceList').toBeTruthy();
+    expect((stub as HTMLElement | null)?.dataset.productId).toBe('9100001');
+
+    const addButton = [...container.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('添加设备'),
+    );
+    expect(addButton, '未保留「添加设备」入口').toBeTruthy();
+    expect(container.innerHTML).not.toContain('需要后端补 productId');
   });
 
   it('tsl 导入：空文本与非法 JSON 都在本地拦截，不把注定失败的请求发给后端', async () => {
@@ -323,7 +359,9 @@ describe('products/modules/detail.vue 补充分支（元素表独立性 / TSL / 
     await flush();
 
     const setTsl = (text: string) => {
-      const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+      const textarea = container.querySelector(
+        'textarea',
+      ) as HTMLTextAreaElement;
       textarea.value = text;
       textarea.dispatchEvent(new Event('input', { bubbles: true }));
     };

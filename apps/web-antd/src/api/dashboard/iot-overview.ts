@@ -31,7 +31,7 @@ export namespace IotDashboardApi {
     offline: number;
   }
 
-  /** 最近告警条目（severity/state 取告警中心同一码值，前端按 page.iot.alert.* 翻译） */
+  /** 最近告警条目（severity/state 取告警中心同一**小写**码值，前端按 page.iot.alert.* 翻译） */
   export interface RecentAlert {
     id: string;
     deviceName: string;
@@ -76,11 +76,11 @@ export namespace IotDashboardApi {
     messageTrend: MessageTrendPoint[];
     /** 近 14 日在线趋势 */
     onlineTrend: OnlineTrendPoint[];
-    /** 接入协议分布（按设备数） */
+    /** 接入协议分布（按设备数）。`name` 是**协议码**（modbus/tcp/mqtt/opcua），展示层须经 protocolLabel 翻译 */
     protocolDistribution: NameValue[];
-    /** 待处理告警级别分布 */
+    /** 待处理告警级别分布。`name` 是**级别码**（critical/warning/info，小写，与告警中心同口径） */
     severityDistribution: NameValue[];
-    /** 设备数 TOP 产品 */
+    /** 设备数 TOP 产品。`name` 是产品名（已是展示名，不做码值翻译） */
     productTop: NameValue[];
     /** 最近告警列表 */
     recentAlerts: RecentAlert[];

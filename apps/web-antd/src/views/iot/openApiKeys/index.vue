@@ -21,6 +21,7 @@ import {
   Popconfirm,
   Progress,
   Tag,
+  Tooltip,
 } from 'ant-design-vue';
 
 import { useVbenVxeGrid } from '#/adapter/vxe-table';
@@ -28,15 +29,15 @@ import { createOpenApiKey, getOpenApiKeys, revokeOpenApiKey } from '#/api/iot';
 import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
 
+import CopyText from '../shared/copy-text.vue';
+import { formatDateTime, openApiScopeLabelKey } from '../shared/display';
 import {
   checkOpenApiKeyForm,
   normalizeOpenApiKeyForm,
   OPEN_API_ALLOWED_SCOPES,
   OPEN_API_DANGEROUS_SCOPE,
-  openApiKeyScopesLabel,
   openApiKeyStatusColor,
   openApiKeyStatusLabelKey,
-  openApiKeyTimeLabel,
   openApiKeyUsageKind,
   openApiKeyUsageLabel,
   openApiKeyUsagePercent,
@@ -252,15 +253,36 @@ async function copyText(text: string) {
     />
 
     <Grid>
+      <template #empty>
+        <!-- 失败态由上方 Alert 承担，这里只声明「真的没有 Key」这一种情况。 -->
+        <span v-if="!listError" class="text-muted-foreground">
+          {{ $t('page.iot.openApiKey.empty') }}
+        </span>
+      </template>
+
       <template #accessKey="{ row }">
-        <span class="font-mono text-xs">{{ row.accessKeyId }}</span>
+        <CopyText :value="row.accessKeyId" />
       </template>
       <template #mono="{ row }">
         <span class="font-mono text-xs">{{ row.secretPrefix }}</span>
       </template>
       <template #scopes="{ row }">
-        <span class="font-mono text-xs">
-          {{ openApiKeyScopesLabel(row.scopes) }}
+        <span
+          v-if="!row.scopes || row.scopes.length === 0"
+          class="text-xs text-muted-foreground"
+        >
+          -
+        </span>
+        <span v-else class="flex flex-wrap items-center justify-center gap-1">
+          <!-- 界面显示中文作用域，原权限码放 tooltip：排障/对接口文档时不用再猜。 -->
+          <Tooltip v-for="scope in row.scopes" :key="scope" :title="scope">
+            <Tag
+              class="m-0 cursor-help"
+              :color="scope === OPEN_API_DANGEROUS_SCOPE ? 'error' : 'default'"
+            >
+              {{ $t(openApiScopeLabelKey(scope)) }}
+            </Tag>
+          </Tooltip>
         </span>
       </template>
       <template #usage="{ row }">
@@ -298,10 +320,10 @@ async function copyText(text: string) {
         </Tag>
       </template>
       <template #expireAt="{ row }">
-        {{ openApiKeyTimeLabel(row.expireAt) }}
+        {{ formatDateTime(row.expireAt) }}
       </template>
       <template #lastUsedAt="{ row }">
-        {{ openApiKeyTimeLabel(row.lastUsedAt) }}
+        {{ formatDateTime(row.lastUsedAt) }}
       </template>
       <template #action="{ row }">
         <Popconfirm
@@ -354,7 +376,10 @@ async function copyText(text: string) {
                   : (formScopes = formScopes.filter((s) => s !== scope))
               "
             >
-              <span class="font-mono text-xs">{{ scope }}</span>
+              <span>{{ $t(openApiScopeLabelKey(scope)) }}</span>
+              <span class="ml-1 font-mono text-xs text-muted-foreground">
+                {{ scope }}
+              </span>
             </Checkbox>
             <Tag
               v-if="scope === OPEN_API_DANGEROUS_SCOPE"

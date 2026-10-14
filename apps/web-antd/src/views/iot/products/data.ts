@@ -4,45 +4,123 @@ import type { IotProductApi } from '#/api/iot';
 
 import { $t } from '#/locales';
 
+import {
+  dataFormatOptions,
+  displayOrFallback,
+  formatDateTime,
+  modelStatusOptions,
+  protocolOptions,
+} from '../shared/display';
+
+/**
+ * CellTag 按**原始值**严格匹配；后端历史数据大小写不统一（协议/数据格式/物模型状态），
+ * 为每个选项补大小写变体，避免大小写不同就退回显示原始码。
+ */
+function withCaseVariants(options: Array<{ label: string; value: string }>) {
+  return options.flatMap((option) => {
+    const variants = new Set([
+      option.value,
+      option.value.toLowerCase(),
+      option.value.toUpperCase(),
+    ]);
+    return [...variants].map((value) => ({ label: option.label, value }));
+  });
+}
+
 export function useColumns(): VxeTableGridColumns {
   return [
     { field: 'productCode', title: $t('page.iot.product.code'), minWidth: 150 },
     { field: 'productName', title: $t('page.iot.product.name'), minWidth: 160 },
-    { field: 'protocol', title: $t('page.iot.device.protocol'), width: 110 },
+    {
+      field: 'protocol',
+      title: $t('page.iot.device.protocol'),
+      width: 110,
+      cellRender: {
+        name: 'CellTag',
+        options: withCaseVariants(protocolOptions()),
+      },
+    },
     {
       field: 'dataFormat',
       title: $t('page.iot.product.dataFormat'),
       width: 110,
+      cellRender: {
+        name: 'CellTag',
+        options: withCaseVariants(dataFormatOptions()),
+      },
     },
     {
       field: 'deviceType',
       title: $t('page.iot.product.deviceType'),
       width: 120,
+      formatter: ({ cellValue }: { cellValue?: string }) =>
+        displayOrFallback(cellValue),
     },
     {
       field: 'modelStatus',
       title: $t('page.iot.product.modelStatus'),
       width: 110,
-      cellRender: { name: 'CellTag' },
+      cellRender: {
+        name: 'CellTag',
+        options: withCaseVariants(modelStatusOptions()),
+      },
     },
     {
       field: 'currentVersion',
       title: $t('page.iot.product.currentVersion'),
       width: 110,
+      formatter: ({ cellValue }: { cellValue?: string }) =>
+        displayOrFallback(cellValue),
     },
     {
       field: 'createTime',
       title: $t('page.iot.device.createTime'),
       width: 170,
+      formatter: ({ cellValue }: { cellValue?: string }) =>
+        formatDateTime(cellValue),
     },
     {
       title: $t('common.action'),
       field: 'action',
       fixed: 'right',
-      // 4 个带图标+文字的按钮（详情 / 发布 / 编辑 / 删除）排一行，240 会被省略号截断
-      width: 330,
+      // 高频「详情/编辑」保持按钮，低频「发布/删除」收进更多菜单，宽度 220 不再截断
+      width: 220,
       align: 'center',
       slots: { default: 'action' },
+    },
+  ];
+}
+
+export function useGridFormSchema(): FormSchema[] {
+  return [
+    {
+      component: 'Input',
+      componentProps: {
+        allowClear: true,
+        placeholder: $t('page.iot.product.searchKeywordPlaceholder'),
+      },
+      fieldName: 'keyword',
+      label: $t('page.iot.product.searchKeyword'),
+    },
+    {
+      component: 'Select',
+      componentProps: {
+        allowClear: true,
+        options: protocolOptions(),
+        placeholder: $t('page.iot.product.protocolPlaceholder'),
+      },
+      fieldName: 'protocol',
+      label: $t('page.iot.device.protocol'),
+    },
+    {
+      component: 'Select',
+      componentProps: {
+        allowClear: true,
+        options: modelStatusOptions(),
+        placeholder: $t('page.iot.product.modelStatusFilterPlaceholder'),
+      },
+      fieldName: 'modelStatus',
+      label: $t('page.iot.product.modelStatus'),
     },
   ];
 }
@@ -51,7 +129,10 @@ export function useFormSchema(): FormSchema[] {
   return [
     {
       component: 'Input',
-      componentProps: { maxlength: 64, placeholder: '如 meter-01' },
+      componentProps: {
+        maxlength: 64,
+        placeholder: $t('page.iot.product.codePlaceholder'),
+      },
       fieldName: 'productCode',
       help: $t('page.iot.product.codeHelp'),
       label: $t('page.iot.product.code'),
@@ -67,12 +148,8 @@ export function useFormSchema(): FormSchema[] {
     {
       component: 'Select',
       componentProps: {
-        options: [
-          { label: 'Modbus TCP', value: 'modbus' },
-          { label: 'TCP 透传', value: 'tcp' },
-          { label: 'MQTT', value: 'mqtt' },
-          { label: 'OPC UA', value: 'opcua' },
-        ],
+        options: protocolOptions(),
+        placeholder: $t('page.iot.product.protocolPlaceholder'),
       },
       defaultValue: 'modbus',
       fieldName: 'protocol',
@@ -81,12 +158,7 @@ export function useFormSchema(): FormSchema[] {
     },
     {
       component: 'Select',
-      componentProps: {
-        options: [
-          { label: 'JSON', value: 'JSON' },
-          { label: 'BINARY', value: 'BINARY' },
-        ],
-      },
+      componentProps: { options: dataFormatOptions() },
       defaultValue: 'JSON',
       fieldName: 'dataFormat',
       label: $t('page.iot.product.dataFormat'),

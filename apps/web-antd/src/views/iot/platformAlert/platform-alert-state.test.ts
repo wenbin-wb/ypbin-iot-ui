@@ -6,8 +6,6 @@ import {
   platformAlertStateColor,
   platformAlertStateLabelKey,
   resolvePlatformAlertListState,
-  snapshotLabel,
-  tsLabel,
 } from './platform-alert-state';
 
 /** 平台告警纯逻辑用例。 */
@@ -58,19 +56,5 @@ describe('resolvePlatformAlertListState（错误优先）', () => {
     expect(resolvePlatformAlertListState(false, 'boom', 0)).toBe('error');
     expect(resolvePlatformAlertListState(false, '', 0)).toBe('empty');
     expect(resolvePlatformAlertListState(false, '', 2)).toBe('ready');
-  });
-});
-
-describe('tsLabel / snapshotLabel', () => {
-  it('时间空给 -', () => {
-    expect(tsLabel('2026-10-05T00:00:00')).toBe('2026-10-05T00:00:00');
-    expect(tsLabel(undefined)).toBe('-');
-    expect(tsLabel('')).toBe('-');
-  });
-
-  it('指标快照：合法 JSON 对象紧凑化；空/非法原样', () => {
-    expect(snapshotLabel(undefined)).toBe('-');
-    expect(snapshotLabel('{not-json')).toBe('{not-json');
-    expect(snapshotLabel('{"lag": 45000}')).toBe('{"lag":45000}');
   });
 });

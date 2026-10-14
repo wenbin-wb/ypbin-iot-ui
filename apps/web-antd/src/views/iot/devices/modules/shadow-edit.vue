@@ -9,7 +9,11 @@ import { updateDeviceShadow } from '#/api/iot';
 import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
 
-import { desiredToEditableText, parseDesiredJson } from './shadow-state';
+import {
+  desiredToEditableText,
+  parseDesiredJson,
+  resolveDesiredParseMessage,
+} from './shadow-state';
 
 /**
  * 设备影子「期望值」编辑器（影子写入接线）。
@@ -47,13 +51,14 @@ function openEditor() {
 const parse = computed(() => parseDesiredJson(text.value));
 
 async function save() {
-  if (!parse.value.ok) {
-    message.error(parse.value.message);
+  const result = parse.value;
+  if (!result.ok) {
+    message.error(resolveDesiredParseMessage(result));
     return;
   }
   saving.value = true;
   try {
-    await updateDeviceShadow(String(props.deviceId), parse.value.value ?? {});
+    await updateDeviceShadow(String(props.deviceId), result.value);
     message.success($t('page.iot.shadow.desiredSaved'));
     open.value = false;
     emit('saved');
@@ -88,7 +93,7 @@ async function save() {
         :placeholder="$t('page.iot.shadow.desiredPlaceholder')"
       />
       <div v-if="!parse.ok" class="text-xs text-red-500">
-        {{ parse.message }}
+        {{ resolveDesiredParseMessage(parse) }}
       </div>
       <div class="text-xs text-muted-foreground">
         {{ $t('page.iot.shadow.desiredHint') }}

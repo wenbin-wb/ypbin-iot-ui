@@ -7,9 +7,10 @@ import { requestClient } from '#/api/request';
  * - `GET  /iot/tenant-ledger`                       权限 `iot:ledger:list`   → `TenantLedgerResp[]`
  * - `PUT  /iot/tenant-ledger/{tenantId}/assignable` 权限 `iot:ledger:update` → `TenantLedgerResp`
  *
- * ⚠️ 下面的字段就是后端 `TenantLedgerResp` 的**全部**字段：没有租户名称、没有设备数、
- * 没有最近上报时间、没有凭据信息（IoT 服务也没有跨租户聚合接口）。
- * ⇒ 页面上这三列一律留空并标注「待接入」，**不得在本文件里补造字段**。
+ * ⚠️ `deviceCount` / `lastReportAt` / `hasCredential` 属于**并行开发中的聚合字段**：
+ * 旧后端可能不返回 ⇒ 展示方按字段是否 `undefined` 区分「真实值」与「待接入」，
+ * 缺失时标注「待接入」，**不得在本文件里补造/猜测**。
+ * 租户名称仍不在本接口（由页面调用系统租户接口批量解析）。
  */
 export namespace IotLedgerApi {
   export interface LedgerResp {
@@ -26,6 +27,15 @@ export namespace IotLedgerApi {
     change?: string;
     /** 更新时间，`yyyy-MM-dd HH:mm:ss`。 */
     updateTime?: string;
+    /** 该租户设备数（后端 `Long` → 全局序列化为 number | string；0 是有效值）。 */
+    deviceCount?: number | string;
+    /**
+     * 最近上报时间（`yyyy-MM-dd HH:mm:ss` 或 ISO）。
+     * 字段缺失 = 后端尚未提供该聚合；字段为空串 = 确实没有上报记录 ⇒ 展示 `-`。
+     */
+    lastReportAt?: string;
+    /** 该租户是否已有接入凭据（字段缺失 = 后端尚未提供）。 */
+    hasCredential?: boolean;
   }
 
   export interface LedgerAssignableReq {

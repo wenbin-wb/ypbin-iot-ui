@@ -5,10 +5,22 @@ import { computed, ref } from 'vue';
 
 import { useVbenDrawer } from '@vben/common-ui';
 
-import { Descriptions, DescriptionsItem, Empty, Spin, Tag } from 'ant-design-vue';
+import {
+  Descriptions,
+  DescriptionsItem,
+  Empty,
+  Spin,
+  Tag,
+} from 'ant-design-vue';
 
 import { getDeviceAvailability } from '#/api/iot';
 import { $t } from '#/locales';
+
+import {
+  displayOrFallback,
+  formatDateTime,
+  maintenanceSourceLabel,
+} from '../../shared/display';
 
 const loading = ref(false);
 const data = ref<IotAvailabilityApi.AvailabilityResp>();
@@ -26,7 +38,9 @@ const [Drawer, drawerApi] = useVbenDrawer<AvailabilityDrawerData>({
     }
     const device = drawerApi.getData();
     drawerApi.setState({
-      title: $t('page.iot.availability.title', [device?.deviceName ?? device?.id ?? '']),
+      title: $t('page.iot.availability.title', [
+        device?.deviceName ?? device?.id ?? '',
+      ]),
     });
     // 没有设备 id 不发请求：否则会打 /iot/devices//availability（后端 404，白跑一趟还留噪音）
     if (!device?.id) {
@@ -70,12 +84,12 @@ const availability = computed(() => num(data.value?.availability));
 const meets = computed(() => data.value?.meetsTarget === true);
 </script>
 <template>
-  <Drawer class="w-[720px]">
+  <Drawer class="w-[720px] max-w-[calc(100vw-40px)]">
     <Spin :spinning="loading">
       <template v-if="data">
         <Descriptions :column="2" bordered size="small">
           <DescriptionsItem :label="$t('page.iot.availability.window')">
-            {{ data.from }} ~ {{ data.to }}
+            {{ formatDateTime(data.from) }} ~ {{ formatDateTime(data.to) }}
           </DescriptionsItem>
           <DescriptionsItem :label="$t('page.iot.availability.availability')">
             <span class="text-lg font-semibold">{{ availability }}</span>
@@ -87,39 +101,46 @@ const meets = computed(() => data.value?.meetsTarget === true);
               }}
             </Tag>
           </DescriptionsItem>
-          <DescriptionsItem :label="$t('page.iot.availability.effectiveWindow')">
+          <DescriptionsItem
+            :label="$t('page.iot.availability.effectiveWindow')"
+          >
             {{ human(data.effectiveWindowSeconds) }}
-            <span class="text-gray-400"
-              >（{{ $t('page.iot.availability.window') }}：{{
+            <span class="text-gray-400">
+              （{{ $t('page.iot.availability.window') }}：{{
                 human(data.windowSeconds)
-              }}）</span
-            >
+              }}）
+            </span>
           </DescriptionsItem>
-          <DescriptionsItem :label="$t('page.iot.availability.maintenanceSeconds')">
+          <DescriptionsItem
+            :label="$t('page.iot.availability.maintenanceSeconds')"
+          >
             {{ human(data.maintenanceSeconds) }}
-            <span class="text-gray-400"
-              >（{{ $t('page.iot.availability.outageInMaintenance') }}：{{
+            <span class="text-gray-400">
+              （{{ $t('page.iot.availability.outageInMaintenance') }}：{{
                 human(data.outageInMaintenanceSeconds)
-              }}）</span
-            >
+              }}）
+            </span>
           </DescriptionsItem>
           <DescriptionsItem :label="$t('page.iot.availability.outageSeconds')">
             {{ human(data.outageSeconds) }}
           </DescriptionsItem>
           <DescriptionsItem :label="$t('page.iot.availability.longestOutage')">
             {{ human(data.longestOutageSeconds) }}
-            <span class="text-gray-400"
-              >（{{ $t('page.iot.availability.outageCount') }}：{{
+            <span class="text-gray-400">
+              （{{ $t('page.iot.availability.outageCount') }}：{{
                 data.outageCount
-              }}）</span
-            >
+              }}）
+            </span>
           </DescriptionsItem>
         </Descriptions>
 
         <div class="mt-4 mb-2 font-semibold">
           {{ $t('page.iot.availability.outages') }}
         </div>
-        <Empty v-if="!data.outages?.length" :description="$t('page.iot.availability.noOutage')" />
+        <Empty
+          v-if="!data.outages?.length"
+          :description="$t('page.iot.availability.noOutage')"
+        />
         <table v-else class="w-full text-sm">
           <thead>
             <tr class="text-left text-gray-500">
@@ -131,10 +152,16 @@ const meets = computed(() => data.value?.meetsTarget === true);
           </thead>
           <tbody>
             <tr v-for="row in data.outages" :key="row.id" class="border-t">
-              <td class="py-1">{{ row.startTs }}</td>
-              <td class="py-1">{{ row.endTs || $t('page.iot.availability.ongoing') }}</td>
+              <td class="py-1">{{ formatDateTime(row.startTs) }}</td>
+              <td class="py-1">
+                {{
+                  row.endTs
+                    ? formatDateTime(row.endTs)
+                    : $t('page.iot.availability.ongoing')
+                }}
+              </td>
               <td class="py-1">{{ human(row.durationSec) }}</td>
-              <td class="py-1">{{ row.reason }}</td>
+              <td class="py-1">{{ displayOrFallback(row.reason) }}</td>
             </tr>
           </tbody>
         </table>
@@ -156,17 +183,21 @@ const meets = computed(() => data.value?.meetsTarget === true);
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in data.maintenanceWindows" :key="row.id" class="border-t">
-              <td class="py-1">{{ row.startTs }}</td>
-              <td class="py-1">{{ row.endTs || $t('page.iot.maintenance.ongoing') }}</td>
+            <tr
+              v-for="row in data.maintenanceWindows"
+              :key="row.id"
+              class="border-t"
+            >
+              <td class="py-1">{{ formatDateTime(row.startTs) }}</td>
               <td class="py-1">
                 {{
-                  row.source === 'LEASE_HANDOVER'
-                    ? $t('page.iot.maintenance.sourceHandover')
-                    : $t('page.iot.maintenance.sourceManual')
+                  row.endTs
+                    ? formatDateTime(row.endTs)
+                    : $t('page.iot.maintenance.ongoing')
                 }}
               </td>
-              <td class="py-1">{{ row.reason || '-' }}</td>
+              <td class="py-1">{{ maintenanceSourceLabel(row.source) }}</td>
+              <td class="py-1">{{ displayOrFallback(row.reason) }}</td>
             </tr>
           </tbody>
         </table>

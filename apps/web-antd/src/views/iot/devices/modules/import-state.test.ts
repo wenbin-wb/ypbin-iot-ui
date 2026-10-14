@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { createApp } from 'vue';
+
+import { i18n } from '@vben/locales';
+
+import { beforeAll, describe, expect, it } from 'vitest';
 
 import {
   batchStatusColor,
@@ -8,10 +12,24 @@ import {
   hasFailedRows,
   IMPORT_BATCH_STATUS,
   IMPORT_ROW_RESULT,
+  resolveImportFileCheckMessage,
   resolveImportListState,
   rowResultLabelKey,
   sortBatchesByRecent,
 } from './import-state';
+
+/** 真实 i18n：只初始化一次（`$t` 就是 `i18n.global.t`）。 */
+beforeAll(async () => {
+  const { setupI18n } = await import('#/locales');
+  const app = createApp({ render: () => null });
+  await setupI18n(app, { defaultLocale: 'zh-CN' });
+  // en-US 语言包与生产同源合并；缺键/编译不过会让下面的英文断言直接红
+  const mod = (await import('#/locales/langs/en-US/page.json')) as {
+    default?: Record<string, unknown>;
+  };
+  const pageDict = (mod.default ?? mod) as { iot: Record<string, unknown> };
+  i18n.global.mergeLocaleMessage('en-US', { page: pageDict });
+});
 
 /**
  * 批量导入页的**纯逻辑**用例（前端补测）。
@@ -63,30 +81,106 @@ describe('checkImportFile（上传前的前端基本校验）', () => {
     expect(checkImportFile(fakeFile('DEVICES.CSV', 1024)).ok).toBe(true);
   });
 
-  it('拒绝明显选错的文件类型，且原因里带上实际文件名', () => {
-    const result = checkImportFile(fakeFile('devices.xlsx', 2048));
-    expect(result.ok).toBe(false);
-    // 用户要能一眼看出「是我选错的那个文件」
-    expect(result.message).toContain('devices.xlsx');
-    expect(result.message).toContain('.csv');
+  it('拒绝明显选错的文件类型：结构化 key + 实际文件名/扩展名参数', () => {
+    expect(checkImportFile(fakeFile('devices.xlsx', 2048))).toMatchObject({
+      messageKey: 'page.iot.device.import.validation.fileType',
+      ok: false,
+      params: ['.csv / .txt', 'devices.xlsx'],
+    });
   });
 
-  it('拒绝 0 字节文件（并说清是空的，而不是含糊的「格式错误」）', () => {
-    const result = checkImportFile(fakeFile('devices.csv', 0));
-    expect(result.ok).toBe(false);
-    expect(result.message).toContain('空');
+  it('文件名为空时用独立 key（不把「（无文件名）」硬编码进逻辑）', () => {
+    expect(checkImportFile(fakeFile('', 2048))).toMatchObject({
+      messageKey: 'page.iot.device.import.validation.fileTypeNoName',
+      ok: false,
+      params: ['.csv / .txt'],
+    });
   });
 
-  it('超过上限时拒绝，且提示给出可执行的下一步（拆分文件）', () => {
-    const result = checkImportFile(fakeFile('devices.csv', 3 * 1024 * 1024));
-    expect(result.ok).toBe(false);
-    expect(result.message).toContain('分批');
+  it('拒绝 0 字节文件：结构化 key（而非含糊的「格式错误」）', () => {
+    expect(checkImportFile(fakeFile('devices.csv', 0))).toMatchObject({
+      messageKey: 'page.iot.device.import.validation.fileEmpty',
+      ok: false,
+    });
+  });
+
+  it('超过上限时拒绝：key 带文件大小与上限参数', () => {
+    expect(
+      checkImportFile(fakeFile('devices.csv', 3 * 1024 * 1024)),
+    ).toMatchObject({
+      messageKey: 'page.iot.device.import.validation.fileTooLarge',
+      ok: false,
+      params: ['3.0 MB', '2.0 MB'],
+    });
   });
 
   it('恰好等于上限时放行（边界含等号，与后端 > 判定一致）', () => {
     expect(checkImportFile(fakeFile('devices.csv', 2 * 1024 * 1024)).ok).toBe(
       true,
     );
+  });
+});
+
+describe('resolveImportFileCheckMessage（真实 vue-i18n，不 mock #/locales）', () => {
+  it('zh-CN：四类失败文案可读，通过时为空串', () => {
+    expect(
+      resolveImportFileCheckMessage(
+        checkImportFile(fakeFile('devices.xlsx', 2048)),
+      ),
+    ).toBe('只支持 CSV/TXT 文件（.csv / .txt），当前文件：devices.xlsx');
+    expect(
+      resolveImportFileCheckMessage(checkImportFile(fakeFile('', 2048))),
+    ).toBe('只支持 CSV/TXT 文件（.csv / .txt），当前文件名不可用');
+    expect(
+      resolveImportFileCheckMessage(
+        checkImportFile(fakeFile('devices.csv', 0)),
+      ),
+    ).toBe('文件是空的（0 字节），请检查是否选错了文件');
+    expect(
+      resolveImportFileCheckMessage(
+        checkImportFile(fakeFile('devices.csv', 3 * 1024 * 1024)),
+      ),
+    ).toBe('文件 3.0 MB 超过上限 2.0 MB，请拆分成多个文件分批导入');
+    expect(
+      resolveImportFileCheckMessage(
+        checkImportFile(fakeFile('devices.csv', 1024)),
+      ),
+    ).toBe('');
+  });
+
+  it('en-US：同 key 同参数给出英文文案（不回落中文）', () => {
+    const previous = i18n.global.locale.value;
+    try {
+      i18n.global.locale.value = 'en-US' as never;
+      expect(
+        resolveImportFileCheckMessage(
+          checkImportFile(fakeFile('devices.xlsx', 2048)),
+        ),
+      ).toBe(
+        'Only CSV/TXT files are supported (.csv / .txt). Current file: devices.xlsx',
+      );
+      expect(
+        resolveImportFileCheckMessage(checkImportFile(fakeFile('', 2048))),
+      ).toBe(
+        'Only CSV/TXT files are supported (.csv / .txt). The current file name is unavailable.',
+      );
+      expect(
+        resolveImportFileCheckMessage(
+          checkImportFile(fakeFile('devices.csv', 0)),
+        ),
+      ).toBe(
+        'The file is empty (0 bytes); check whether you selected the wrong file.',
+      );
+      expect(
+        resolveImportFileCheckMessage(
+          checkImportFile(fakeFile('devices.csv', 3 * 1024 * 1024)),
+        ),
+      ).toBe(
+        'File 3.0 MB exceeds the 2.0 MB limit; split it into multiple files and import in batches.',
+      );
+    } finally {
+      i18n.global.locale.value = previous as never;
+    }
   });
 });
 

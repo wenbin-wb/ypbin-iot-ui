@@ -1,13 +1,31 @@
-import { describe, expect, it } from 'vitest';
+import { createApp } from 'vue';
+
+import { i18n } from '@vben/locales';
+
+import { beforeAll, describe, expect, it } from 'vitest';
 
 import {
   checkTagForm,
   normalizeTagForm,
+  resolveTagFormCheckMessage,
   resolveTagListState,
   TAG_KEY_MAX,
   TAG_VALUE_MAX,
   tagDisplayKey,
 } from './tag-state';
+
+/** 真实 i18n：只初始化一次（`$t` 就是 `i18n.global.t`）。 */
+beforeAll(async () => {
+  const { setupI18n } = await import('#/locales');
+  const app = createApp({ render: () => null });
+  await setupI18n(app, { defaultLocale: 'zh-CN' });
+  // en-US 语言包与生产同源合并；缺键/编译不过会让下面的英文断言直接红
+  const mod = (await import('#/locales/langs/en-US/page.json')) as {
+    default?: Record<string, unknown>;
+  };
+  const pageDict = (mod.default ?? mod) as { iot: Record<string, unknown> };
+  i18n.global.mergeLocaleMessage('en-US', { page: pageDict });
+});
 
 /**
  * 设备标签纯逻辑用例。
@@ -43,11 +61,64 @@ describe('checkTagForm（与后端 @NotBlank/@Size 同口径）', () => {
     });
   });
 
-  it('失败信息能指出是哪个字段', () => {
-    expect(checkTagForm('', 'v').message).toContain('标签键');
-    expect(checkTagForm('k', '').message).toContain('标签值');
-    expect(checkTagForm('k'.repeat(100), 'v').message).toContain('64');
-    expect(checkTagForm('k', 'v'.repeat(300)).message).toContain('255');
+  it('失败结论带结构化 key/参数（页面不得自己拼文案）', () => {
+    expect(checkTagForm('', 'v')).toMatchObject({
+      messageKey: 'page.iot.tag.validation.keyRequired',
+      ok: false,
+    });
+    expect(checkTagForm('k', '')).toMatchObject({
+      messageKey: 'page.iot.tag.validation.valueRequired',
+      ok: false,
+    });
+    expect(checkTagForm('k'.repeat(100), 'v')).toMatchObject({
+      messageKey: 'page.iot.tag.validation.keyTooLong',
+      ok: false,
+      params: [TAG_KEY_MAX],
+    });
+    expect(checkTagForm('k', 'v'.repeat(300))).toMatchObject({
+      messageKey: 'page.iot.tag.validation.valueTooLong',
+      ok: false,
+      params: [TAG_VALUE_MAX],
+    });
+  });
+});
+
+describe('resolveTagFormCheckMessage（真实 vue-i18n，不 mock #/locales）', () => {
+  it('zh-CN：失败文案可读、带字段名与上限，通过时为空串', () => {
+    expect(resolveTagFormCheckMessage(checkTagForm('', 'v'))).toBe(
+      '标签键不能为空',
+    );
+    expect(resolveTagFormCheckMessage(checkTagForm('k', ''))).toBe(
+      '标签值不能为空',
+    );
+    expect(resolveTagFormCheckMessage(checkTagForm('k'.repeat(100), 'v'))).toBe(
+      '标签键超过 64 字符限制',
+    );
+    expect(resolveTagFormCheckMessage(checkTagForm('k', 'v'.repeat(300)))).toBe(
+      '标签值超过 255 字符限制',
+    );
+    expect(resolveTagFormCheckMessage(checkTagForm('k', 'v'))).toBe('');
+  });
+
+  it('en-US：同 key 同参数给出英文文案（不回落中文）', () => {
+    const previous = i18n.global.locale.value;
+    try {
+      i18n.global.locale.value = 'en-US' as never;
+      expect(resolveTagFormCheckMessage(checkTagForm('', 'v'))).toBe(
+        'Tag key is required',
+      );
+      expect(resolveTagFormCheckMessage(checkTagForm('k', ''))).toBe(
+        'Tag value is required',
+      );
+      expect(
+        resolveTagFormCheckMessage(checkTagForm('k'.repeat(100), 'v')),
+      ).toBe('Tag key exceeds the 64-character limit');
+      expect(
+        resolveTagFormCheckMessage(checkTagForm('k', 'v'.repeat(300))),
+      ).toBe('Tag value exceeds the 255-character limit');
+    } finally {
+      i18n.global.locale.value = previous as never;
+    }
   });
 });
 

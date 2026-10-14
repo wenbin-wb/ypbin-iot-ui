@@ -8,14 +8,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { Page, useVbenDrawer } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
-import {
-  Alert,
-  Button,
-  message,
-  Popconfirm,
-  Switch,
-  Tag,
-} from 'ant-design-vue';
+import { Button, message, Popconfirm, Switch, Tag } from 'ant-design-vue';
 
 import { useVbenVxeGrid, VbenTableAction } from '#/adapter/vxe-table';
 import {
@@ -30,8 +23,9 @@ import { extractErrorMessage } from '#/utils/error';
 
 import EmptyGuide from '../onboarding/modules/empty-guide.vue';
 import OnboardingGuide from '../onboarding/modules/guide.vue';
+import ListErrorAlert from '../shared/list-error-alert.vue';
 import TenantLedger from '../tenant-ledger/modules/ledger.vue';
-import { useColumns } from './data';
+import { useColumns, useGridFormSchema } from './data';
 import Availability from './modules/availability.vue';
 import Detail from './modules/detail.vue';
 import Form from './modules/form.vue';
@@ -104,7 +98,25 @@ const alertCounts = ref<Record<string, number | string>>({});
 
 const alertCountError = ref('');
 
+/**
+ * `?productId=` 带来的**初始筛选值**（产品详情「添加设备」与按产品浏览共用这个参数）。
+ *
+ * 只在组件初始化时读取：搜索表单的 `defaultValue` 会随首次查询一起提交，
+ * 因此「带 productId 打开台账」天然是筛选后的结果；用户之后可在表单里改/清空。
+ * `action=create` 的消费链路（见 `consumeCreateQuery`）保持不变：同一个 productId
+ * 既预填筛选、又预选设备表单，两件事互不冲突。
+ */
+const initialProductId =
+  typeof route.query.productId === 'string' && route.query.productId !== ''
+    ? route.query.productId
+    : undefined;
+
 const [Grid, gridApi] = useVbenVxeGrid({
+  // 搜索表单字段名与后端 `IotDeviceQuery` 同名（keyword/productId/protocol），submitOnChange 即时查询
+  formOptions: {
+    schema: useGridFormSchema(initialProductId),
+    submitOnChange: true,
+  },
   gridOptions: {
     columns: useColumns(),
     height: 'auto',
@@ -112,11 +124,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
     pagerConfig: { enabled: true },
     proxyConfig: {
       ajax: {
-        query: async ({ page }) => {
+        query: async ({ page }, formValues: IotDeviceApi.DeviceQuery = {}) => {
           try {
+            // 搜索条件原样透传（字段与后端同名，不做改名校验/映射）
             const result = await getDevicePage({
               page: page.currentPage,
               pageSize: page.pageSize,
+              ...formValues,
             });
             listError.value = '';
             await loadAlertCounts(result.items ?? []);
@@ -137,7 +151,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
       },
     },
     rowConfig: { keyField: 'id' },
-    toolbarConfig: { custom: true, export: false, refresh: true, zoom: true },
+    toolbarConfig: {
+      custom: true,
+      export: false,
+      refresh: true,
+      search: true,
+      zoom: true,
+    },
   } as VxeTableGridOptions<IotDeviceApi.DeviceResp>,
 });
 
@@ -344,23 +364,17 @@ function openImport() {
       活动告警数查询失败：**辅助信息失败不能把设备列表画成失败态**，但也不能静默无声
       （列上只会显示 `-`，用户会以为「这台设备没有告警」）。因此单独一条可关闭的提示。
     -->
-    <Alert
+    <ListErrorAlert
       v-if="alertCountError"
-      class="mb-2"
+      :error="alertCountError"
+      :title="$t('page.iot.alert.activeCountLoadFailed')"
       closable
-      :description="alertCountError"
-      :message="$t('page.iot.alert.activeCountLoadFailed')"
-      show-icon
       type="warning"
       @close="alertCountError = ''"
     />
-    <Alert
-      v-if="listError"
-      class="mb-2"
-      :description="listError"
-      :message="$t('page.iot.device.listLoadFailed')"
-      show-icon
-      type="error"
+    <ListErrorAlert
+      :error="listError"
+      :title="$t('page.iot.device.listLoadFailed')"
     />
     <Grid>
       <template #toolbar-tools>
@@ -450,6 +464,10 @@ function openImport() {
         </Tag>
       </template>
 
+      <!--
+        操作列：详情/编辑留在行内，告警/可用率/历史曲线/删除收进「更多」下拉。
+        6 个 icon+文字按钮横排会被固定列宽挤成省略号；权限码与各动作入口保持不变。
+      -->
       <template #action="{ row }">
         <VbenTableAction
           :actions="[
@@ -459,6 +477,14 @@ function openImport() {
               auth: 'iot:device:list',
               onClick: () => onDetail(row),
             },
+            {
+              text: $t('common.edit'),
+              icon: 'lucide:edit',
+              auth: 'iot:device:update',
+              onClick: () => onEdit(row),
+            },
+          ]"
+          :dropdown-actions="[
             {
               text: $t('page.iot.alert.title'),
               icon: 'lucide:bell-ring',
@@ -476,12 +502,6 @@ function openImport() {
               icon: 'lucide:chart-line',
               auth: 'iot:series:get',
               onClick: () => onSeries(row),
-            },
-            {
-              text: $t('common.edit'),
-              icon: 'lucide:edit',
-              auth: 'iot:device:update',
-              onClick: () => onEdit(row),
             },
             {
               text: $t('common.delete'),

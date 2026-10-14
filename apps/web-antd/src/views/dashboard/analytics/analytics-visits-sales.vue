@@ -5,6 +5,7 @@ import type { IotDashboardApi } from '#/api/dashboard/iot-overview';
 
 import { computed, onMounted, ref, watch } from 'vue';
 
+import { Inbox } from '@vben/icons';
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 
 import { $t } from '#/locales';
@@ -18,6 +19,9 @@ const props = defineProps<{
 
 const chartRef = ref<EchartsUIType>();
 const { renderEcharts } = useEcharts(chartRef);
+
+/** 空数据时不渲染画布，改为友好空态：空数组会让图表区看起来像坏掉的白块。 */
+const hasData = computed(() => props.items.length > 0);
 
 /** 横向条形图 y 轴自下而上绘制，取 TOP6 并反序让最大值在顶部 */
 const topItems = computed(() =>
@@ -96,9 +100,16 @@ onMounted(() => {
   renderChart(topItems.value);
 });
 
-watch(topItems, renderChart, { deep: true });
+watch(topItems, renderChart, { deep: true, flush: 'post' });
 </script>
 
 <template>
-  <EchartsUI ref="chartRef" />
+  <EchartsUI v-if="hasData" ref="chartRef" />
+  <div
+    v-else
+    class="flex h-[300px] flex-col items-center justify-center gap-2 text-sm text-muted-foreground"
+  >
+    <Inbox class="size-8 opacity-50" />
+    <span>{{ $t('page.dashboard.chartEmptyDistribution') }}</span>
+  </div>
 </template>

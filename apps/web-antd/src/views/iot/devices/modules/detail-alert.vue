@@ -33,6 +33,7 @@ import {
   stateLabelKey,
 } from '../../alerts/data';
 import InstanceCurve from '../../alerts/modules/instance-curve.vue';
+import { displayOrFallback, formatDateTime } from '../../shared/display';
 
 /**
  * 设备详情抽屉的**第 6 个「告警」页签**。
@@ -75,6 +76,14 @@ const summaryText = ref('');
 const loading = ref(false);
 
 const expandedKeys = ref<string[]>([]);
+
+/** 持续时长：空值给 `-`；`0` 是合法时长，不能被当成空。 */
+function durationText(value?: null | number | string): string {
+  if (value === null || value === undefined || value === '') {
+    return '-';
+  }
+  return humanSeconds(value);
+}
 
 async function loadSummary() {
   if (!props.deviceId) {
@@ -236,17 +245,25 @@ watch(
           <span v-if="record.outage">{{
             $t('page.iot.alert.kind.offline')
           }}</span>
-          <span v-else>{{ record.propertyId ?? '-' }}</span>
+          <span v-else>{{ displayOrFallback(record.propertyId) }}</span>
         </template>
       </Table.Column>
       <Table.Column
         :title="$t('page.iot.alert.triggerValue')"
         data-index="triggerValue"
-      />
+      >
+        <template #default="{ record }">
+          {{ displayOrFallback(record.triggerValue) }}
+        </template>
+      </Table.Column>
       <Table.Column
         :title="$t('page.iot.alert.threshold')"
         data-index="thresholdSnapshot"
-      />
+      >
+        <template #default="{ record }">
+          {{ displayOrFallback(record.thresholdSnapshot) }}
+        </template>
+      </Table.Column>
       <Table.Column :title="$t('page.iot.alert.stateField')" data-index="state">
         <template #default="{ record }">
           <Tag :color="stateColor(record.state)">
@@ -259,7 +276,7 @@ watch(
         data-index="durationSeconds"
       >
         <template #default="{ record }">
-          {{ humanSeconds(record.durationSeconds) }}
+          {{ durationText(record.durationSeconds) }}
         </template>
       </Table.Column>
       <Table.Column :title="$t('common.action')">
@@ -290,13 +307,16 @@ watch(
         <div class="grid grid-cols-2 gap-4">
           <div class="text-xs">
             <div>
-              {{ $t('page.iot.alert.startTs') }}: {{ record.startTs ?? '-' }}
+              {{ $t('page.iot.alert.startTs') }}:
+              {{ formatDateTime(record.startTs) }}
             </div>
             <div>
-              {{ $t('page.iot.alert.firingTs') }}: {{ record.firingTs ?? '-' }}
+              {{ $t('page.iot.alert.firingTs') }}:
+              {{ formatDateTime(record.firingTs) }}
             </div>
             <div v-if="record.silenceUntil">
-              {{ $t('page.iot.alert.silenceUntil') }}: {{ record.silenceUntil }}
+              {{ $t('page.iot.alert.silenceUntil') }}:
+              {{ formatDateTime(record.silenceUntil) }}
             </div>
             <div v-if="record.reason">
               {{ $t('page.iot.alert.reasonField') }}:
@@ -361,15 +381,24 @@ watch(
       <Table.Column
         :title="$t('page.iot.alert.property')"
         data-index="propertyId"
-      />
-      <Table.Column
-        :title="$t('page.iot.alert.startTs')"
-        data-index="startTs"
-      />
+      >
+        <template #default="{ record }">
+          {{ displayOrFallback(record.propertyId) }}
+        </template>
+      </Table.Column>
+      <Table.Column :title="$t('page.iot.alert.startTs')" data-index="startTs">
+        <template #default="{ record }">
+          {{ formatDateTime(record.startTs) }}
+        </template>
+      </Table.Column>
       <Table.Column
         :title="$t('page.iot.alert.resolvedTs')"
         data-index="resolvedTs"
-      />
+      >
+        <template #default="{ record }">
+          {{ formatDateTime(record.resolvedTs) }}
+        </template>
+      </Table.Column>
       <Table.Column
         :title="$t('page.iot.alert.reasonField')"
         data-index="reason"

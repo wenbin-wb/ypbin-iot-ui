@@ -4,12 +4,18 @@ import type { TabOption } from '@vben/types';
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { AnalysisChartCard, AnalysisChartsTabs } from '@vben/common-ui';
+import {
+  AnalysisChartCard,
+  AnalysisChartsTabs,
+  useVbenDrawer,
+} from '@vben/common-ui';
 
-import { Tag } from 'ant-design-vue';
+import { Tag, Tooltip } from 'ant-design-vue';
 
 import { $t } from '#/locales';
 
+import HelpDrawer from '../../iot/shared/help-drawer.vue';
+import NoviceGuideCard from '../shared/novice-guide-card.vue';
 import { useIotOverview } from '../shared/use-iot-overview';
 import AnalyticsTrends from './analytics-trends.vue';
 import AnalyticsVisitsData from './analytics-visits-data.vue';
@@ -23,6 +29,11 @@ const BRAND_GRAD =
 
 const router = useRouter();
 const { loading, overview, usingDemo } = useIotOverview();
+
+// 术语词典抽屉：与工作台/接入向导共用同一份内容（view 层只负责打开）
+const [HelpDrawerContainer, helpDrawerApi] = useVbenDrawer({
+  connectedComponent: HelpDrawer,
+});
 
 /** 演示数据兜底时页面数据可能为 null，模板统一走空对象口径 */
 const data = computed(() => overview.value);
@@ -146,6 +157,10 @@ function formatCompact(n: number) {
 function goAlerts() {
   router.push('/iot/alerts');
 }
+
+function openHelp() {
+  helpDrawerApi.open();
+}
 </script>
 
 <template>
@@ -171,9 +186,11 @@ function goAlerts() {
             class="mt-1 flex items-center gap-2 text-2xl font-bold tracking-tight"
           >
             {{ $t('page.dashboard.analyticsTitle') }}
-            <Tag v-if="usingDemo" color="orange" class="!mr-0">
-              {{ $t('page.dashboard.demoBadge') }}
-            </Tag>
+            <Tooltip v-if="usingDemo" :title="$t('page.dashboard.demoReason')">
+              <Tag color="orange" class="!mr-0 cursor-help">
+                {{ $t('page.dashboard.demoBadge') }}
+              </Tag>
+            </Tooltip>
           </h2>
           <p class="mt-1 text-sm text-muted-foreground">
             {{ $t('page.dashboard.analyticsSubtitle') }}
@@ -200,6 +217,9 @@ function goAlerts() {
         </div>
       </div>
     </div>
+
+    <!-- 新手快速上手：面向第一次接入的物业/值班人员，术语问题统一走帮助抽屉 -->
+    <NoviceGuideCard class="mt-5" @open-help="openHelp" />
 
     <!-- 指标卡（设备 / 在线率 / 消息 / 告警） -->
     <div
@@ -360,6 +380,8 @@ function goAlerts() {
         </table>
       </div>
     </div>
+
+    <HelpDrawerContainer />
   </div>
 </template>
 

@@ -12,17 +12,17 @@ import {
   Space,
   Table,
   Tag,
+  Tooltip,
 } from 'ant-design-vue';
 
 import { getDeviceTrace } from '#/api/iot';
 import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
 
+import { formatDateTime, formatRelativeTime } from '../../shared/display';
 import {
   directionLabelKey,
   formatDiscardDetail,
-  formatPersistedAt,
-  formatTraceTime,
   hasAdvice,
   hasBatchInfo,
   needsAttention,
@@ -251,7 +251,10 @@ onMounted(load);
       >
         <template #default="{ record }">
           <div class="flex flex-col">
-            <span>{{ formatTraceTime(record.occurredAt) }}</span>
+            <!-- 绝对时间为主、相对时间为辅：排障时常问「这是几分钟前的事」 -->
+            <Tooltip :title="formatRelativeTime(record.occurredAt)">
+              <span>{{ formatDateTime(record.occurredAt) }}</span>
+            </Tooltip>
             <!-- 重发会就地覆写时间戳 ⇒ 必须提示，否则用户以为"10:03 那次"还是原来那次 -->
             <span v-if="needsRetryHint(record)" class="text-xs text-orange-500">
               {{
@@ -306,7 +309,7 @@ onMounted(load);
             <span class="text-gray-500">
               {{
                 $t('page.iot.device.trace.persistedAt', {
-                  time: formatPersistedAt(record),
+                  time: formatDateTime(record.persistedAt),
                 })
               }}
             </span>
