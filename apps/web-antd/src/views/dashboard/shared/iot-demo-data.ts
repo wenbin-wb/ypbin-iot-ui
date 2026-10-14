@@ -52,13 +52,14 @@ const DEVICE_OFFLINE = DEVICE_TOTAL - DEVICE_ONLINE - DEVICE_DISABLED;
 const UPLINK_TODAY = 1_284_506;
 const DOWNLINK_TODAY = 96_420;
 
+// 与真实接口同口径：`name` 存**协议码**（后端 `protocolDistribution.name`），
+// 展示层由 analytics-visits-data.vue 走 shared/display.protocolLabel 统一翻译——
+// 演示数据若直接写中文名，会让映射逻辑在演示态下被绕过、真实态才暴露英文码。
 const PROTOCOL_BASE: Array<[string, number]> = [
-  ['MQTT', 986],
-  ['Modbus TCP', 512],
-  ['OPC UA', 268],
-  ['HTTP', 174],
-  ['CoAP', 120],
-  ['TCP', 88],
+  ['mqtt', 986],
+  ['modbus', 512],
+  ['opcua', 268],
+  ['tcp', 174],
 ];
 
 const PRODUCT_BASE: Array<[string, number]> = [

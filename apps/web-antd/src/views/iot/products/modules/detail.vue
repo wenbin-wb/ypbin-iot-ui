@@ -50,6 +50,7 @@ import {
   serviceOptionLabel,
 } from '../../shared/display';
 import PanelErrorBoundary from '../../shared/panel-error-boundary.vue';
+import DeviceList from './device-list.vue';
 import ThingModelForm from './thingmodel-form.vue';
 
 /**
@@ -59,11 +60,12 @@ import ThingModelForm from './thingmodel-form.vue';
  * - **概览**：产品基础信息 + 导入/导出 TSL + 新建草稿/发布 + 添加设备；
  * - **物模型**：服务列表 + 选中服务的属性/命令/事件三张表（增删改，走已就绪的物模型接口）；
  * - **TSL**：导出查看 / 粘贴导入（全量替换草稿；错误逐项展示，禁静默失败）；
- * - **设备**：一键跳「添加设备」（带 productId 预选）；
+ * - **设备**：内嵌按产品分页的设备清单（`device-list.vue`，服务端 `productId` 过滤），
+ *   并保留「添加设备」入口（带 `productId` 跳设备台账并预选/预筛）；
  * - **版本**：`GET /products/{id}/versions`。
  *
  * ⚠️ **不做的**：点位模板（产品级模板表尚不存在）——页签里如实写「待接入」，
- * 不画一个点不动的空表；按产品筛设备（后端查询条件未补）同理，只在页面上说明。
+ * 不画一个点不动的空表。
  */
 interface ProductDetailData {
   id: string;
@@ -76,6 +78,9 @@ const emit = defineEmits(['reload']);
 const router = useRouter();
 
 const productId = ref('');
+
+/** 内嵌设备清单实例（`defineExpose({ reload })`），按产品重查用。 */
+const deviceListRef = ref<InstanceType<typeof DeviceList> | null>(null);
 
 const product = ref<IotProductApi.ProductResp>();
 
@@ -210,6 +215,8 @@ async function reloadAll() {
     console.warn('[iot] 产品版本列表加载失败，版本页签回落为空', error);
   }
   loading.value = false;
+  // 设备清单是按 productId 独立查询的内嵌列表：产品变更后随之刷新（未挂载时 no-op）
+  deviceListRef.value?.reload();
 }
 
 function onSelectService(serviceId: string) {
@@ -801,19 +808,21 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
 
           <!-- ===== 设备 ===== -->
           <Tabs.TabPane key="devices" :tab="$t('page.iot.product.tabDevices')">
-            <Alert
-              :message="$t('page.iot.product.deviceTabHint')"
-              class="mb-3"
-              show-icon
-              type="warning"
+            <!-- 设备清单：按 productId 服务端分页查询（后端 IotDeviceQuery.productId 已支持） -->
+            <div class="mb-3 flex justify-end">
+              <Button
+                v-access:code="['iot:device:create']"
+                type="primary"
+                @click="onAddDevice"
+              >
+                {{ $t('page.iot.product.addDevice') }}
+              </Button>
+            </div>
+            <DeviceList
+              v-if="productId"
+              ref="deviceListRef"
+              :product-id="productId"
             />
-            <Button
-              v-access:code="['iot:device:create']"
-              type="primary"
-              @click="onAddDevice"
-            >
-              {{ $t('page.iot.product.addDevice') }}
-            </Button>
           </Tabs.TabPane>
 
           <!-- ===== 版本 ===== -->

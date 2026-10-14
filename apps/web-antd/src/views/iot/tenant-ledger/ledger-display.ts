@@ -1,13 +1,19 @@
 /**
  * 租户台账的**纯展示/过滤逻辑**（零 vue、零网络依赖，可直接单测）。
  *
- * 背景：后端 `TenantLedgerResp` 只给 `tenantId`，不返回租户名称；
- * 页面用 `#/api/system/tenant` 的 `getTenantList()` **批量**解析名称后在这里建映射。
+ * 背景：后端的租户名称仍不在台账接口里，页面用 `#/api/system/tenant` 的
+ * `getTenantList()` **批量**解析名称后在这里建映射。
  * 约定：映射缺失时**不伪造名称**——由调用方回落展示 `tenantId` 或「名称待接入」。
+ *
+ * 聚合字段（`deviceCount` / `lastReportAt` / `hasCredential`）的展示口径：
+ * **只有字段 `undefined`（后端尚未提供）才标注「待接入」**；0 / 空串是真实值，
+ * 如实展示（0 就是 0，空时间显示 `-`），绝不拿推测值填。
  *
  * `tenantId` 是后端 Long 序列化后的字符串 ⇒ 全程按字符串处理（不用 Number()）。
  */
 import type { SystemTenantApi } from '#/api/system/tenant';
+
+import { displayOrFallback, formatDateTime } from '../shared/display';
 
 /** tenantId → 租户名称。 */
 export type TenantNameMap = Record<string, string>;
@@ -70,4 +76,24 @@ export function assignableColor(value?: boolean | null): string {
     return 'default';
   }
   return 'warning';
+}
+
+/** 设备数展示：0 是有效值（显示 `0`）；null/undefined/空串回落 `-`（调用方按 undefined 判定「待接入」）。 */
+export function ledgerDeviceCountText(value?: null | number | string): string {
+  return displayOrFallback(value);
+}
+
+/** 最近上报展示：空串/非法时间显示 `-`，不把原始串贴给用户（调用方按 undefined 判定「待接入」）。 */
+export function ledgerLastReportText(value?: string): string {
+  return formatDateTime(value);
+}
+
+/** 是否有凭据的文案键（调用方已确认字段存在）：有 → `是` / 无 → `否`。 */
+export function ledgerCredentialLabelKey(value: boolean): string {
+  return value ? 'page.iot.display.yes' : 'page.iot.display.no';
+}
+
+/** 是否有凭据的 Tag 颜色（有 = success；无或待接入 = default，不制造告警感）。 */
+export function ledgerCredentialColor(value?: boolean): string {
+  return value === true ? 'success' : 'default';
 }

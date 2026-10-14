@@ -3,9 +3,12 @@ import type { VxeTableGridColumns } from '#/adapter/vxe-table';
 import type { IotDeviceApi } from '#/api/iot';
 
 import { getPublishedProductOptions } from '#/api/iot';
+// 值导入走全路径（skill 约定）；`#/api/iot` 聚合器只用于类型导入
+import { getProductOptions } from '#/api/iot/product';
 import { $t } from '#/locales';
 
 import {
+  displayOrFallback,
   formatDateTime,
   onlineStatusColor,
   onlineStatusOptions,
@@ -18,6 +21,15 @@ export function useColumns(): VxeTableGridColumns {
   return [
     { field: 'deviceCode', title: $t('page.iot.device.code'), minWidth: 140 },
     { field: 'deviceName', title: $t('page.iot.device.name'), minWidth: 160 },
+    {
+      field: 'productIdName',
+      title: $t('page.iot.device.product'),
+      minWidth: 160,
+      // 后端已用 @RefText("product") 翻译产品名；并行开发期可能缺失 ⇒ 依次回落
+      // productIdName → productId → `-`，不把「没注解名」误读成「未绑定产品」。
+      formatter: ({ row }: { row: IotDeviceApi.DeviceResp }) =>
+        displayOrFallback(row.productIdName ?? row.productId),
+    },
     {
       field: 'protocol',
       title: $t('page.iot.device.protocol'),
@@ -159,10 +171,14 @@ export function useFormSchema(): FormSchema[] {
 /**
  * 设备台账搜索表单。
  *
- * 字段名与后端 `IotDeviceQuery` 完全一致（`keyword` / `protocol`），查询时原样透传，
- * 不在页面里做改名映射（铁律 7）。协议选项复用 shared/display，避免硬编码中文。
+ * 字段名与后端 `IotDeviceQuery` 完全一致（`keyword` / `productId` / `protocol`），
+ * 查询时原样透传，不在页面里做改名映射（铁律 7）。
+ * 协议选项复用 shared/display；产品下拉复用 `getProductOptions`（labelField/valueField
+ * 与后端 `id`/`productName` 同名），避免页面里硬编码中文。
+ *
+ * @param initialProductId 从 `?productId=` 带来的预填值（产品详情进入时只筛该产品）。
  */
-export function useGridFormSchema(): FormSchema[] {
+export function useGridFormSchema(initialProductId?: string): FormSchema[] {
   return [
     {
       component: 'Input',
@@ -172,6 +188,21 @@ export function useGridFormSchema(): FormSchema[] {
       },
       fieldName: 'keyword',
       label: $t('page.iot.device.searchKeyword'),
+    },
+    {
+      component: 'ApiSelect',
+      componentProps: {
+        allowClear: true,
+        api: getProductOptions,
+        class: 'w-full',
+        labelField: 'productName',
+        placeholder: $t('page.iot.device.productFilterPlaceholder'),
+        showSearch: true,
+        valueField: 'id',
+      },
+      defaultValue: initialProductId,
+      fieldName: 'productId',
+      label: $t('page.iot.device.product'),
     },
     {
       component: 'Select',

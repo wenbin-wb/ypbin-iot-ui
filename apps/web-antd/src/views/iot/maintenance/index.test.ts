@@ -20,8 +20,9 @@ import MaintenancePage from './index.vue';
  * 覆盖三块此前无覆盖的逻辑：
  * 1. **三态**：失败不许画成「还没有维护窗口」（该页空态的真实含义是「计划停机不会被排除、
  *    可用率偏低」，把查询失败说成这件事会误导运维）；
- * 2. **设备名解析是展示增强、不是列表前提**：解析失败要回落裸 deviceId 而**不**让整页失败；
- *    且必须**一次批量**解析（N+1 规避）；
+ * 2. **设备名解析是展示增强、不是列表前提**：后端 `deviceIdName`（@RefText）优先，
+ *    仅缺注解名的行才**一次批量**解析（全部有注解名时不发请求）；解析失败回落裸 deviceId，
+ *    但**不**让整页失败（N+1 规避 + 不引入设备列表权限依赖）；
  * 3. **交互**：关闭窗口（仅未结束的窗口才有该动作）成功才刷新；空态引导的「接入向导」入口要能打开抽屉。
  *
  * 用真实 vue-i18n（不 mock `#/locales`）。
@@ -226,6 +227,56 @@ describe('maintenance/index.vue 三态', () => {
     // N+1 规避：一次批量（只带本页出现过的 deviceId），绝不按行发请求
     expect(mockApi.getDeviceNameMap).toHaveBeenCalledTimes(1);
     expect(mockApi.getDeviceNameMap).toHaveBeenCalledWith(['d-1']);
+  });
+
+  it('★ 后端已返回 deviceIdName（@RefText）⇒ 直接用注解名，完全不发批量解析请求', async () => {
+    mockApi.getMaintenanceWindowList.mockResolvedValue([
+      { deviceId: 'd-1', deviceIdName: '产线 A 网关', id: 'w-1' },
+      { deviceId: 'd-2', deviceIdName: '产线 B 网关', id: 'w-2' },
+    ]);
+
+    await mountPage();
+    const rows = await runQuery();
+
+    expect(rows).toEqual([
+      {
+        deviceId: 'd-1',
+        deviceIdName: '产线 A 网关',
+        deviceName: '产线 A 网关',
+        id: 'w-1',
+        maintenanceState: 'unknown',
+      },
+      {
+        deviceId: 'd-2',
+        deviceIdName: '产线 B 网关',
+        deviceName: '产线 B 网关',
+        id: 'w-2',
+        maintenanceState: 'unknown',
+      },
+    ]);
+    // 全部行都有注解名 ⇒ 不得再发 getDeviceNameMap（N 行 0 请求）
+    expect(mockApi.getDeviceNameMap).not.toHaveBeenCalled();
+  });
+
+  it('★ 只有缺注解名的行参与批量解析：有注解名的行不被覆盖', async () => {
+    mockApi.getMaintenanceWindowList.mockResolvedValue([
+      { deviceId: 'd-1', deviceIdName: '注解名 A', id: 'w-1' },
+      { deviceId: 'd-2', id: 'w-2' },
+      { deviceId: 'd-3', id: 'w-3' },
+    ]);
+    mockApi.getDeviceNameMap.mockResolvedValue({ 'd-2': '解析名 B' });
+
+    await mountPage();
+    const rows = await runQuery();
+
+    expect(rows.map((row: { deviceName: string }) => row.deviceName)).toEqual([
+      '注解名 A',
+      '解析名 B',
+      'd-3',
+    ]);
+    // 只批量解析缺失行（去重、不按行请求），有注解名的 d-1 不进请求
+    expect(mockApi.getDeviceNameMap).toHaveBeenCalledTimes(1);
+    expect(mockApi.getDeviceNameMap).toHaveBeenCalledWith(['d-2', 'd-3']);
   });
 
   it('★ 设备名解析失败 ⇒ 回落到裸 deviceId，**整页列表照旧成功**（不引入新的权限依赖）', async () => {

@@ -7,6 +7,13 @@ export namespace IotMaintenanceApi {
   export interface MaintenanceWindowDto {
     id: string;
     deviceId?: string;
+    /**
+     * 设备名（后端 `@RefText("device")` 注解翻译）。
+     *
+     * ⚠️ 并行开发期可能不返回 ⇒ 列表页仅对**缺失注解名**的行批量解析设备名，
+     * 全部有注解名时不发多余的批量查询。
+     */
+    deviceIdName?: string;
     startTs: string;
     endTs?: string;
     source: string;

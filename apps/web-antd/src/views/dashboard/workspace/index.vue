@@ -9,6 +9,7 @@ import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 
 import {
+  useVbenDrawer,
   WorkbenchHeader,
   WorkbenchProject,
   WorkbenchQuickNav,
@@ -18,10 +19,12 @@ import {
 import { preferences } from '@vben/preferences';
 import { useUserStore } from '@vben/stores';
 
-import { Empty, Spin, Tag } from 'ant-design-vue';
+import { Empty, Spin, Tag, Tooltip } from 'ant-design-vue';
 
 import { $t } from '#/locales';
 
+import HelpDrawer from '../../iot/shared/help-drawer.vue';
+import NoviceGuideCard from '../shared/novice-guide-card.vue';
 import { useIotOverview } from '../shared/use-iot-overview';
 import { useWorkbenchTrends } from './use-workbench-trends';
 
@@ -30,6 +33,15 @@ const router = useRouter();
 
 // 运行总览（真实接口缺位时演示数据兜底，页面上以徽标标注）
 const { loading, overview, usingDemo } = useIotOverview();
+
+// 术语词典抽屉：与工作台/接入向导共用同一份内容（view 层只负责打开）
+const [HelpDrawerContainer, helpDrawerApi] = useVbenDrawer({
+  connectedComponent: HelpDrawer,
+});
+
+function openHelp() {
+  helpDrawerApi.open();
+}
 
 // 最近告警动态流
 const { trendItems } = useWorkbenchTrends(overview);
@@ -266,9 +278,11 @@ function onProjectClick(item: WorkbenchProjectItem) {
       <template #title>
         <span class="inline-flex items-center gap-2">
           {{ welcomeTitle }}
-          <Tag v-if="usingDemo" color="orange" class="!mr-0">
-            {{ $t('page.dashboard.demoBadge') }}
-          </Tag>
+          <Tooltip v-if="usingDemo" :title="$t('page.dashboard.demoReason')">
+            <Tag color="orange" class="!mr-0 cursor-help">
+              {{ $t('page.dashboard.demoBadge') }}
+            </Tag>
+          </Tooltip>
         </span>
       </template>
       <template #description>
@@ -287,9 +301,9 @@ function onProjectClick(item: WorkbenchProjectItem) {
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
               }"
-              >{{
-                overview ? overview.deviceTotal.toLocaleString() : '—'
-              }}</span>
+            >
+              {{ overview ? overview.deviceTotal.toLocaleString() : '—' }}
+            </span>
           </div>
           <div class="flex flex-col items-end">
             <span class="text-xs text-muted-foreground">{{
@@ -302,9 +316,9 @@ function onProjectClick(item: WorkbenchProjectItem) {
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
               }"
-              >{{
-                overview ? overview.deviceOnline.toLocaleString() : '—'
-              }}</span>
+            >
+              {{ overview ? overview.deviceOnline.toLocaleString() : '—' }}
+            </span>
           </div>
           <div class="flex flex-col items-end">
             <span class="text-xs text-muted-foreground">{{
@@ -317,7 +331,9 @@ function onProjectClick(item: WorkbenchProjectItem) {
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
               }"
-              >{{ overview ? overview.alertPending : '—' }}</span>
+            >
+              {{ overview ? overview.alertPending : '—' }}
+            </span>
           </div>
         </div>
       </template>
@@ -358,6 +374,9 @@ function onProjectClick(item: WorkbenchProjectItem) {
         </div>
       </div>
     </div>
+
+    <!-- 新手快速上手：三步接入 + 术语帮助入口（与首页分析页同一份卡片） -->
+    <NoviceGuideCard class="mt-5" @open-help="openHelp" />
 
     <!-- 最近告警动态 + 快捷导航 -->
     <div class="mt-5 flex flex-col gap-4 xl:flex-row">
@@ -424,6 +443,8 @@ function onProjectClick(item: WorkbenchProjectItem) {
         />
       </div>
     </div>
+
+    <HelpDrawerContainer />
   </div>
 </template>
 

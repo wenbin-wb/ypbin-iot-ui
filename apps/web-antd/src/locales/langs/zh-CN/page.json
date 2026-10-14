@@ -531,7 +531,8 @@
       "serviceOptionMaster": "主服务",
       "serviceOptionMandatory": "必选服务",
       "serviceOptionOptional": "可选服务",
-      "codePlaceholder": "如 meter-01"
+      "codePlaceholder": "如 meter-01",
+      "devicesEmptyReason": "该产品还没有设备：点右上角「添加设备」即可创建第一台。"
     },
     "group": {
       "title": "设备分组",
@@ -725,8 +726,8 @@
       "lastReportAt": "最近上报",
       "credential": "是否有凭据",
       "pending": "待接入",
-      "noticeTitle": "部分列暂无可信数据源",
-      "noticeText": "「设备数」「最近上报」「是否有凭据」三列留空并标注「待接入」：IoT 服务未提供跨租户聚合与凭据接口，本页不填充任何推测值，补齐这三列需要后端新增聚合接口。租户名称已改用系统租户接口解析；解析失败时名称列会标注「名称待接入」并给出可见提示（不再只显示裸 tenantId）。",
+      "noticeTitle": "聚合字段按后端实有数据展示",
+      "noticeText": "「设备数」「最近上报」「是否有凭据」直接消费后端聚合字段：有值即展示真实值（设备数为 0 也显示 0，最近上报为空显示 -，凭据显示是/否）；只有后端尚未返回该字段时才标注「待接入」，不填充推测值。租户名称经系统租户接口解析，失败时名称列标注「名称待接入」并给出可见提示。",
       "change": {
         "created": "首次接入",
         "revived": "恢复接入",
@@ -1169,6 +1170,36 @@
       "leaseAliveYes": "续约中",
       "leaseExpired": "已过期",
       "noLease": "无租约"
+    },
+    "help": {
+      "title": "术语词典",
+      "intro": "这里用大白话解释平台里的常见术语，并告诉你什么时候会用到。",
+      "whatLabel": "是什么",
+      "whenLabel": "什么时候会用到",
+      "open": "术语与帮助",
+      "openHint": "术语看不懂？打开帮助",
+      "termShadow": "设备影子",
+      "termAvailability": "可用率与断档",
+      "termProtocolWhat": "设备跟平台说话用的“语言”，常见有 MQTT、Modbus TCP、OPC UA、TCP 透传等。",
+      "termProtocolWhen": "新建产品时必须先选；选错设备会连不上，通常要改产品配置或换接入方式。",
+      "termEndpointWhat": "平台连接设备用的地址，相当于设备的“门牌号”，通常是 IP + 端口或主题前缀。",
+      "termEndpointWhen": "添加设备时填写；设备一直离线时，先检查端点有没有写错。",
+      "termThingModelWhat": "一台设备的能力说明书：能上报哪些数据、能接收哪些指令，统一描述成属性、命令、事件。",
+      "termThingModelWhen": "建完产品、添加设备之前定义；没有物模型，平台不知道设备的数据是什么含义。",
+      "termPointMappingWhat": "把设备里的原始信号（如寄存器地址 40001）对应到物模型里的属性（如温度）。",
+      "termPointMappingWhen": "设备接入后配置；不配置的话平台收不到数据，曲线和告警都不会有。",
+      "termShadowWhat": "平台保存的设备状态快照，包含设备最近上报的值和云端期望值，设备离线也能查看。",
+      "termShadowWhen": "想确认设备现在是什么状态，或要给设备下发目标配置时查看和编辑。",
+      "termAvailabilityWhat": "可用率是统计周期内设备正常上报的时间占比；断档就是中间停止上报的那一段时间。",
+      "termAvailabilityWhen": "做巡检/考核或排查数据为什么断了一段时看；计划检修要先登记维护窗口，否则会被算成断档。",
+      "termMaintenanceWhat": "提前登记的计划停机时段（检修、换件、停电），这段时间不计入断档。",
+      "termMaintenanceWhen": "设备要停机检修之前登记；忘记登记会拉低可用率。",
+      "termAlertRuleWhat": "给某个点位设一个条件（超过上限、掉线等），条件满足时系统自动通知。",
+      "termAlertRuleWhen": "想让系统替你盯着设备时配置；收到的告警在告警中心确认或静默。",
+      "termOpenApiKeyWhat": "给外部系统调平台接口用的“门禁卡”，可以限定它只能读取哪些数据。",
+      "termOpenApiKeyWhen": "对接第三方系统或自建大屏时签发；Secret 明文只显示一次，要立即保存。",
+      "termPlatformAlertWhat": "平台监控自身健康的告警，比如采集调度停摆、通知发送失败，不是某台设备的故障。",
+      "termPlatformAlertWhen": "平台自告警出现时先看这里，判断是平台问题还是设备问题。"
     }
   },
   "ai": {
@@ -1671,7 +1702,26 @@
     "todoModel": "补全物模型点位",
     "todoModelContent": "为新产品定义属性、单位与量程",
     "todoImport": "批量导入设备",
-    "todoImportContent": "用三步向导从 Excel 批量接入台账"
+    "todoImportContent": "用三步向导从 Excel 批量接入台账",
+    "demoReason": "后端统计接口暂未就绪，当前展示的是演示数据；接口上线后自动切换为真实统计，无需改配置。",
+    "chartEmptyTrend": "暂无趋势数据，设备接入并上报后自动展示",
+    "chartEmptyDistribution": "暂无分布数据，接入设备后自动生成",
+    "novice": {
+      "title": "新手快速上手",
+      "subtitle": "三步让第一台设备接入平台；每一步都告诉你为什么做、去哪里点。",
+      "step1Title": "建产品并定义物模型",
+      "step1Desc": "产品是同一型号设备的集合；先写清设备能采集哪些数据（属性）、能执行哪些操作（命令），设备接入后才有数据可看。",
+      "step1Action": "去建产品",
+      "step2Title": "发布物模型",
+      "step2Desc": "只有已发布的产品才能被设备绑定；发布后物模型变为只读，要改就先新建草稿再发布。",
+      "step2Action": "去发布",
+      "step3Title": "添加设备并配置点位映射",
+      "step3Desc": "设备绑定已发布产品后，还要把设备里的原始地址（如寄存器 40001）对应到物模型属性上，平台才能收到数据。",
+      "step3Action": "去添加设备",
+      "wizard": "需要手把手？打开接入向导",
+      "conceptAlert": "告警规则：给点位设阈值或掉线条件，满足后系统自动通知，不用一直盯大屏。",
+      "conceptMaintenance": "维护窗口：提前登记计划停电/检修时段，这段停机不算断档，不影响可用率。"
+    }
   },
   "admin": {
     "title": "基础管理"

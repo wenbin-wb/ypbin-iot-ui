@@ -3,11 +3,14 @@ import type { EchartsUIType } from '@vben/plugins/echarts';
 
 import type { IotDashboardApi } from '#/api/dashboard/iot-overview';
 
-import { onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 
+import { Inbox } from '@vben/icons';
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 
 import { $t } from '#/locales';
+
+import { protocolLabel } from '../../iot/shared/display';
 
 defineOptions({ name: 'AnalyticsProtocolDistribution' });
 
@@ -18,6 +21,9 @@ const props = defineProps<{
 
 const chartRef = ref<EchartsUIType>();
 const { renderEcharts } = useEcharts(chartRef);
+
+/** 空数据时不渲染画布，改为友好空态：空数组会让图表区看起来像坏掉的白块。 */
+const hasData = computed(() => props.items.length > 0);
 
 const PALETTE = [
   '#0066f5',
@@ -50,7 +56,12 @@ function renderChart(items: IotDashboardApi.NameValue[]) {
         animationEasing: 'exponentialInOut',
         animationType: 'scale',
         avoidLabelOverlap: false,
-        data: items.map((item) => ({ ...item })),
+        // 后端 `protocolDistribution.name` 是协议码（modbus/tcp/mqtt/opcua）⇒ 必须映射成
+        // 中文名，否则饼图/图例直接露出英文码；未知码由 shared/display 按「未知（原码）」露出。
+        data: items.map((item) => ({
+          name: protocolLabel(item.name),
+          value: item.value,
+        })),
         emphasis: {
           label: { fontSize: '12', fontWeight: 'bold', show: true },
           scaleSize: 8,
@@ -79,9 +90,16 @@ onMounted(() => {
   renderChart(props.items);
 });
 
-watch(() => props.items, renderChart, { deep: true });
+watch(() => props.items, renderChart, { deep: true, flush: 'post' });
 </script>
 
 <template>
-  <EchartsUI ref="chartRef" />
+  <EchartsUI v-if="hasData" ref="chartRef" />
+  <div
+    v-else
+    class="flex h-[300px] flex-col items-center justify-center gap-2 text-sm text-muted-foreground"
+  >
+    <Inbox class="size-8 opacity-50" />
+    <span>{{ $t('page.dashboard.chartEmptyDistribution') }}</span>
+  </div>
 </template>

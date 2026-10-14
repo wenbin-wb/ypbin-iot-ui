@@ -98,10 +98,23 @@ const alertCounts = ref<Record<string, number | string>>({});
 
 const alertCountError = ref('');
 
+/**
+ * `?productId=` 带来的**初始筛选值**（产品详情「添加设备」与按产品浏览共用这个参数）。
+ *
+ * 只在组件初始化时读取：搜索表单的 `defaultValue` 会随首次查询一起提交，
+ * 因此「带 productId 打开台账」天然是筛选后的结果；用户之后可在表单里改/清空。
+ * `action=create` 的消费链路（见 `consumeCreateQuery`）保持不变：同一个 productId
+ * 既预填筛选、又预选设备表单，两件事互不冲突。
+ */
+const initialProductId =
+  typeof route.query.productId === 'string' && route.query.productId !== ''
+    ? route.query.productId
+    : undefined;
+
 const [Grid, gridApi] = useVbenVxeGrid({
-  // 搜索表单字段名与后端 `IotDeviceQuery` 同名（keyword/protocol），submitOnChange 即时查询
+  // 搜索表单字段名与后端 `IotDeviceQuery` 同名（keyword/productId/protocol），submitOnChange 即时查询
   formOptions: {
-    schema: useGridFormSchema(),
+    schema: useGridFormSchema(initialProductId),
     submitOnChange: true,
   },
   gridOptions: {

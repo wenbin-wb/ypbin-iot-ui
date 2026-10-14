@@ -23,7 +23,10 @@ export type MaintenanceState = ReturnType<typeof maintenanceState>;
 
 /**
  * 维护窗口行 = 后端 DTO + 展示层补的派生字段。
+ *
+ * `deviceIdName` 来自后端 `@RefText("device")` 注解名（可能缺失，见 api/iot/maintenance.ts）；
  * `deviceName` / `maintenanceState` 只用于展示，不进 api 层 DTO，后端字段名保持不变。
+ * 名称优先级：`deviceIdName` → 批量解析的 `deviceName` 映射 → 裸 `deviceId` → 租户级文案。
  */
 export type MaintenanceWindowRow = IotMaintenanceApi.MaintenanceWindowDto & {
   deviceName: string;
@@ -104,8 +107,9 @@ export function useColumns(): VxeTableGridColumns {
   return [
     {
       // 展示的是**设备名**：窗口表里存的是 deviceId，裸雪花 ID 对用户毫无意义。
-      // 名称由列表页批量解析后写进行的 `deviceName`（见 index.vue，按页批量拉取、绝不逐行查），
-      // 解析不到时回落成裸 ID（不编造名字）；deviceId 为空是「租户级窗口」，由列表页填该文案。
+      // 名称优先取后端 `deviceIdName`（@RefText 注解名，列表页写进行的 `deviceName`）；
+      // 仅对注解名缺失的行才按页批量解析（见 index.vue，绝不逐行查、全有注解名时不发请求）；
+      // 仍解析不到时回落成裸 ID（不编造名字）；deviceId 为空是「租户级窗口」，由列表页填该文案。
       field: 'deviceName',
       title: $t('page.iot.maintenance.device'),
       minWidth: 160,

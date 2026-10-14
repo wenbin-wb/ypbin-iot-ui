@@ -5,6 +5,10 @@ import {
   assignableLabelKey,
   buildTenantNameMap,
   filterLedgerRows,
+  ledgerCredentialColor,
+  ledgerCredentialLabelKey,
+  ledgerDeviceCountText,
+  ledgerLastReportText,
 } from './ledger-display';
 
 /** 租户台账纯逻辑用例（名称解析映射 + 前端过滤 + assignable 三态）。 */
@@ -76,5 +80,34 @@ describe('assignable 三态展示（缺失不猜成「不可接入」）', () =>
       expect(assignableLabelKey(value)).toBe('page.iot.display.unknown');
       expect(assignableColor(value)).toBe('warning');
     }
+  });
+});
+
+describe('聚合字段展示（缺失=待接入，真实值不伪造）', () => {
+  it('deviceCount：0 是有效值（显示 0），字符串原样，缺失回落 -', () => {
+    expect(ledgerDeviceCountText(0)).toBe('0');
+    expect(ledgerDeviceCountText('12')).toBe('12');
+    expect(ledgerDeviceCountText(12)).toBe('12');
+    expect(ledgerDeviceCountText(undefined)).toBe('-');
+  });
+
+  it('lastReportAt：合法时间统一格式化，空串/非法值回落 -', () => {
+    expect(ledgerLastReportText('2026-01-01 00:00:00')).toBe(
+      '2026-01-01 00:00:00',
+    );
+    expect(ledgerLastReportText('2026-01-01T08:30:00')).toBe(
+      '2026-01-01 08:30:00',
+    );
+    expect(ledgerLastReportText('')).toBe('-');
+    expect(ledgerLastReportText('not-a-time')).toBe('-');
+    expect(ledgerLastReportText(undefined)).toBe('-');
+  });
+
+  it('hasCredential：true/false → yes/no 键与颜色；缺失不猜成 false', () => {
+    expect(ledgerCredentialLabelKey(true)).toBe('page.iot.display.yes');
+    expect(ledgerCredentialLabelKey(false)).toBe('page.iot.display.no');
+    expect(ledgerCredentialColor(true)).toBe('success');
+    expect(ledgerCredentialColor(false)).toBe('default');
+    expect(ledgerCredentialColor(undefined)).toBe('default');
   });
 });

@@ -23,6 +23,10 @@ import {
   assignableLabelKey,
   buildTenantNameMap,
   filterLedgerRows,
+  ledgerCredentialColor,
+  ledgerCredentialLabelKey,
+  ledgerDeviceCountText,
+  ledgerLastReportText,
 } from '../ledger-display';
 
 /**
@@ -41,20 +45,22 @@ import {
  * 本组件要求宿主提供**确定高度**的容器（`h-full` 链），`Page auto-content-height` 与
  * vben 抽屉 body（`flex-1 overflow-y-auto`）都满足。
  *
- * 字段诚实性（硬要求）：后端 `TenantLedgerResp` 只有
- * `tenantId` / `assignable` / `configEpoch` / `change` / `updateTime` 五个字段，
- * 没有租户名称、设备数、最近上报、凭据信息，IoT 服务也没有跨租户聚合接口。
+ * 字段诚实性（硬要求）：
  * - 租户名称：用系统租户接口 `GET /system/tenant/list` **批量**解析（不按行发 N+1 请求），
  *   失败时名称列回落「名称待接入」并挂可见 Alert（不伪造名称、也不清空台账）；
- * - 「设备数」「最近上报」「是否有凭据」三列仍一律留空、渲染「待接入」标签，
- *   绝不显示 0 或假日期；`change` 列表恒为空，故不做成列；
+ * - 「设备数」「最近上报」「是否有凭据」：消费后端聚合字段
+ *   `deviceCount` / `lastReportAt` / `hasCredential`。**只有字段 `undefined`（后端尚未提供）
+ *   才渲染「待接入」**；0 显示 0、空时间显示 `-`、有/无凭据显示「是/否」Tag，
+ *   绝不把缺失或空值猜成 0 / 假日期 / 无凭据；
+ * - `change` 列表恒为空，故不做成列；
  * - 搜索为**前端过滤**（租户名 / tenantId），不新增后端查询参数。
  */
 
 /**
- * 列定义：tenantId / assignable / configEpoch / updateTime 有真实数据源；
+ * 列定义：tenantId / assignable / configEpoch / updateTime 为后端直出字段；
  * tenantName 是**展示派生列**（由系统租户接口解析，无同名后端字段）；
- * 末三列当前无数据源（留空 + 「待接入」标签，见文件头说明）。
+ * deviceCount / lastReportAt / hasCredential 消费后端聚合字段，
+ * 仅 `undefined`（后端未提供）显示「待接入」（见文件头说明）。
  */
 function useColumns(): VxeTableGridColumns {
   return [
@@ -91,25 +97,25 @@ function useColumns(): VxeTableGridColumns {
       width: 170,
       slots: { default: 'updateTime' },
     },
-    // ↓ 以下三列的数据源**当前不存在**：留空 + 「待接入」标签（见文件头说明）。
-    //   `field` 仍按目标聚合接口的预期字段名声明，便于后端补齐后直接接线。
+    // 以下三列消费后端聚合字段；`field` 与后端 DTO 同名，不做改名映射（铁律 7）：
+    // 字段缺失（undefined）才显示「待接入」，0 / 空串按真实值展示。
     {
       field: 'deviceCount',
       title: $t('page.iot.ledger.deviceCount'),
       width: 110,
-      slots: { default: 'pendingDeviceCount' },
+      slots: { default: 'deviceCount' },
     },
     {
       field: 'lastReportAt',
       title: $t('page.iot.ledger.lastReportAt'),
-      width: 150,
-      slots: { default: 'pendingLastReportAt' },
+      width: 170,
+      slots: { default: 'lastReportAt' },
     },
     {
-      field: 'credential',
+      field: 'hasCredential',
       title: $t('page.iot.ledger.credential'),
       width: 130,
-      slots: { default: 'pendingCredential' },
+      slots: { default: 'hasCredential' },
     },
     {
       align: 'center',
@@ -373,15 +379,26 @@ function onToggleAssignable(row: IotLedgerApi.LedgerResp, assignable: boolean) {
           </Button>
         </template>
 
-        <!-- 三列当前无数据源：留空 + 「待接入」，不显示 0 / 不显示假日期 -->
-        <template #pendingDeviceCount>
-          <Tag color="default">{{ $t('page.iot.ledger.pending') }}</Tag>
+        <!-- 聚合字段三列：undefined（后端未提供）才显示「待接入」；0 / 空串是真实值 -->
+        <template #deviceCount="{ row }">
+          <Tag v-if="row.deviceCount === undefined" color="default">
+            {{ $t('page.iot.ledger.pending') }}
+          </Tag>
+          <span v-else>{{ ledgerDeviceCountText(row.deviceCount) }}</span>
         </template>
-        <template #pendingLastReportAt>
-          <Tag color="default">{{ $t('page.iot.ledger.pending') }}</Tag>
+        <template #lastReportAt="{ row }">
+          <Tag v-if="row.lastReportAt === undefined" color="default">
+            {{ $t('page.iot.ledger.pending') }}
+          </Tag>
+          <span v-else>{{ ledgerLastReportText(row.lastReportAt) }}</span>
         </template>
-        <template #pendingCredential>
-          <Tag color="default">{{ $t('page.iot.ledger.pending') }}</Tag>
+        <template #hasCredential="{ row }">
+          <Tag v-if="row.hasCredential === undefined" color="default">
+            {{ $t('page.iot.ledger.pending') }}
+          </Tag>
+          <Tag v-else :color="ledgerCredentialColor(row.hasCredential)">
+            {{ $t(ledgerCredentialLabelKey(row.hasCredential)) }}
+          </Tag>
         </template>
 
         <template #action="{ row }">

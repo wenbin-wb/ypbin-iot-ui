@@ -531,7 +531,8 @@
       "serviceOptionMaster": "Master service",
       "serviceOptionMandatory": "Mandatory service",
       "serviceOptionOptional": "Optional service",
-      "codePlaceholder": "e.g. meter-01"
+      "codePlaceholder": "e.g. meter-01",
+      "devicesEmptyReason": "No devices for this product yet: click \"Add device\" at the top right to create the first one."
     },
     "group": {
       "title": "Device groups",
@@ -725,8 +726,8 @@
       "lastReportAt": "Last reported",
       "credential": "Has credentials",
       "pending": "Pending integration",
-      "noticeTitle": "Some columns have no trustworthy data source yet",
-      "noticeText": "The Devices, Last reported and Has credentials columns are intentionally left blank and marked Pending integration: the IoT service exposes no cross-tenant aggregation or credential endpoint, so this page never fills in guessed values. Enabling those columns requires a new backend aggregation API. Tenant names are now resolved through the system tenant API; if that lookup fails, the name column is marked as name pending with a visible notice instead of showing only the raw tenantId.",
+      "noticeTitle": "Aggregate columns show only real backend data",
+      "noticeText": "Devices, Last reported and Has credentials are rendered from the backend aggregate fields: a real value is shown as-is (0 devices displays 0, an empty last-report time displays -, credentials display Yes/No). Only when the backend does not return a field at all is it marked Pending integration; no guessed values are filled in. Tenant names are resolved through the system tenant API; if that lookup fails, the name column is marked as name pending with a visible notice.",
       "change": {
         "created": "First-time onboarding",
         "revived": "Onboarding resumed",
@@ -1169,6 +1170,36 @@
       "leaseAliveYes": "Renewing",
       "leaseExpired": "Expired",
       "noLease": "No lease"
+    },
+    "help": {
+      "title": "Glossary",
+      "intro": "Plain-language explanations of common terms, with when you will need them.",
+      "whatLabel": "What it is",
+      "whenLabel": "When to use it",
+      "open": "Glossary & help",
+      "openHint": "Confused by the terms? Open help",
+      "termShadow": "Device shadow",
+      "termAvailability": "Availability & outages",
+      "termProtocolWhat": "The language a device uses to talk to the platform, such as MQTT, Modbus TCP, OPC UA or TCP passthrough.",
+      "termProtocolWhen": "Choose it when creating a product. A wrong protocol means the device cannot connect, and you will need to change the product or the connection method.",
+      "termEndpointWhat": "The address the platform uses to reach a device, like its door number. Usually an IP plus port, or a topic prefix.",
+      "termEndpointWhen": "Fill it in when adding a device. If the device stays offline, check this first.",
+      "termThingModelWhat": "The capability description of a device: which data it reports and which commands it accepts, modelled as properties, commands and events.",
+      "termThingModelWhen": "Define it after creating a product and before adding devices. Without a thing model the platform cannot interpret the data.",
+      "termPointMappingWhat": "Maps raw signals in a device (e.g. register address 40001) to thing-model properties (e.g. temperature).",
+      "termPointMappingWhen": "Configure it after the device is connected. Without it the platform receives no data, charts or alerts.",
+      "termShadowWhat": "A snapshot of a device's state stored by the platform: the latest reported values plus desired values, still viewable when the device is offline.",
+      "termShadowWhen": "Use it to check the current state of a device or to edit the target configuration to be sent.",
+      "termAvailabilityWhat": "Availability is the share of time a device reported normally within a period; an outage is the interval when reporting stopped.",
+      "termAvailabilityWhen": "Use it for inspections and to investigate gaps in data. Register planned downtime as a maintenance window first, or it counts as an outage.",
+      "termMaintenanceWhat": "Planned downtime registered in advance (maintenance, part replacement, power-off); this period is excluded from outages.",
+      "termMaintenanceWhen": "Register it before taking a device down for maintenance; otherwise availability drops.",
+      "termAlertRuleWhat": "A condition on a point (over limit, offline, etc.). When it is met, the platform notifies automatically.",
+      "termAlertRuleWhen": "Set up rules to watch devices for you; acknowledge or silence alerts in the alert center.",
+      "termOpenApiKeyWhat": "A key that lets external systems call platform APIs, limited to the data scopes you choose.",
+      "termOpenApiKeyWhen": "Issue one when integrating third-party systems or custom dashboards. The secret is shown only once, so save it immediately.",
+      "termPlatformAlertWhat": "Alerts about the platform's own health, such as stalled collection scheduling or failed notifications, not a specific device fault.",
+      "termPlatformAlertWhen": "Check platform alerts first to tell a platform issue from a device issue."
     }
   },
   "auth": {
@@ -1671,7 +1702,26 @@
     "todoModel": "Complete thing-model points",
     "todoModelContent": "Define properties, units and ranges for new products",
     "todoImport": "Bulk import devices",
-    "todoImportContent": "Onboard the registry from Excel with the 3-step wizard"
+    "todoImportContent": "Onboard the registry from Excel with the 3-step wizard",
+    "demoReason": "The statistics API is not ready yet, so demo data is shown. Real statistics appear automatically once the API is online.",
+    "chartEmptyTrend": "No trend data yet. It appears automatically after devices are connected and reporting.",
+    "chartEmptyDistribution": "No distribution data yet. It is generated automatically after devices are connected.",
+    "novice": {
+      "title": "Getting started",
+      "subtitle": "Three steps to connect your first device. Each step explains why and links to the right page.",
+      "step1Title": "Create a product and define its thing model",
+      "step1Desc": "A product groups devices of the same model. Define what the device reports (properties) and what it can do (commands) so there is data to view after connection.",
+      "step1Action": "Create product",
+      "step2Title": "Publish the thing model",
+      "step2Desc": "Only published products can be bound to devices. A published thing model is read-only; create a draft to change it and publish again.",
+      "step2Action": "Publish",
+      "step3Title": "Add a device and map its points",
+      "step3Desc": "After binding a published product, map the device's raw addresses (e.g. register 40001) to thing-model properties so the platform can receive data.",
+      "step3Action": "Add device",
+      "wizard": "Prefer a step-by-step wizard? Open the onboarding guide",
+      "conceptAlert": "Alert rules: set a threshold or offline condition on a point and get notified automatically instead of watching the dashboard.",
+      "conceptMaintenance": "Maintenance windows: register planned downtime in advance so it is excluded from outages and availability."
+    }
   },
   "admin": {
     "title": "Administration"
