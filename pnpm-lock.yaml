@@ -76,8 +76,8 @@ catalogs:
       specifier: ^4.3.3
       version: 4.3.3
     '@tanstack/store':
-      specifier: ^0.11.0
-      version: 0.11.0
+      specifier: ^0.11.2
+      version: 0.11.2
     '@tanstack/vue-form':
       specifier: ^1.33.2
       version: 1.33.2
@@ -1427,7 +1427,7 @@ importers:
     dependencies:
       '@tanstack/store':
         specifier: 'catalog:'
-        version: 0.11.0
+        version: 0.11.2
       '@tanstack/vue-form':
         specifier: 'catalog:'
         version: 1.33.2(vue@3.5.43(typescript@6.0.3))
@@ -14533,7 +14533,7 @@ snapshots:
     dependencies:
       '@tanstack/devtools-event-client': 0.4.4
       '@tanstack/pacer-lite': 0.1.1
-      '@tanstack/store': 0.11.0
+      '@tanstack/store': 0.11.2
 
   '@tanstack/match-sorter-utils@8.19.4':
     dependencies:
