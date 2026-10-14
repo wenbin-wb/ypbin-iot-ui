@@ -34,7 +34,7 @@ import { UserSelect } from '#/components/user-select';
 import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
 
-import { resolveNotifyRisk } from '../notify-risk';
+import { notifyHintKey, resolveNotifyRisk } from '../notify-risk';
 import {
   findInvalidEmails,
   joinNotifyTargets,
@@ -142,6 +142,26 @@ const needsPoint = computed(() => Boolean(form.value.operator));
 const invalidEmails = computed(() =>
   findInvalidEmails(form.value.notifyExtraEmails),
 );
+
+/** 通知对象原文（与保存请求**同源**：同样调用 `joinNotifyTargets`）。 */
+const notifyTargetsText = computed(() =>
+  joinNotifyTargets({
+    userIds: form.value.notifyUserIds,
+    emails: form.value.notifyExtraEmails,
+    unrecognized: form.value.notifyUnrecognized,
+  }),
+);
+
+/**
+ * 通知对象风险态（判据见 `../notify-risk`）：
+ * 未选渠道 / 未配对象 / 邮件仅靠平台兜底 / 站内信兜底 / 正常。
+ */
+const notifyRisk = computed(() =>
+  resolveNotifyRisk(form.value.channels.join(','), notifyTargetsText.value),
+);
+
+/** 内联提示的 i18n 键；`undefined` ⇒ 不渲染（通知对象齐全时提示不出现）。 */
+const notifyHint = computed(() => notifyHintKey(notifyRisk.value));
 
 /** 点位选择项的展示名（含单位），预览里用同一份数据。 */
 const propertyLabel = computed(() => {
@@ -451,12 +471,13 @@ async function onSubmit() {
     await (editingId.value
       ? updateAlertRule(editingId.value, request)
       : createAlertRule(request));
-    // 通知对象风险提示：EMAIL 渠道无收件邮箱时，后端投递必失败（无兜底则 GIVEN_UP）——保存虽成功，但要当场提示
-    if (
-      resolveNotifyRisk(request.notifyChannels, request.notifyTargets) ===
-      'emailBroken'
-    ) {
-      message.warning($t('page.iot.alert.notify.emailBrokenHint'));
+    // 通知对象风险提示：未配对象 / 邮件仅靠平台兜底时保存虽成功，但必须当场把「可能不会送达」说清楚
+    // （文案见语言包；不在组件里写死，避免 zh/en 口径漂移）
+    const hintKey = notifyHintKey(
+      resolveNotifyRisk(request.notifyChannels, request.notifyTargets),
+    );
+    if (hintKey) {
+      message.warning($t(hintKey));
     } else {
       message.success($t('common.success'));
     }
@@ -755,6 +776,23 @@ onMounted(loadPresets);
             $t('page.iot.alert.notifyUnrecognized', [
               form.notifyUnrecognized.join(', '),
             ])
+          "
+        />
+
+        <!--
+          🔴 未配置通知对象必须当场可见（issue #226）：站内信走兜底链、邮件仅在平台配置了
+          兜底邮箱时才会送达 —— 文案全部在语言包里，不在这里写死，避免 zh/en 口径漂移。
+        -->
+        <Alert
+          v-if="notifyHint"
+          show-icon
+          :message="$t(notifyHint)"
+          :type="
+            notifyRisk === 'noChannel'
+              ? 'error'
+              : notifyRisk === 'inboxFallback'
+                ? 'info'
+                : 'warning'
           "
         />
       </div>

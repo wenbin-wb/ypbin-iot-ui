@@ -5,13 +5,15 @@ import { Tag } from 'ant-design-vue';
 
 import { $t } from '#/locales';
 
-import { resolveNotifyRisk } from '../notify-risk';
+import { notifyRiskLabelKey, resolveNotifyRisk } from '../notify-risk';
 
 /**
- * 规则「通知对象」风险标签（前端可见提示）。
+ * 规则「通知对象」风险标签（列表页的前端可见提示）。
  *
- * emailBroken：EMAIL 渠道无收件邮箱（投递必败/GIVEN_UP）→ 红；
- * inboxOnly：仅 INBOX 且无显式收件人（后端回落给创建者）→ 蓝提示；
+ * noChannel：一个渠道都没选（不会产生任何通知记录）→ 红；
+ * noTargets：选了渠道但通知对象为空（站内信走兜底、邮件看平台兜底邮箱）→ 橙；
+ * emailFallback：EMAIL 无邮箱收件人（仅平台兜底邮箱可送达）→ 橙；
+ * inboxFallback：INBOX 无用户收件人（兜底给创建者 ∪ 平台兜底用户）→ 蓝提示；
  * ok：正常 → 灰。
  */
 const props = defineProps<{
@@ -21,24 +23,26 @@ const props = defineProps<{
 
 const risk = computed(() => resolveNotifyRisk(props.channels, props.targets));
 
-const labelKey = computed(() => {
-  if (risk.value === 'emailBroken') {
-    return 'page.iot.alert.notify.riskEmailBroken';
-  }
-  if (risk.value === 'inboxOnly') {
-    return 'page.iot.alert.notify.riskInboxOnly';
-  }
-  return 'page.iot.alert.notify.riskOk';
-});
+const labelKey = computed(() => notifyRiskLabelKey(risk.value));
 
 const color = computed(() => {
-  if (risk.value === 'emailBroken') {
-    return 'error';
+  switch (risk.value) {
+    case 'emailFallback': {
+      return 'warning';
+    }
+    case 'inboxFallback': {
+      return 'processing';
+    }
+    case 'noChannel': {
+      return 'error';
+    }
+    case 'noTargets': {
+      return 'warning';
+    }
+    default: {
+      return 'default';
+    }
   }
-  if (risk.value === 'inboxOnly') {
-    return 'processing';
-  }
-  return 'default';
 });
 </script>
 

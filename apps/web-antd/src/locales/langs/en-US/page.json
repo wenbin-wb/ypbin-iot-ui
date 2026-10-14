@@ -101,10 +101,15 @@
         "failed": "Failed",
         "givenUp": "Given up",
         "unknown": "Unknown",
-        "riskEmailBroken": "EMAIL no recipient",
-        "riskInboxOnly": "Creator only",
+        "riskNoChannel": "No channel",
+        "riskNoTargets": "No recipients",
+        "riskEmailFallback": "Email fallback only",
+        "riskInboxFallback": "In-app fallback",
         "riskOk": "OK",
-        "emailBrokenHint": "The EMAIL channel has no recipient mailbox: its notifications will fail (recorded as GIVEN_UP). Add an email recipient or disable the EMAIL channel."
+        "hintNoChannel": "No notification channel selected: no delivery record is produced at all (at least one channel is required before saving).",
+        "hintNoTargets": "No recipients configured: in-app messages go to the rule creator and the platform fallback users (nothing is delivered if neither is available); email is delivered only when the platform has fallback mailboxes configured, otherwise that channel is not delivered (recorded as GIVEN_UP).",
+        "hintEmailFallback": "The email channel has no recipient mailbox: it is delivered only when the platform has fallback mailboxes configured, otherwise that channel is not delivered (recorded as GIVEN_UP).",
+        "hintInboxFallback": "The in-app channel has no explicit recipient: it goes to the rule creator and the platform fallback users (nothing is delivered if neither is available)."
       },
       "kind": {
         "offline": "Device offline (no data)"
@@ -133,7 +138,7 @@
         "thresholdNotNumber": "The threshold must be a number, not text",
         "durationShort": "Below 60 seconds, sampling jitter may prevent the condition from being met (60 or more is recommended)",
         "booleanOperator": "Boolean points only support equals / not equals",
-        "noTargets": "No recipients: in-app messages go to the rule creator, email needs an explicit address",
+        "noTargets": "No recipients configured: in-app messages go to the rule creator and platform fallback users; email is delivered only when fallback mailboxes are configured",
         "needChannel": "No notification channel selected yet",
         "disabled": "The rule is disabled and will not take effect after saving"
       },
@@ -211,11 +216,11 @@
       "ruleList": "View Alert Rules",
       "ruleSave": "Save Alert Rules",
       "notifyUsers": "Notify users",
-      "notifyUsersHint": "If left empty, the in-app message goes to the rule creator.",
+      "notifyUsersHint": "If left empty, goes to the rule creator and the platform fallback users (nothing is delivered if neither is available).",
       "notifyExtraEmails": "Additional emails",
       "notifyExtraEmailsPlaceholder": "Type an email and press Enter; multiple allowed",
       "notifyExtraEmailsInvalid": "These entries are not valid emails and will be ignored on save: {0}",
-      "notifyExtraEmailsHint": "For mailboxes that are not system users (e.g. a shared alert group).",
+      "notifyExtraEmailsHint": "For mailboxes that are not system users (e.g. a shared alert group); if left empty, email only uses platform fallback mailboxes (nothing is delivered if none is configured).",
       "notifyUnrecognized": "These legacy entries are neither users nor emails; they are kept as-is (the platform will not send to them): {0}"
     },
     "title": "IoT Platform",
