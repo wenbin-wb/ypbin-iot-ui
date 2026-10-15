@@ -84,7 +84,7 @@ const availability = computed(() => num(data.value?.availability));
 const meets = computed(() => data.value?.meetsTarget === true);
 </script>
 <template>
-  <Drawer class="w-[720px] max-w-[calc(100vw-40px)]">
+  <Drawer class="w-[min(920px,96vw)]">
     <Spin :spinning="loading">
       <template v-if="data">
         <Descriptions :column="2" bordered size="small">
@@ -141,30 +141,42 @@ const meets = computed(() => data.value?.meetsTarget === true);
           v-if="!data.outages?.length"
           :description="$t('page.iot.availability.noOutage')"
         />
-        <table v-else class="w-full text-sm">
-          <thead>
-            <tr class="text-left text-gray-500">
-              <th class="py-1">{{ $t('page.iot.availability.start') }}</th>
-              <th class="py-1">{{ $t('page.iot.availability.end') }}</th>
-              <th class="py-1">{{ $t('page.iot.availability.duration') }}</th>
-              <th class="py-1">{{ $t('page.iot.availability.reason') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in data.outages" :key="row.id" class="border-t">
-              <td class="py-1">{{ formatDateTime(row.startTs) }}</td>
-              <td class="py-1">
-                {{
-                  row.endTs
-                    ? formatDateTime(row.endTs)
-                    : $t('page.iot.availability.ongoing')
-                }}
-              </td>
-              <td class="py-1">{{ human(row.durationSec) }}</td>
-              <td class="py-1">{{ displayOrFallback(row.reason) }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div v-else class="overflow-x-auto">
+          <table class="w-full min-w-[640px] text-sm">
+            <thead>
+              <tr
+                class="border-b border-border/60 text-left text-xs text-muted-foreground"
+              >
+                <th class="py-1.5 pr-3 font-medium">
+                  {{ $t('page.iot.availability.start') }}
+                </th>
+                <th class="py-1.5 pr-3 font-medium">
+                  {{ $t('page.iot.availability.end') }}
+                </th>
+                <th class="py-1.5 pr-3 font-medium">
+                  {{ $t('page.iot.availability.duration') }}
+                </th>
+                <th class="py-1.5 font-medium">
+                  {{ $t('page.iot.availability.reason') }}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in data.outages" :key="row.id" class="border-t">
+                <td class="py-1">{{ formatDateTime(row.startTs) }}</td>
+                <td class="py-1">
+                  {{
+                    row.endTs
+                      ? formatDateTime(row.endTs)
+                      : $t('page.iot.availability.ongoing')
+                  }}
+                </td>
+                <td class="py-1">{{ human(row.durationSec) }}</td>
+                <td class="py-1">{{ displayOrFallback(row.reason) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
         <div class="mt-4 mb-2 font-semibold">
           {{ $t('page.iot.maintenance.title') }}
@@ -173,34 +185,46 @@ const meets = computed(() => data.value?.meetsTarget === true);
           v-if="!data.maintenanceWindows?.length"
           :description="$t('page.iot.maintenance.empty')"
         />
-        <table v-else class="w-full text-sm">
-          <thead>
-            <tr class="text-left text-gray-500">
-              <th class="py-1">{{ $t('page.iot.maintenance.start') }}</th>
-              <th class="py-1">{{ $t('page.iot.maintenance.end') }}</th>
-              <th class="py-1">{{ $t('page.iot.maintenance.source') }}</th>
-              <th class="py-1">{{ $t('page.iot.maintenance.reason') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="row in data.maintenanceWindows"
-              :key="row.id"
-              class="border-t"
-            >
-              <td class="py-1">{{ formatDateTime(row.startTs) }}</td>
-              <td class="py-1">
-                {{
-                  row.endTs
-                    ? formatDateTime(row.endTs)
-                    : $t('page.iot.maintenance.ongoing')
-                }}
-              </td>
-              <td class="py-1">{{ maintenanceSourceLabel(row.source) }}</td>
-              <td class="py-1">{{ displayOrFallback(row.reason) }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div v-else class="overflow-x-auto">
+          <table class="w-full min-w-[640px] text-sm">
+            <thead>
+              <tr
+                class="border-b border-border/60 text-left text-xs text-muted-foreground"
+              >
+                <th class="py-1.5 pr-3 font-medium">
+                  {{ $t('page.iot.maintenance.start') }}
+                </th>
+                <th class="py-1.5 pr-3 font-medium">
+                  {{ $t('page.iot.maintenance.end') }}
+                </th>
+                <th class="py-1.5 pr-3 font-medium">
+                  {{ $t('page.iot.maintenance.source') }}
+                </th>
+                <th class="py-1.5 font-medium">
+                  {{ $t('page.iot.maintenance.reason') }}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="row in data.maintenanceWindows"
+                :key="row.id"
+                class="border-t"
+              >
+                <td class="py-1">{{ formatDateTime(row.startTs) }}</td>
+                <td class="py-1">
+                  {{
+                    row.endTs
+                      ? formatDateTime(row.endTs)
+                      : $t('page.iot.maintenance.ongoing')
+                  }}
+                </td>
+                <td class="py-1">{{ maintenanceSourceLabel(row.source) }}</td>
+                <td class="py-1">{{ displayOrFallback(row.reason) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </template>
     </Spin>
   </Drawer>

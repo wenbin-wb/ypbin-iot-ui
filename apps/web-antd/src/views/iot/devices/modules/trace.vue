@@ -242,7 +242,7 @@ onMounted(load);
       :pagination="false"
       row-key="occurredAt"
       size="small"
-      :scroll="{ y: 420 }"
+      :scroll="{ x: 1100, y: 420 }"
     >
       <Table.Column
         :title="$t('page.iot.device.trace.colTime')"

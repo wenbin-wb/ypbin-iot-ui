@@ -1099,38 +1099,48 @@ const batchSummary = computed(() => {
         :type="batchSummary.failed > 0 ? 'warning' : 'success'"
         show-icon
       />
-      <table class="mt-2 w-full text-sm">
-        <thead>
-          <tr class="text-left text-gray-500">
-            <th class="py-1">{{ $t('page.iot.debug.columnIdentifier') }}</th>
-            <th class="py-1">{{ $t('page.iot.debug.requestId') }}</th>
-            <th class="py-1">{{ $t('page.iot.debug.columnStatus') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="(item, index) in sendResults"
-            :key="index"
-            class="border-t"
-          >
-            <td class="py-1">{{ item.identifier || '-' }}</td>
-            <td class="py-1">
-              <CopyText :value="item.requestId" />
-            </td>
-            <td class="py-1">
-              <Tag v-if="item.error" color="error">
-                {{ $t('page.iot.debug.sendFailed') }}
-              </Tag>
-              <Tag v-else :color="statusColor(item.statusCode)">
-                {{ statusText(item.statusCode) }}
-              </Tag>
-              <Tooltip v-if="item.error" :title="item.raw || item.error">
-                <span class="ml-2 text-xs break-all">{{ item.error }}</span>
-              </Tooltip>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="mt-2 overflow-x-auto">
+        <table class="w-full min-w-[520px] text-sm">
+          <thead>
+            <tr
+              class="border-b border-border/60 text-left text-xs text-muted-foreground"
+            >
+              <th class="py-1.5 pr-3 font-medium">
+                {{ $t('page.iot.debug.columnIdentifier') }}
+              </th>
+              <th class="py-1.5 pr-3 font-medium">
+                {{ $t('page.iot.debug.requestId') }}
+              </th>
+              <th class="py-1.5 font-medium">
+                {{ $t('page.iot.debug.columnStatus') }}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="(item, index) in sendResults"
+              :key="index"
+              class="border-t border-border/60"
+            >
+              <td class="py-1.5 pr-3">{{ item.identifier || '-' }}</td>
+              <td class="py-1.5 pr-3">
+                <CopyText :value="item.requestId" />
+              </td>
+              <td class="py-1.5">
+                <Tag v-if="item.error" color="error">
+                  {{ $t('page.iot.debug.sendFailed') }}
+                </Tag>
+                <Tag v-else :color="statusColor(item.statusCode)">
+                  {{ statusText(item.statusCode) }}
+                </Tag>
+                <Tooltip v-if="item.error" :title="item.raw || item.error">
+                  <span class="ml-2 text-xs break-all">{{ item.error }}</span>
+                </Tooltip>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <div class="mt-1 text-xs text-muted-foreground">
         {{ $t('page.iot.debug.batchHint') }}
       </div>
@@ -1216,6 +1226,7 @@ const batchSummary = computed(() => {
           :pagination="false"
           :row-class-name="rowClassName"
           row-key="id"
+          :scroll="{ x: 920 }"
           size="small"
         >
           <template #bodyCell="{ column, record }">
