@@ -15,19 +15,22 @@ import { $t } from '#/locales';
 import RuleForm from './modules/rule-form.vue';
 
 /**
- * 告警规则「多条件」组件级用例（task-4）。
+ * 告警规则「多条件」组件级用例（task-4 建，task-7 按真 AND 语义修订）。
  *
  * 覆盖的**用户可感知失败**（每一条都在改造前会真实发生）：
  * 1. 编辑一条 `points=[A,B]` 的规则 ⇒ **两行都回填**（旧实现只取 points[0]，B 被静默丢弃）；
  * 2. 保存时 `payload.points` 长度为 2 且**顺序与界面一致**；
  * 3. 删除一行后保存 ⇒ payload 只剩 1 行（删掉的行确实不再提交）；
  * 4. 点位级规则删到 0 行 ⇒ **提交被拦且有可见提示**（不是静默提交成断档类规则）；
- * 5. 同一行重复点位 ⇒ 被拦并给出可见原因（后端唯一键会静默合并，绝不能放过去）。
+ * 5. **同一点位重复必须放行**（task-7 翻转）——去重键已是 `R:ruleId:deviceId`（不含 propertyId），
+ *    组内两条同点位条件各参与一次合取判定，是合法条件组；上一轮那条「重复点位必须被拦」的用例
+ *    建立在旧去重键之上，已随语义变更删除。
+ * 6. **文案必须是 AND 口径**（组内全部条件同时满足才告警）——用户按 OR 理解就会配错规则。
  *
  * 纪律：**绝不 mock `#/locales`**（真实 vue-i18n + 真实语言包），
  * 否则「键缺失 / 文案编译失败」这类只在实际渲染时暴露的问题会被结构性漏掉。
- * 新键尚未并入 page.json（按仓规由 Lead 合并 `temp/i18n-requests-*.json`），
- * 因此断言只依赖 **data-testid 与结构**，不依赖新文案的译法。
+ * 文案断言一律用真实 `$t` 取**已提交 page.json** 的期望值（CI 检出里没有仓外 temp/），
+ * 这样既守住语义，又不会写死译文导致润色即转红。
  */
 
 const { drawerCalls, mockApi } = vi.hoisted(() => ({
@@ -195,6 +198,7 @@ function ruleWith(points: Record<string, unknown>[]) {
     id: '77',
     notifyChannels: 'INBOX',
     points,
+    repeatIntervalSec: 1800,
     ruleName: '演示多条件规则',
     scopeDeviceId: '9',
     scopeProductId: '1',
@@ -380,28 +384,82 @@ describe('多条件表单：点位级规则删到 0 行必须被拦且有可见�
   });
 });
 
-describe('多条件表单：重复点位必须被拦（后端唯一键会静默合并）', () => {
-  it('🔴 同行点位重复 ⇒ 行内可见原因 + 保存被拦', async () => {
+describe('多条件表单：同一行重复点位必须**放行**（真 AND 下的合法条件组）', () => {
+  it('🔴 两行同点位（> 80 且 < 100）⇒ 无行内报错、可保存、**两行都提交**', async () => {
     const { container } = await mountForm(
       ruleWith([
         POINT_TEMPERATURE,
-        { ...POINT_HUMIDITY, propertyId: 'temperature' },
+        {
+          ...POINT_HUMIDITY,
+          operator: 'LT',
+          propertyId: 'temperature',
+          threshold: '100',
+        },
       ]),
     );
 
-    const error = container.querySelector<HTMLElement>(
-      '[data-testid="condition-error-1"]',
-    );
-    // 断言**渲染后的中文**（键已并入 page.json）。行号参数与实现一致：重复的是第 2 行，
-    // 参数 [2, 'temperature']。用真实 $t 取期望，避免写死译文导致文案润色即转红。
-    expect(error?.textContent).toContain(
-      $t('page.iot.alert.rule.condition.duplicatePoint', [2, 'temperature']),
-    );
-    expect(saveButton(container)?.disabled).toBe(true);
+    // 行内不得出现任何报错（旧实现会在这里报 duplicatePoint 并阻断保存）
+    expect(
+      container.querySelector('[data-testid="condition-error-1"]'),
+    ).toBeNull();
+    // 也不得出现作用域级报错
+    expect(
+      container.querySelector('[data-testid="condition-scope-error"]'),
+    ).toBeNull();
+    expect(saveButton(container)?.disabled).toBe(false);
 
     saveButton(container)?.click();
     await flush();
-    expect(mockApi.updateAlertRule).not.toHaveBeenCalled();
+    expect(mockApi.updateAlertRule).toHaveBeenCalledTimes(1);
+    const [, payload] = mockApi.updateAlertRule.mock.calls[0] as [
+      string,
+      { points: Record<string, unknown>[] },
+    ];
+    // 两行都进请求（同点位不再被去重/静默合并）
+    expect(payload.points).toHaveLength(2);
+    expect(payload.points.map((item) => item.propertyId)).toEqual([
+      'temperature',
+      'temperature',
+    ]);
+    expect(payload.points.map((item) => item.threshold)).toEqual(['80', '100']);
+  });
+});
+
+describe('多条件表单：界面文案必须是 AND 口径（真 AND）', () => {
+  it('🔴 条件区提示写「全部条件同时满足才告警」，不得再出现旧逐条件措辞', async () => {
+    const { container } = await mountForm(
+      ruleWith([POINT_TEMPERATURE, POINT_HUMIDITY]),
+    );
+
+    const hint = $t('page.iot.alert.rule.condition.perPointHint');
+    // 断言渲染文案包含真实 i18n 文案（不写死译文，避免润色即转红）
+    expect(container.textContent).toContain(hint);
+    // 新口径必须在场；旧口径必须消失
+    expect(hint).toContain('全部条件');
+    expect(container.textContent).not.toContain('各自独立判定');
+  });
+
+  it('🔴 人话摘要把两行连成「…且…」（AND），不得再把多行说成独立判定', async () => {
+    const { container } = await mountForm(
+      ruleWith([POINT_TEMPERATURE, POINT_HUMIDITY]),
+    );
+
+    const clause = container.querySelector(
+      '[data-testid="summary-condition-clause"]',
+    );
+    const text = clause?.textContent ?? '';
+    // 两行都存在，且被「且」连起来（连接词来自 i18n 键，与 rule-form 渲染同源）
+    expect(text).toContain($t('page.iot.alert.rule.condition.clauseJoin'));
+    // 操作符必须是**人话符号**（与单条件句子同一个显示函数），不是契约码 GT / LT
+    expect(text).toContain('>');
+    expect(text).toContain('<');
+    expect(text).not.toContain('GT');
+    expect(text).not.toContain('LT');
+    // 摘要主句必须是「全部满足」口径（参数 = 条件数、连续次数、重复间隔秒）
+    expect(container.textContent).toContain(
+      $t('page.iot.alert.rule.condition.summaryMultiple', [2, 3, 1800]),
+    );
+    expect(container.textContent).not.toContain('逐个独立判定');
   });
 });
 
@@ -429,11 +487,11 @@ describe('多条件表单：条件一改 ⇒ 上一次试算结果失效', () =>
   it('🔴 改阈值后，上一次试算结果必须被清掉（不留旧结果）', async () => {
     const { container } = await mountForm(ruleWith([POINT_TEMPERATURE]));
 
-    // 先跑一次试算：结果区出现（data-testid=backtest-row-0）
+    // 先跑一次试算：结果区出现（跑过就必须可见，见 rule-form 的 backtest-result 容器）
     buttonByText(container, '试算')?.click();
     await flush();
     expect(
-      container.querySelector('[data-testid="backtest-row-0"]'),
+      container.querySelector('[data-testid="backtest-result"]'),
     ).not.toBeNull();
 
     // 改阈值：条件行一变，上一次结果必须失效（不得继续展示旧阈值的试算结果）。

@@ -1,6 +1,6 @@
 import type { RuleSummary, SummaryArg } from './summary';
 
-import { buildRuleSummary } from './summary';
+import { buildRuleSummary, operatorSymbol } from './summary';
 
 /**
  * 多行点位条件的人话摘要（纯逻辑，可单测）。
@@ -9,9 +9,11 @@ import { buildRuleSummary } from './summary';
  *
  * 1. **与保存请求同源**：摘要只读同一份条件行数组（`toConditionRequests(rows)` 的输入），
  *    不做任何二次解析或默认值补充；
- * 2. **不宣称 AND**：引擎对每个点位条件**各自独立判定、各自产生告警实例**
- *    （见 `condition-rows.ts` 模块头注释的证据）。因此多行摘要只陈述「N 条条件、各自独立判定」，
- *    **禁止**出现「且 / AND / 同时满足」；
+ * 2. **必须如实宣称 AND**：一条规则的多条点位条件是**同一设备上的合取条件组**
+ *    （真 AND，2026-10-15 起；证据见 `condition-rows.ts` 模块头注释）。因此多行摘要必须说清
+ *    「组内**全部**条件同时满足才告警」，并由 {@link CONDITION_CLAUSE_JOIN_KEY} 把各行连成
+ *    「A 且 B 且 C」；**禁止**出现「各自独立判定 / 满足任一条即告警」这类旧口径（那会让用户按
+ *    错误语义配规则——把 OR 当 AND 或反之，都会造成漏报或误报）；
  * 3. **单行时行为与改造前逐字一致**：单条件规则直接委托 {@link buildRuleSummary}，
  *    既有的句式和参数顺序（含 `summary.test.ts` 钉住的那些）保持不变。
  *
@@ -47,6 +49,15 @@ export interface ConditionsSummaryInput {
   triggerThreshold?: null | number | string;
 }
 
+/**
+ * 多条件行的**连接词** i18n 键（与 {@link ConditionsSummaryInput} 的 `conditionClauses` 配对）。
+ *
+ * 单独导出而不是写死在模板里：调用方（rule-form）与用例都要用同一个键把「A 且 B 且 C」拼出来，
+ * 写死两处就会在改文案时漏掉一处（zh/en 口径漂移的经典来源）。
+ */
+export const CONDITION_CLAUSE_JOIN_KEY =
+  'page.iot.alert.rule.condition.clauseJoin';
+
 /** 「还差什么」的统一返回（句子永远非空：空句子会让用户不知道下一步做什么）。 */
 function blocked(
   sentenceKey: string,
@@ -66,7 +77,8 @@ function blocked(
  * 组装多行条件摘要。
  *
  * @param input 条件行（含行级问题）+ 规则级字段
- * @returns 单行时等价于 `buildRuleSummary`；多行时给出「N 条条件各自独立判定」句式
+ * @returns 单行时等价于 `buildRuleSummary`；多行时给出「N 条条件全部满足才告警」句式 +
+ *          `conditionClauses`（调用方按 {@link CONDITION_CLAUSE_JOIN_KEY} 连成「A 且 B 且 C」）
  */
 export function buildConditionsSummary(
   input: ConditionsSummaryInput,
@@ -135,11 +147,12 @@ export function buildConditionsSummary(
     });
   }
 
-  // ⑤ 多条件：如实陈述「N 条条件、逐条独立判定」（**不是 AND**）
+  // ⑤ 多条件：如实陈述「组内全部条件同时满足才告警」（真 AND，2026-10-15 起）
   const conditionClauses = rows.map((row) => ({
     args: [
       row.propertyLabel ?? '',
-      row.operator ?? '',
+      // 与单条件句子（buildRuleSummary）用同一个操作符显示函数：'GT' 是契约码，不是人话
+      operatorSymbol(row.operator),
       row.threshold ?? '',
     ] as SummaryArg[],
     key: 'page.iot.alert.rule.condition.clause',
@@ -155,7 +168,7 @@ export function buildConditionsSummary(
     input.triggerMode === 'DURATION'
       ? 'page.iot.alert.expect.durationNeedsSeries'
       : 'page.iot.alert.expect.countNoSeries',
-    'page.iot.alert.rule.condition.expectPerPoint',
+    'page.iot.alert.rule.condition.expectAllMustHold',
   ];
   return {
     conditionClauses,
