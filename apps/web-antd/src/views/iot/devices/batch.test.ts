@@ -96,18 +96,20 @@ vi.mock('#/adapter/vxe-table', () => ({
     captured.options = options;
     const GridStub = defineComponent({
       name: 'GridStub',
-      emits: ['checkbox-change'],
-      setup: (_props: unknown, { emit, slots }: any) => {
+      setup: (_props: unknown, { slots }: any) => {
+        // 勾选走 gridEvents.checkboxChange（生产口径）：vben 的 Grid 把未声明 attrs 透传到根 div，
+        // vxe 的 checkbox-change 只绑在内层 VxeGrid 上（自定义事件不冒泡）⇒ 模板 @checkbox-change
+        // 收不到。用桩 emit 会让用例恒真、掩盖"批量按钮在真实页面恒禁用"这个缺陷。
+        const events = options?.gridEvents ?? {};
         return () =>
           h('div', { class: 'grid-stub' }, [
-            // 模拟 vxe 勾选两行后 emit checkbox-change
             h(
               'button',
               {
                 class: 'emit-checkbox',
                 'data-testid': 'emit-checkbox',
                 onClick: () =>
-                  emit('checkbox-change', {
+                  events.checkboxChange?.({
                     records: [{ id: '1001' }, { id: '1002' }],
                   }),
               },

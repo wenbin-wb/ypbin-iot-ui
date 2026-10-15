@@ -1,9 +1,6 @@
 <script lang="ts" setup>
 import type { ConditionRowDraft } from '../condition-rows';
-import type {
-  RulePreviewConditionEvaluation,
-  RulePreviewWindowKey,
-} from '../rule-preview';
+import type { RulePreviewResult, RulePreviewWindowKey } from '../rule-preview';
 
 import type { IotAlertApi } from '#/api/iot';
 
@@ -51,7 +48,10 @@ import {
   toConditionRequests,
   validateConditionRows,
 } from '../condition-rows';
-import { buildConditionsSummary } from '../condition-summary';
+import {
+  buildConditionsSummary,
+  CONDITION_CLAUSE_JOIN_KEY,
+} from '../condition-summary';
 import { notifyHintKey, resolveNotifyRisk } from '../notify-risk';
 import {
   findInvalidEmails,
@@ -59,7 +59,7 @@ import {
   splitNotifyTargets,
 } from '../notify-targets';
 import {
-  evaluateRulePreviewPerCondition,
+  evaluateRulePreviewGroup,
   RULE_PREVIEW_WINDOWS,
 } from '../rule-preview';
 import { resolveArgs } from '../summary';
@@ -165,13 +165,13 @@ const conditionRows = ref<ConditionRowDraft[]>([]);
 const needsPoint = computed(() => conditionRows.value.length > 0);
 
 /**
- * 行级校验（与后端 `AlertRuleServiceImpl.buildPoint()` 同口径，见 `../condition-rows`）。
+ * 行级校验（与后端 `AlertRuleServiceImpl.buildPoint()/validate()` **完全同口径**，见 `../condition-rows`）。
  *
- * **阻断保存**（不是只警告）：
- * - 行内必填/数字/布尔 0-1/回差非负等 → 后端同样会拒，前端先拦只是不白跑一次请求；
- * - 同行 `propertyId` 重复 → 后端唯一键 `uk_alert_active` 只含 (rule, device, propertyId)，
- *   重复行会被**静默合并**成一条实例（只留最先插入的）。这是后端**不做**而前端必须拦的一条：
- *   放过去就会出现「我配了两条，但只有一条生效」且没有任何提示。
+ * **阻断保存**（不是只警告）：行内必填/数字/布尔 0-1/回差非负/字段长度/行数上限/点位级至少一行
+ * —— 这些都是后端**同样会拒**的，前端先拦只是不白跑一次请求。
+ *
+ * ⚠️ 真 AND 之后**不再有「重复点位」这条阻断**：去重键已是 `R:ruleId:deviceId`（不含 propertyId），
+ * 同一点位的两行会**各参与一次合取判定**（例如「同一读数 > 80 且 < 100」），是合法用法。
  */
 const conditionIssues = computed(() =>
   validateConditionRows(conditionRows.value, {
@@ -278,8 +278,13 @@ const backtestLoading = ref(false);
 
 const backtestError = ref('');
 
-/** 逐条件试算结果（**每行一个**，与引擎「逐条件独立判定」同口径）。 */
-const backtestResults = ref<RulePreviewConditionEvaluation[]>([]);
+/**
+ * 条件组试算结果（**整组一份**）。
+ *
+ * 真 AND 之后一条规则的多条件是一个合取条件组，试算必须给出**组判定**而不是逐行结果；
+ * `null` 表示「还没算/已失效」（不得留旧结果给用户当真）。
+ */
+const backtestResult = ref<null | RulePreviewResult>(null);
 
 /**
  * 试算条件与保存请求**同源**：两者都只读 `conditionRows`，且都经
@@ -297,18 +302,48 @@ const backtestReady = computed(
 );
 
 /**
- * 试算结果行（与条件行一一对应；缺失序列的行如实显示「没有历史数据」，不伪造 0 命中）。
+ * 试算明细行（对齐时刻逐条；不可判定时刻如实标「不可判定」，不伪装成未命中）。
+ *
+ * `toReversed()`：不得就地反转 `result.groupSamples`（`reverse()` 会改到计算结果本身）。
  */
 const backtestRows = computed(() =>
-  backtestResults.value.map((item) => ({
-    ...item,
-    label: propertyLabelOf(item.propertyId),
-    // toReversed()：不得就地反转 result.samples（reverse() 会改到计算结果本身）
-    samples: (item.result.samples ?? [])
-      .slice(-BACKTEST_SAMPLE_ROWS)
-      .toReversed(),
-  })),
+  (backtestResult.value?.groupSamples ?? [])
+    .slice(-BACKTEST_SAMPLE_ROWS)
+    .toReversed()
+    .map((sample) => ({
+      ...sample,
+      // 逐条件取值带上展示名与比较符/阈值（「阈值 vs 读到多少 vs 判定」三段式）
+      values: sample.values.map((value) => ({
+        ...value,
+        conditionLabel: propertyLabelOf(value.propertyId),
+        thresholdText: (() => {
+          const view = backtestResult.value?.conditions?.[value.index];
+          return view ? `${view.symbol} ${view.threshold}` : '';
+        })(),
+      })),
+    })),
 );
+
+/** 对齐容差的**人话**（毫秒 → 秒/毫秒；UI 必须显示，见 rule-preview 模块头的对齐口径）。 */
+const backtestAlignText = computed(() => {
+  const ms = backtestResult.value?.alignToleranceMs ?? 0;
+  if (ms <= 0) {
+    return '';
+  }
+  return ms >= 1000 ? `${Number((ms / 1000).toFixed(1))} s` : `${ms} ms`;
+});
+
+/** 本次判定实际用到的最大偏移（毫秒；没有可判定样本时为 null ⇒ 不显示，不伪造 0）。 */
+const backtestMaxOffsetText = computed(() => {
+  const offsets = (backtestResult.value?.groupSamples ?? [])
+    .map((sample) => sample.maxOffsetMs)
+    .filter((value): value is number => value !== null);
+  if (offsets.length === 0) {
+    return '';
+  }
+  const max = Math.max(...offsets);
+  return max >= 1000 ? `${Number((max / 1000).toFixed(1))} s` : `${max} ms`;
+});
 
 /**
  * 切换试算设备：只清空上一次结果。
@@ -317,7 +352,7 @@ const backtestRows = computed(() =>
  * 那个独立选择器正是旧实现把「试算点位」代入所有条件、从而伪造出 AND 语义的来源。
  */
 function onBacktestDeviceChange() {
-  backtestResults.value = [];
+  backtestResult.value = null;
   backtestError.value = '';
 }
 
@@ -339,27 +374,28 @@ watch(
     backtestWindow.value,
   ],
   () => {
-    backtestResults.value = [];
+    backtestResult.value = null;
     backtestError.value = '';
   },
 );
 
 /** 打开抽屉时把主表单已有设备同步成试算默认设备（点位由各条件行自带）。 */
 function syncBacktestFromForm() {
-  backtestResults.value = [];
+  backtestResult.value = null;
   backtestError.value = '';
   backtestDeviceId.value = form.value.deviceId || '';
 }
 
 /**
- * 执行历史试算（**逐条件**）。
+ * 执行历史试算（**条件组整体试算，真 AND**）。
  *
- * 引擎对每个点位条件各自独立判定、各自产生告警实例，因此试算也必须逐行、按**该行自己的点位**
- * 判历史序列（旧实现把「试算点位」代入所有条件再合并判定，那是不存在的 AND 语义）。
+ * 引擎把同一条规则在同一台设备上的全部点位条件当成**一个**合取条件组，因此试算也必须整组做：
+ * 拉取组内**每个** propertyId 的序列，按时间对齐后逐时刻做 AND 判定（对齐口径见 `../rule-preview`
+ * 模块头，容差与最大偏移都会显示在 UI 上）。
  *
  * - 每个**不同**的点位只查一次历史（同点位复用，避免 N 行 N 次请求）；
  * - 断档/离线类（无条件行）：**不发历史请求**，直接给出「无法试算」的诚实结论；
- * - 某点位查询失败原样展示后端 message，并让该行**如实显示无法试算**，绝不伪装成「没有数据」；
+ * - 某点位查询失败原样展示后端 message，**整组如实显示无法试算**（不拿部分序列硬算出一个假结论）；
  * - `backtestLoading` 期间按钮 loading 且点击短路 ⇒ 防重复请求。
  */
 async function runBacktest() {
@@ -367,16 +403,17 @@ async function runBacktest() {
     return;
   }
   backtestError.value = '';
-  backtestResults.value = [];
+  backtestResult.value = null;
   const to = Date.now();
   const from = to - RULE_PREVIEW_WINDOWS[backtestWindow.value];
   const conditions = backtestConditions.value ?? [];
   if (conditions.length === 0) {
-    backtestResults.value = evaluateRulePreviewPerCondition(
-      [],
-      {},
-      { from, to },
-    );
+    backtestResult.value = evaluateRulePreviewGroup({
+      conditions: [],
+      from,
+      seriesByPropertyId: {},
+      to,
+    });
     return;
   }
   backtestLoading.value = true;
@@ -399,13 +436,15 @@ async function runBacktest() {
         { from, limit: BACKTEST_SERIES_LIMIT, propertyId, to },
       );
     }
-    backtestResults.value = evaluateRulePreviewPerCondition(
+    backtestResult.value = evaluateRulePreviewGroup({
       conditions,
+      from,
+      limit: BACKTEST_SERIES_LIMIT,
       seriesByPropertyId,
-      { from, limit: BACKTEST_SERIES_LIMIT, to },
-    );
+      to,
+    });
   } catch (error) {
-    backtestResults.value = [];
+    backtestResult.value = null;
     backtestError.value = extractErrorMessage(
       error,
       $t('page.iot.alert.rule.backtest.loadFailed'),
@@ -416,10 +455,11 @@ async function runBacktest() {
 }
 
 /**
- * 人话预览（**与保存请求同源**）：两者都只读 `conditionRows`，且多行摘要同样**不宣称 AND**。
+ * 人话预览（**与保存请求同源**）：两者都只读 `conditionRows`。
  *
  * 单行时委托既有的 {@link buildRuleSummary}（句式与参数顺序逐字不变）；
- * 多行时给出「N 条条件、逐条独立判定」句式 + 每行一句「点位 比较符 阈值」。
+ * 多行时给出「{N} 条条件**全部满足**才告警」句式 + 每行一句「点位 比较符 阈值」，
+ * 由模板按 {@link CONDITION_CLAUSE_JOIN_KEY} 连成「A 且 B 且 C」（真 AND 口径）。
  */
 const summary = computed(() =>
   buildConditionsSummary({
@@ -926,8 +966,10 @@ onMounted(loadPresets);
 
       <!--
         ③ 点位条件行（**多行**）
-        每条条件由引擎**独立判定、各自产生告警实例**（不是 AND）；同一设备上多条条件会各报各的。
-        保存顺序 = 界面顺序；「不丢行」由 condition-rows 的纯逻辑 + 用例保证。
+        引擎把同一条规则在同一台设备上的**全部**条件当成一个合取条件组（真 AND）：
+        组内全部条件都越界才告警，任一条未越界即不告警；触发时只产生**一条**实例。
+        保存顺序 = 界面顺序（也决定通知正文明细与实例快照的顺序）；「不丢行」由 condition-rows
+        的纯逻辑 + 用例保证。
       -->
       <div class="rounded border border-solid border-gray-200 p-3">
         <div class="mb-1 flex items-center justify-between">
@@ -945,7 +987,7 @@ onMounted(loadPresets);
         </div>
         <!--
           引擎真实语义必须当场说清（用户口径：不误导）：
-          逐条独立判定、各自告警，而不是「全部满足才告警」。
+          组内**全部**条件同时满足才告警（AND），不是「满足任一条就告警」。
         -->
         <div class="mb-2 text-xs text-muted-foreground">
           {{ $t('page.iot.alert.rule.condition.perPointHint') }}
@@ -1073,7 +1115,7 @@ onMounted(loadPresets);
               />
             </div>
           </div>
-          <!-- 行内问题（与后端同口径 + 重复点位）：行号的定位必须能给到用户 -->
+          <!-- 行内问题（与后端 buildPoint 同口径）：行号的定位必须能给到用户 -->
           <div
             v-if="rowIssue(position)"
             class="mt-1 text-xs text-red-500"
@@ -1259,21 +1301,20 @@ onMounted(loadPresets);
           <div class="space-y-1">
             <div class="text-base font-semibold">{{ summaryText }}</div>
             <!--
-              多条件规则逐条列出（引擎逐条件独立判定，**不是 AND**）：
-              不把多行压成一句「且」，避免用户按错误语义配置规则。
+              多条件规则逐条列出并**用「且」连成一句**（真 AND：组内全部条件同时满足才告警）。
+              连接词走 i18n 键，不在这里写死，避免 zh/en 口径漂移。
             -->
-            <ul
+            <div
               v-if="summary.conditionClauses?.length"
-              class="list-disc pl-5 text-xs"
+              class="text-xs"
               data-testid="summary-condition-clause"
             >
-              <li
-                v-for="(clause, index) in summary.conditionClauses"
-                :key="index"
-              >
-                {{ $t(clause.key, resolveArgs(clause.args, $t)) }}
-              </li>
-            </ul>
+              {{
+                summary.conditionClauses
+                  .map((clause) => $t(clause.key, resolveArgs(clause.args, $t)))
+                  .join($t(CONDITION_CLAUSE_JOIN_KEY))
+              }}
+            </div>
             <ul
               v-if="summary.expectations.length > 0"
               class="list-disc pl-5 text-xs"
@@ -1298,7 +1339,11 @@ onMounted(loadPresets);
         </template>
       </Alert>
 
-      <!-- ⑥ 历史试算（只读预览：不改保存逻辑，断档类如实说明无法试算） -->
+      <!--
+        ⑥ 历史试算（只读预览：不改保存逻辑，断档类如实说明无法试算）
+        真 AND：试算按**条件组整体**做（组内各点位序列按时间对齐后逐时刻 AND 判定），
+        对齐口径与容差在 `../rule-preview` 模块头显式定义、并在下面如实展示。
+      -->
       <div class="rounded border border-solid border-gray-200 p-3">
         <div class="mb-1 text-sm font-semibold">
           {{ $t('page.iot.alert.rule.backtest.title') }}
@@ -1388,165 +1433,214 @@ onMounted(loadPresets);
           type="error"
         />
 
-        <template v-else-if="backtestRows.length > 0">
-          <div class="mt-2 text-sm font-semibold">
+        <!--
+          只要跑过一次就渲染结果容器（data-testid=backtest-result）：即使窗口内一条可判定样本都没有，
+          也要让用户看到「跑了、但结论为空」并读到原因，而不是点完毫无反应。
+        -->
+        <template v-else-if="backtestResult">
+          <div class="mt-2 text-sm font-semibold" data-testid="backtest-result">
             {{ $t('page.iot.alert.rule.backtest.resultTitle') }}
           </div>
+          <!-- 组判定口径：全部满足才命中（AND） -->
           <div class="mt-1 text-xs text-muted-foreground">
-            {{ $t('page.iot.alert.rule.backtest.perConditionNote') }}
+            {{ $t('page.iot.alert.rule.backtest.groupNote') }}
+          </div>
+          <!-- ⏱ 对齐口径必须显式展示（容差 + 本次最大偏移），不得只说「已对齐」 -->
+          <div
+            v-if="backtestAlignText"
+            class="mt-1 text-xs text-muted-foreground"
+            data-testid="backtest-align-note"
+          >
+            {{
+              $t('page.iot.alert.rule.backtest.alignNote', [
+                backtestAlignText,
+                backtestMaxOffsetText || '-',
+              ])
+            }}
           </div>
           <div class="mt-1 text-xs text-muted-foreground">
             {{ $t('page.iot.alert.rule.backtest.approximationNote') }}
           </div>
 
-          <!-- 逐条件结果：每行一条条件，与保存请求同一份条件数组、同一顺序 -->
+          <Descriptions :column="3" class="mt-2" size="small" bordered>
+            <DescriptionsItem
+              :label="$t('page.iot.alert.rule.backtest.triggerCount')"
+            >
+              <span class="font-semibold">
+                {{ backtestResult.triggerCount }}
+              </span>
+            </DescriptionsItem>
+            <DescriptionsItem
+              :label="$t('page.iot.alert.rule.backtest.matchedCount')"
+            >
+              {{ backtestResult.matchedCount }}
+            </DescriptionsItem>
+            <DescriptionsItem
+              :label="$t('page.iot.alert.rule.backtest.notDecidableCount')"
+            >
+              {{ backtestResult.notDecidableCount }}
+            </DescriptionsItem>
+            <DescriptionsItem
+              :label="$t('page.iot.alert.rule.backtest.sampleCount')"
+            >
+              {{ backtestResult.usedSamples }}
+            </DescriptionsItem>
+            <DescriptionsItem
+              :label="$t('page.iot.alert.rule.backtest.firstTrigger')"
+            >
+              {{
+                backtestResult.firstTriggerTs === null
+                  ? '-'
+                  : formatDateTime(backtestResult.firstTriggerTs)
+              }}
+            </DescriptionsItem>
+            <DescriptionsItem
+              :label="$t('page.iot.alert.rule.backtest.lastTrigger')"
+            >
+              {{
+                backtestResult.lastTriggerTs === null
+                  ? '-'
+                  : formatDateTime(backtestResult.lastTriggerTs)
+              }}
+            </DescriptionsItem>
+          </Descriptions>
+
+          <Alert
+            v-if="backtestResult.usedSamples === 0"
+            class="mt-2"
+            :message="
+              backtestResult.notDecidableCount > 0
+                ? $t('page.iot.alert.rule.backtest.allNotDecidable')
+                : $t('page.iot.alert.rule.backtest.emptyData')
+            "
+            show-icon
+            type="warning"
+          />
+          <Alert
+            v-else-if="backtestResult.matchedCount === 0"
+            class="mt-2"
+            :message="$t('page.iot.alert.rule.backtest.noneTriggered')"
+            show-icon
+            type="info"
+          />
+
           <div
-            v-for="(row, position) in backtestRows"
-            :key="row.index"
-            class="mt-2 rounded border border-solid border-gray-100 p-2"
-            :data-testid="`backtest-row-${position}`"
+            v-if="backtestResult.skippedSamples > 0"
+            class="mt-1 text-xs text-orange-600"
           >
+            {{
+              $t('page.iot.alert.rule.backtest.skipped', [
+                backtestResult.skippedSamples,
+              ])
+            }}
+          </div>
+          <div
+            v-if="backtestResult.truncatedSamples > 0"
+            class="mt-1 text-xs text-orange-600"
+          >
+            {{
+              $t('page.iot.alert.rule.backtest.truncated', [
+                backtestResult.usedSamples,
+              ])
+            }}
+          </div>
+
+          <!-- 对齐时刻明细：每个时刻给组判定 + 逐条件「阈值 vs 读到多少 vs 判定」三段式 -->
+          <div v-if="backtestRows.length > 0" class="mt-2">
             <div class="mb-1 text-xs font-semibold">
               {{
-                $t('page.iot.alert.rule.condition.rowTitle', [position + 1])
-              }}:
-              {{ row.label }}
+                $t('page.iot.alert.rule.backtest.samplesTitle', [
+                  Math.min(BACKTEST_SAMPLE_ROWS, backtestRows.length),
+                ])
+              }}
             </div>
-
-            <!-- 条件非法 / 没有序列（点位为空）⇒ 如实说明，不伪造 0 命中 -->
-            <Alert
-              v-if="row.result.kind === 'unsupported'"
-              :message="
-                row.result.reason === 'empty-conditions'
-                  ? $t('page.iot.alert.rule.condition.needProperty', [
-                      position + 1,
-                    ])
-                  : $t('page.iot.alert.summary.needNumber')
-              "
-              show-icon
-              type="warning"
-            />
-
-            <template v-else>
-              <Descriptions :column="2" size="small" bordered>
-                <DescriptionsItem
-                  :label="$t('page.iot.alert.rule.backtest.triggerCount')"
-                >
-                  <span class="font-semibold">
-                    {{ row.result.triggerCount }}
-                  </span>
-                </DescriptionsItem>
-                <DescriptionsItem
-                  :label="$t('page.iot.alert.rule.backtest.matchedCount')"
-                >
-                  {{ row.result.matchedCount }}
-                </DescriptionsItem>
-                <DescriptionsItem
-                  :label="$t('page.iot.alert.rule.backtest.sampleCount')"
-                >
-                  {{ row.result.usedSamples }}
-                </DescriptionsItem>
-                <DescriptionsItem
-                  :label="$t('page.iot.alert.rule.backtest.firstTrigger')"
+            <div
+              v-for="(sample, position) in backtestRows"
+              :key="`${sample.ts}-${position}`"
+              class="mt-2 rounded border border-solid border-gray-100 p-2"
+              :data-testid="`backtest-row-${position}`"
+            >
+              <div class="mb-1 flex items-center justify-between text-xs">
+                <span class="font-mono">{{ formatDateTime(sample.ts) }}</span>
+                <Tag
+                  :color="
+                    sample.matched === null
+                      ? 'warning'
+                      : sample.matched
+                        ? 'success'
+                        : 'default'
+                  "
                 >
                   {{
-                    row.result.firstTriggerTs === null
-                      ? '-'
-                      : formatDateTime(row.result.firstTriggerTs)
+                    sample.matched === null
+                      ? $t('page.iot.alert.rule.backtest.notDecidable')
+                      : sample.matched
+                        ? $t('page.iot.alert.rule.backtest.groupMatched')
+                        : $t('page.iot.alert.rule.backtest.groupNotMatched')
                   }}
-                </DescriptionsItem>
-                <DescriptionsItem
-                  :label="$t('page.iot.alert.rule.backtest.lastTrigger')"
-                >
-                  {{
-                    row.result.lastTriggerTs === null
-                      ? '-'
-                      : formatDateTime(row.result.lastTriggerTs)
-                  }}
-                </DescriptionsItem>
-              </Descriptions>
-
-              <Alert
-                v-if="row.result.usedSamples === 0"
-                class="mt-2"
-                :message="$t('page.iot.alert.rule.backtest.emptyData')"
-                show-icon
-                type="warning"
-              />
-              <Alert
-                v-else-if="row.result.matchedCount === 0"
-                class="mt-2"
-                :message="$t('page.iot.alert.rule.backtest.noneTriggered')"
-                show-icon
-                type="info"
-              />
-
-              <div
-                v-if="row.result.skippedSamples > 0"
-                class="mt-1 text-xs text-orange-600"
-              >
-                {{
-                  $t('page.iot.alert.rule.backtest.skipped', [
-                    row.result.skippedSamples,
-                  ])
-                }}
+                </Tag>
               </div>
-              <div
-                v-if="row.result.truncatedSamples > 0"
-                class="mt-1 text-xs text-orange-600"
-              >
-                {{
-                  $t('page.iot.alert.rule.backtest.truncated', [
-                    row.result.usedSamples,
-                  ])
-                }}
-              </div>
-
-              <div v-if="row.samples.length > 0" class="mt-2">
-                <div class="mb-1 text-xs font-semibold">
-                  {{
-                    $t('page.iot.alert.rule.backtest.samplesTitle', [
-                      Math.min(BACKTEST_SAMPLE_ROWS, row.result.usedSamples),
-                    ])
-                  }}
-                </div>
-                <table class="w-full text-xs">
-                  <thead>
-                    <tr class="text-left text-muted-foreground">
-                      <th>
-                        {{ $t('page.iot.alert.rule.backtest.sampleTime') }}
-                      </th>
-                      <th>
-                        {{ $t('page.iot.alert.rule.backtest.sampleValue') }}
-                      </th>
-                      <th>
-                        {{ $t('page.iot.alert.rule.backtest.sampleMatched') }}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr
-                      v-for="sample in row.samples"
-                      :key="`${sample.ts}-${sample.value}`"
-                    >
-                      <td>{{ formatDateTime(sample.ts) }}</td>
-                      <td class="font-mono">
-                        {{ sample.value === '' ? '-' : sample.value }}
-                      </td>
-                      <td>
-                        <Tag :color="sample.matched ? 'success' : 'default'">
-                          {{
-                            sample.matched
+              <table class="w-full text-xs">
+                <thead>
+                  <tr class="text-left text-muted-foreground">
+                    <th>
+                      {{ $t('page.iot.alert.rule.backtest.sampleProperty') }}
+                    </th>
+                    <th>
+                      {{ $t('page.iot.alert.rule.backtest.sampleCondition') }}
+                    </th>
+                    <th>
+                      {{ $t('page.iot.alert.rule.backtest.sampleValue') }}
+                    </th>
+                    <th>
+                      {{ $t('page.iot.alert.rule.backtest.sampleTime') }}
+                    </th>
+                    <th>
+                      {{ $t('page.iot.alert.rule.backtest.sampleMatched') }}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="item in sample.values"
+                    :key="item.index"
+                    :data-testid="`backtest-condition-${position}-${item.index}`"
+                  >
+                    <td>{{ item.conditionLabel }}</td>
+                    <td class="font-mono">{{ item.thresholdText }}</td>
+                    <td class="font-mono">
+                      {{ item.value === '' ? '-' : item.value }}
+                    </td>
+                    <td>
+                      {{
+                        item.sampleTs === null
+                          ? '-'
+                          : formatDateTime(item.sampleTs)
+                      }}
+                    </td>
+                    <td>
+                      <Tag
+                        :color="
+                          item.matched === null
+                            ? 'warning'
+                            : item.matched
+                              ? 'success'
+                              : 'default'
+                        "
+                      >
+                        {{
+                          item.matched === null
+                            ? $t('page.iot.alert.rule.backtest.notDecidable')
+                            : item.matched
                               ? $t('page.iot.alert.rule.backtest.matched')
                               : $t('page.iot.alert.rule.backtest.notMatched')
-                          }}
-                        </Tag>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </template>
+                        }}
+                      </Tag>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </template>
       </div>

@@ -73,9 +73,11 @@ export interface RuleSummary {
   /**
    * 多条件规则的**逐条**陈述（可选；单条件时为 undefined）。
    *
-   * 引擎对每个点位条件各自独立判定、各自产生告警实例（**不是 AND**），
-   * 故这里按行列出「点位 比较符 阈值」，由调用方在摘要下方逐条渲染，
-   * 而不是把多条件压成一句会被误读为「且」的话。
+   * 一条规则的多个点位条件是同一个**合取条件组**（真 AND，2026-10-15 起；
+   * 见 `condition-rows.ts` 模块头与后端 `AlertTenantEvaluator#evaluateGroup`），
+   * 故这里按行列出「点位 比较符 阈值」，由调用方用连接词把它们连成「A 且 B 且 C」
+   * （连接词键见 `condition-summary.CONDITION_CLAUSE_JOIN_KEY`）——**必须**让用户看出是合取，
+   * 否则会按「满足任一条即告警」的错误语义配规则。
    */
   conditionClauses?: { args: SummaryArg[]; key: string }[];
   /** 需要注意/修正的点（人话；后端返回的 message 也走同一条展示链路）。 */

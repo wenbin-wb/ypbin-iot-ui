@@ -7,8 +7,11 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { $t } from '#/locales';
 import enUsPage from '#/locales/langs/en-US/page.json';
 
-import { buildConditionsSummary } from './condition-summary';
-import { argKey } from './summary';
+import {
+  buildConditionsSummary,
+  CONDITION_CLAUSE_JOIN_KEY,
+} from './condition-summary';
+import { argKey, resolveArgs } from './summary';
 
 /**
  * 从**已提交语言包**读取一条文案（CI 里没有仓外的 temp/ 请求文件，禁止依赖它）。
@@ -42,12 +45,12 @@ beforeAll(async () => {
 });
 
 /**
- * 多条件摘要用例（task-4）。
+ * 多条件摘要用例（task-4 建，task-7 按真 AND 语义**翻转**）。
  *
  * 两条硬纪律：
- * 1. **不得宣称 AND**：引擎对每个点位条件**各自独立判定、各自产生告警实例**
- *    （AlertCandidateResolver 逐条件建 Candidate / AlertTenantEvaluator 逐候选判定）。
- *    摘要一旦写成「且 / 同时满足」，用户就会按错误语义配规则——这比现在静默丢条件更糟。
+ * 1. **必须宣称 AND**：一条规则的多条件构成同一设备上的合取条件组
+ *    （后端 `AlertTenantEvaluator#evaluateGroup`：组内全部条件同时越界才触发）。
+ *    摘要不写明 AND，用户就会按 OR 配规则——把 AND 当 OR 会漏报、把 OR 当 AND 会误报。
  * 2. **单行行为逐字不变**：单条件规则必须与改造前 `buildRuleSummary` 完全一致
  *    （句式、参数顺序、warnings），否则会把既有页面文案改坏。
  */
@@ -140,8 +143,8 @@ describe('buildConditionsSummary：单条件与改造前逐字一致', () => {
   });
 });
 
-describe('buildConditionsSummary：多条件如实陈述「逐条独立」', () => {
-  it('🔴 多行句子**不含**「且 / 同时满足」，且带 per-point 说明', () => {
+describe('buildConditionsSummary：多条件如实陈述「全部满足才告警」', () => {
+  it('🔴 多行句子带「全部满足」口径 + 组级说明，且逐条列出条件', () => {
     const summary = buildConditionsSummary({
       ...base,
       rows: [
@@ -159,7 +162,7 @@ describe('buildConditionsSummary：多条件如实陈述「逐条独立」', () 
       'page.iot.alert.rule.condition.summaryMultiple',
     );
     expect(summary.expectations).toContain(
-      'page.iot.alert.rule.condition.expectPerPoint',
+      'page.iot.alert.rule.condition.expectAllMustHold',
     );
     // 多条件阈值规则**不得**继承「断档类」的 expectations（那会误导用户以为走断档链路）
     expect(summary.expectations).not.toContain(
@@ -173,13 +176,13 @@ describe('buildConditionsSummary：多条件如实陈述「逐条独立」', () 
     );
     // 参数：条数、连续次数、重复间隔数值
     expect(summary.sentenceArgs).toEqual([2, 3, 1800]);
-    // 逐条陈述：每行一句「点位 比较符 阈值」
+    // 逐条陈述：每行一句「点位 比较符 阈值」；比较符必须是**人话符号**（与单条件句子同一函数）
     expect(summary.conditionClauses).toHaveLength(2);
     expect(summary.conditionClauses?.[0]).toEqual({
-      args: ['温度', 'GT', '80'],
+      args: ['温度', '>', '80'],
       key: 'page.iot.alert.rule.condition.clause',
     });
-    expect(summary.conditionClauses?.[1]?.args).toEqual(['湿度', 'LT', '10']);
+    expect(summary.conditionClauses?.[1]?.args).toEqual(['湿度', '<', '10']);
   });
 
   it('🔴 三行时逐条数量与顺序与条件行一致（不得静默丢行）', () => {
@@ -244,8 +247,8 @@ describe('buildConditionsSummary：多条件如实陈述「逐条独立」', () 
   });
 });
 
-describe('condition.summaryMultiple 文案语义守门', () => {
-  it('i18n 文案不得把多条件描述成「且 / 同时满足 / AND」', () => {
+describe('condition 文案语义守门（真 AND 口径）', () => {
+  it('🔴 多条件文案**必须**体现「全部满足 / AND」，且**不得**再出现旧逐条件措辞', () => {
     // 🔴 文案的事实源是**已提交进本仓**的 page.json（zh-CN/en-US 两个语言包），
     // 不是仓外的 temp/i18n-requests-*.json —— 那只是合并前的请求文件，CI 检出里并不存在
     // （曾因此把「校验与构建」打红：ENOENT temp/…）。用**真实 i18n 实例**取文案，
@@ -256,18 +259,55 @@ describe('condition.summaryMultiple 文案语义守门', () => {
       '30 分钟',
     ]);
     const hint = $t('page.iot.alert.rule.condition.perPointHint');
-    expect(multiple).not.toContain('且');
-    expect(multiple).not.toMatch(/同时满足/);
-    expect(hint).not.toContain('且');
-    expect(hint).toContain('不是');
-    // en-US：AND 允许出现，但必须是否定式（"NOT an ... AND"）且点明独立判定。
-    // 这里不从仓外请求文件读英文（CI 无该文件），直接从**已提交的语言包**读，
-    // 保证断言的是随包发布的真实文案。
+    const clauseJoin = $t(CONDITION_CLAUSE_JOIN_KEY);
+    // ① 新口径必须在场（缺了就等于把真 AND 说成 OR ⇒ 用户按错误语义配规则）
+    expect(multiple).toContain('全部满足');
+    expect(hint).toContain('全部条件');
+    expect(hint).toContain('AND');
+    for (const text of [multiple, hint]) {
+      expect(text).not.toMatch(/各自独立|独立判定|逐个独立/);
+      expect(text).not.toMatch(/满足任一条/);
+      expect(text).not.toMatch(/不是 ?AND|不是「必须同时满足」/);
+    }
+    // ② 连接词必须是「且」（多行摘要据此拼成「A 且 B 且 C」）
+    expect(clauseJoin).toContain('且');
+    // en-US：直接从**已提交的语言包**读（CI 无仓外请求文件），保证断言的是随包发布的真实文案。
     const enHint = readLocaleMessage(
       'en-US',
       'page.iot.alert.rule.condition.perPointHint',
     );
-    expect(enHint).toContain('NOT');
-    expect(enHint).toContain('independently');
+    const enMultiple = readLocaleMessage(
+      'en-US',
+      'page.iot.alert.rule.condition.summaryMultiple',
+    );
+    const enJoin = readLocaleMessage('en-US', CONDITION_CLAUSE_JOIN_KEY);
+    expect(enHint).toContain('ALL');
+    expect(enHint).toContain('AND');
+    expect(enMultiple).toContain('ALL');
+    expect(enJoin).toContain(' and ');
+    for (const text of [enHint, enMultiple]) {
+      expect(text).not.toMatch(/independently/);
+      expect(text).not.toMatch(/NOT an/);
+    }
+  });
+
+  it('🔴 多行摘要按连接词拼出来就是「A 且 B」（与 rule-form 同一份渲染逻辑）', () => {
+    const summary = buildConditionsSummary({
+      ...base,
+      rows: [
+        row({ propertyLabel: '温度' }),
+        row({
+          operator: 'LT',
+          propertyLabel: '湿度',
+          threshold: '10',
+          unit: '%',
+        }),
+      ],
+    });
+    const clauses = (summary.conditionClauses ?? []).map((clause) =>
+      $t(clause.key, resolveArgs(clause.args, $t)),
+    );
+    expect(clauses.join($t(CONDITION_CLAUSE_JOIN_KEY))).toContain('且');
+    expect(clauses).toHaveLength(2);
   });
 });

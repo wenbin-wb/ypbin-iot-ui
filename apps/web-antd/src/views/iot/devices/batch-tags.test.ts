@@ -163,10 +163,12 @@ vi.mock('#/adapter/vxe-table', () => ({
   }),
   useVbenVxeGrid: (options: any) => {
     captured.options = options;
+    // 生产口径：勾选事件来自 gridEvents.checkboxChange（vben 的 Grid 把未声明 attrs 透传到根 div，
+    // vxe 的 checkbox-change 只绑在内层 VxeGrid 上 ⇒ 模板 @checkbox-change 收不到，见 batch.test.ts）
+    const events = options?.gridEvents ?? {};
     const GridStub = defineComponent({
       name: 'GridStub',
-      emits: ['checkbox-change'],
-      setup(_props: unknown, { emit, slots }: any) {
+      setup(_props: unknown, { slots }: any) {
         return () =>
           h('div', { class: 'grid-stub' }, [
             h(
@@ -174,7 +176,7 @@ vi.mock('#/adapter/vxe-table', () => ({
               {
                 'data-testid': 'emit-checkbox',
                 onClick: () =>
-                  emit('checkbox-change', {
+                  events.checkboxChange?.({
                     records: [{ id: '1001' }, { id: '1002' }],
                   }),
               },

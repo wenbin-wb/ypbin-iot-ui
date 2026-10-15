@@ -10,15 +10,17 @@ import {
 } from './condition-rows';
 
 /**
- * 多条件行纯逻辑用例（task-4）。
+ * 多条件行纯逻辑用例（task-4 建，task-7 按真 AND 语义修订）。
  *
  * 守门的不变量（每一条都对应一个真实会伤到用户的失败）：
  * 1. **回填全部条件行**——旧实现只取 `points[0]`，编辑多条件规则再保存会静默删掉其余条件；
- * 2. **保存顺序 = 界面顺序**——顺序是用户能看到的语义（也决定条件行在通知/列表里的排列）；
- * 3. 校验与后端 `AlertRuleServiceImpl.buildPoint()/validate()` **同口径**
+ * 2. **保存顺序 = 界面顺序**——顺序是用户能看到的语义（也决定通知正文明细与实例快照的顺序）；
+ * 3. 校验与后端 `AlertRuleServiceImpl.buildPoint()/validate()` **完全同口径**
  *    （比较符白名单、布尔只能 EQ/NE 且阈值 0/1、阈值/回差必须是十进制数、回差非负、行数上限、
  *    点位级至少一行）；
- * 4. **重复点位必须被拦**——后端唯一键只含 (rule, device, propertyId)，重复行会被静默合并。
+ * 4. **同一点位重复不再被拦**（task-7 语义翻转）——去重键已是 `R:ruleId:deviceId`（不含
+ *    propertyId），组内两条同点位条件各参与一次合取判定（例如「同一读数 > 80 且 < 100」），
+ *    属于合法用法，必须能保存。
  */
 
 describe('parseConditionRows：编辑回填（本次核心 bug）', () => {
@@ -386,36 +388,30 @@ describe('validateConditionRows：与后端 buildPoint 同口径', () => {
     ).toBe(false);
   });
 
-  it('🔴 重复点位必须被拦（后端唯一键只含 propertyId，重复行会被静默合并）', () => {
-    const issues = validateConditionRows(
-      [
-        row({ operator: 'GT', propertyId: 'temperature', threshold: '80' }),
-        row({ operator: 'LT', propertyId: 'temperature', threshold: '10' }),
-      ],
-      options,
-    );
-    expect(issues).toEqual([
-      {
-        args: [2, 'temperature'],
-        index: 2,
-        key: 'page.iot.alert.rule.condition.duplicatePoint',
-      },
+  it('🔴 同一点位重复**不再**被拦：真 AND 下是合法条件组（同一读数 > 80 且 < 100）', () => {
+    const rows = [
+      row({ operator: 'GT', propertyId: 'temperature', threshold: '80' }),
+      row({ operator: 'LT', propertyId: 'temperature', threshold: '100' }),
+    ];
+    // 校验必须放行（去重键 R:ruleId:deviceId 不含 propertyId，两条条件各参与一次合取判定）
+    expect(validateConditionRows(rows, options)).toEqual([]);
+    // 且两行都进保存请求（不得借「重复」之名静默丢掉一行）
+    expect(toConditionRequests(rows).map((item) => item.threshold)).toEqual([
+      '80',
+      '100',
     ]);
   });
 
-  it('重复点位判据是「trim 后的属性标识」，与后端存库后的形态一致', () => {
-    const issues = validateConditionRows(
-      [
-        row({ operator: 'GT', propertyId: ' temperature ', threshold: '80' }),
-        row({ operator: 'LT', propertyId: 'temperature', threshold: '10' }),
-      ],
-      options,
-    );
+  it('重复点位判据不依赖 trim 形态：带空格的同点位同样放行（不再比较 propertyId）', () => {
     expect(
-      issues.some(
-        (issue) => issue.key === 'page.iot.alert.rule.condition.duplicatePoint',
+      validateConditionRows(
+        [
+          row({ operator: 'GT', propertyId: ' temperature ', threshold: '80' }),
+          row({ operator: 'LT', propertyId: 'temperature', threshold: '10' }),
+        ],
+        options,
       ),
-    ).toBe(true);
+    ).toEqual([]);
   });
 });
 

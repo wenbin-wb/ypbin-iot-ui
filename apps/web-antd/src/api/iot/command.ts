@@ -101,6 +101,70 @@ export namespace IotCommandApi {
     writeDesired?: boolean;
   }
 
+  /**
+   * 逐设备结果里的**三态**已由后端两个字段表达，前端**不得**把两者合并成一个 ok：
+   * - accepted = 平台已受理（命令实例已落库，可查询/可重发）；
+   * - ok = 设备确实收到（statusCode = sent）。
+   *
+   * 因此 response 里的单条结果保留两个布尔位，展示层按
+   * accepted+ok / accepted+!ok / !accepted 三态渲染（见 views/iot/devices/modules/batch-command-state.ts）。
+   */
+  export interface CommandBatchItemResult {
+    deviceId: number | string;
+    /** 平台是否受理成功（实例已创建）。 */
+    accepted?: boolean;
+    /** 是否投递成功（statusCode=sent）。accepted=true 且 ok=false ⇒ 已提交未送达，可重发。 */
+    ok?: boolean;
+    /** 命令实例请求 ID（受理成功时必有；前端据此重发）。 */
+    requestId?: string;
+    /** 实例状态码：pending | sent | failed。 */
+    statusCode?: string;
+    /** 投递失败原因码：NO_SUBSCRIBER | EMQX_ERROR | …（成功时为空）。 */
+    errorCode?: string;
+    /**
+     * **未受理**原因码（受理成功时为空）：
+     * DEVICE_NOT_FOUND | DEVICE_DISABLED | DEVICE_WITHOUT_PRODUCT | THING_MODEL_EMPTY |
+     * THING_MODEL_LOAD_FAILED | COMMAND_REJECTED | BATCH_BUDGET_EXCEEDED | INTERNAL_ERROR。
+     */
+    code?: string;
+    /** 人话说明（未受理原因或投递结果说明），后端已写好，前端原样展示。 */
+    message?: string;
+  }
+
+  /** 批量下发请求（后端 `CommandBatchSendReq`：**一个命令模板 + 多台设备**）。 */
+  export interface CommandBatchSendReq {
+    /**
+     * 设备主键清单。
+     *
+     * ⚠️ **契约上后端是 `List<Long>`**，本仓「Long 全程字符串」的口径（铁律 9）在这里**不适用**：
+     * Jackson 接受 JSON 字符串形式的数字并转成 Long，但**前端不应依赖这种隐式转换**——设备 id
+     * 来自后端响应（已是字符串），我们只在**发送前**显式转成 number，且要求它是安全整数。
+     * 这是本仓唯一的例外，故在此显式说明理由，不做「反正能过」的静默处理。
+     */
+    deviceIds: number[];
+    /** 命令模板（原样应用到每一台设备）。 */
+    command: CommandSendReq;
+    /**
+     * 请求级幂等键（可选）。**批量下后端会逐设备派生**为 `<本字段>:<deviceId>`，
+     * 因此同一批重复提交不会二次下发；为空则不启用幂等。
+     */
+    clientRequestId?: string;
+  }
+
+  /** 批量下发响应（后端 `CommandBatchResp`：逐设备结果 + 四个计数）。 */
+  export interface CommandBatchResp {
+    /** 去重后的设备总数。 */
+    total: number | string;
+    /** 受理成功台数（实例已创建）。 */
+    accepted: number | string;
+    /** 未受理台数（未创建实例）。 */
+    rejected: number | string;
+    /** 受理且投递成功台数（statusCode = sent）。 */
+    delivered: number | string;
+    /** 逐台结果（与去重后的入参顺序一致）。 */
+    results?: CommandBatchItemResult[];
+  }
+
   /** 历史查询条件（后端 `CommandQuery`，排序固定为最新优先）。 */
   export interface CommandQuery {
     /** 状态码过滤；省略 = 全部（未知状态码后端会明确报错，不静默当全部）。 */
@@ -181,6 +245,33 @@ export async function getDeviceCommands(
   return requestClient.get<
     IotCommandApi.PageResult<IotCommandApi.CommandInstanceResp>
   >(`/iot/devices/${deviceId}/commands`, { params });
+}
+
+/**
+ * 批量下发：**一个命令模板**应用到多台设备，返回逐设备结果。
+ *
+ * 后端 `POST /iot/devices/commands/batch`（权限 `iot:debug:send`，与单台同一权限码、
+ * 同一份物模型校验与下发链路；不新造权限码）。
+ *
+ * ⚠️ **两处与单台端点不同的语义**（照做，不要自行「统一」）：
+ * 1. **部分失败不整体失败**：设备不存在/已停用/无物模型/被拒都进 `results` 逐条返回
+ *    （`accepted=false` 且带 `code`+`message`），只有「请求本身不成立」才整批报错
+ *    （deviceIds 空/含 null/超上限、命令模板缺失或形态非法）——调用方必须能分辨这两种失败；
+ * 2. **设备离线不是失败**：平台受理成功但投递失败时 `accepted=true, ok=false`（实例已落库、
+ *    `requestId` 可重发），页面**不得**把它画成失败或成功，而应展示「已提交未送达，可重发」。
+ *
+ * 批量会**明确拒绝停用设备**（`DEVICE_DISABLED`，单台端点不拒，这是后端有意为之）。
+ *
+ * `deviceIds` 的转数责任在调用方：本函数只做「原样发送」，不在 API 层做隐式字符串转换——
+ * 见 {@link IotCommandApi.CommandBatchSendReq.deviceIds} 的口径说明。
+ */
+export async function sendBatchDeviceCommands(
+  data: IotCommandApi.CommandBatchSendReq,
+) {
+  return requestClient.post<IotCommandApi.CommandBatchResp>(
+    '/iot/devices/commands/batch',
+    data,
+  );
 }
 
 /**

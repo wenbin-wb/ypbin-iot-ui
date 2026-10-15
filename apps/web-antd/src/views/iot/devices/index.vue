@@ -41,6 +41,7 @@ import { useIotRealtime } from '../shared/use-iot-realtime';
 import TenantLedger from '../tenant-ledger/modules/ledger.vue';
 import { useColumns, useGridFormSchema } from './data';
 import Availability from './modules/availability.vue';
+import BatchCommand from './modules/batch-command.vue';
 import BatchTags from './modules/batch-tags.vue';
 import Detail from './modules/detail.vue';
 import Form from './modules/form.vue';
@@ -96,6 +97,17 @@ const [ImportDrawer, ImportDrawerApi] = useVbenDrawer();
  */
 const [BatchTagsDrawer, BatchTagsDrawerApi] = useVbenDrawer({
   connectedComponent: BatchTags,
+});
+
+/**
+ * 批量下发命令抽屉（一个命令模板 + 多台设备，逐设备结果如实展示）。
+ *
+ * 权限沿用后端要求的 `iot:debug:send`（批量是同一动作的放大，不新造权限码）；
+ * 目标设备来自当前勾选（**设备 id 全程字符串**，铁律 9；由抽屉在发送前显式转 number，
+ * 因为后端该字段是 `List<Long>`）。
+ */
+const [BatchCommandDrawer, BatchCommandDrawerApi] = useVbenDrawer({
+  connectedComponent: BatchCommand,
 });
 
 /** 批量导入面板的实例（用来在打开抽屉时触发一次列表刷新）。 */
@@ -164,6 +176,19 @@ const [Grid, gridApi] = useVbenVxeGrid({
   formOptions: {
     schema: useGridFormSchema(initialProductId),
     submitOnChange: true,
+  },
+  /**
+   * 🔴 **勾选事件必须走 gridEvents，不能只写模板上的 @checkbox-change**。
+   *
+   * 机制事实（已实测核实，2026-10-15）：vben 的 `<Grid>` 包装组件把未声明的 attrs 透传到自身**根 div**，
+   * 而 vxe 的真实 `checkbox-change` 事件只由内层 `<VxeGrid>` 的 `v-on="events"` 绑定
+   * （见 packages/effects/plugins/src/vxe-table/use-vxe-grid.vue）。Vue 自定义事件不冒泡 ⇒
+   * 模板上的 `@checkbox-change` **收不到**，`selectedIds` 永远是空、所有批量按钮恒为禁用。
+   * 这也是既有「批量启用/停用/删除/打标签」在页面上从不激活的根因（既有用例用桩 Grid 直接 emit，
+   * 结构性掩盖了它）。`gridEvents` 是 vben 文档化的接线方式，与 alerts 页同一写法。
+   */
+  gridEvents: {
+    checkboxChange: onCheckboxChange,
   },
   gridOptions: {
     columns: useColumns(),
@@ -352,9 +377,9 @@ function onDelete(row: IotDeviceApi.DeviceResp) {
     .catch(() => {});
 }
 
-/** vxe 勾选变化 → 同步批量操作的目标 id（字符串，铁律 9）。 */
-function onCheckboxChange({ records }: { records: IotDeviceApi.DeviceResp[] }) {
-  selectedIds.value = records.map((item) => item.id);
+/** vxe 勾选变化 → 同步批量操作的目标 id（字符串，铁律 9）。由 gridEvents.checkboxChange 调用。 */
+function onCheckboxChange(params: { records?: IotDeviceApi.DeviceResp[] }) {
+  selectedIds.value = (params?.records ?? []).map((item) => String(item.id));
 }
 
 /**
@@ -448,6 +473,39 @@ function openBatchTags(mode: 'remove' | 'set') {
 /** 批量标签成功：清空勾选 + 刷新列表（与批量启停/删除同口径）。 */
 function onBatchTagsSuccess() {
   clearSelection();
+  gridApi.query();
+}
+
+/**
+ * 打开批量下发命令抽屉：目标是当前勾选的设备。
+ *
+ * 未勾选时按钮已禁用，这里再短路一道防呆（程序化调用时不能对空清单发请求）。
+ * 传的是**设备对象**（需要 deviceName/deviceCode/productId 用于弹窗展示与物模辨预判），
+ * 不只是 id —— 弹窗要展示「将下发到 N 台」的清单，光有 id 只能显示数字。
+ */
+function openBatchCommand() {
+  const rows = (gridApi.grid?.getCheckboxRecords?.() ??
+    []) as IotDeviceApi.DeviceResp[];
+  const selected =
+    rows.length > 0
+      ? rows
+      : // 测试桩/异常情况下退化为只有勾选 id（至少不丢目标）
+        selectedIds.value.map((id) => ({ id }) as IotDeviceApi.DeviceResp);
+  if (selected.length === 0) {
+    return;
+  }
+  BatchCommandDrawerApi.setData({
+    devices: selected.map((row) => ({
+      deviceCode: row.deviceCode,
+      deviceId: String(row.id),
+      deviceName: row.deviceName,
+      productId: row.productId,
+    })),
+  }).open();
+}
+
+/** 批量下发成功（**部分失败也算成功返回**，由弹窗逐台如实展示）：保留勾选，只刷新列表。 */
+function onBatchCommandSuccess() {
   gridApi.query();
 }
 
@@ -607,6 +665,7 @@ function openImport() {
       <DeviceImport ref="ImportPanel" />
     </ImportDrawer>
     <BatchTagsDrawer @success="onBatchTagsSuccess" />
+    <BatchCommandDrawer @success="onBatchCommandSuccess" />
     <!--
       🔴 失败态**必须挂在表格之外**（不能只放 `#empty` 槽里）：
       真实 vxe 只在**表体没有行**时才渲染 `#empty` 槽 ⇒ 若把失败提示只放槽里，
@@ -636,7 +695,13 @@ function openImport() {
       :error="listError"
       :title="$t('page.iot.device.listLoadFailed')"
     />
-    <Grid @checkbox-change="onCheckboxChange">
+    <!--
+      勾选事件不写在这里：vben 的 Grid 会把未声明的 attrs 透传到自身根 div，而 vxe 的
+      checkbox-change 只绑定在内层 VxeGrid 上（自定义事件不冒泡）⇒ 模板监听收不到，
+      selectedIds 恒为空、所有批量按钮恒禁用。正确接线是 gridOptions 同级的
+      gridEvents.checkboxChange（见脚本内注释）。
+    -->
+    <Grid>
       <template #toolbar-tools>
         <div class="flex flex-wrap items-center gap-2">
           <!-- 实时连接状态：live/connecting/reconnecting；closed（无 token）不渲染 -->
@@ -701,6 +766,19 @@ function openImport() {
               {{ $t('page.iot.device.batchDelete') }}
             </Button>
           </Popconfirm>
+          <!--
+            批量下发命令：权限沿用 iot:debug:send（后端 @SaCheckPermission 同码）；
+            未勾选或批量请求在途时禁用。批量会**明确拒绝停用设备**（单台端点不拒），
+            该结果由弹窗逐台如实展示。
+          -->
+          <Button
+            v-access:code="['iot:debug:send']"
+            data-testid="batch-command"
+            :disabled="batchActionDisabled"
+            @click="openBatchCommand"
+          >
+            {{ $t('page.iot.device.batchCommand.entry') }}
+          </Button>
           <!-- 批量打标签：后端权限为 iot:tag:create/update 任一（SaMode.OR），故两码都放行 -->
           <Button
             v-access:code="['iot:tag:create', 'iot:tag:update']"

@@ -21,14 +21,25 @@ import type { IotAlertApi } from '#/api/iot';
  * - 单规则条件行数上限（见 {@link MAX_POINTS_PER_RULE} 的来源注释）；
  * - 点位级规则至少 1 行（`validate()` 第 269-272 行）。
  *
- * ## 引擎真实语义（**不是 AND**，禁止在本模块/UI 里宣称「且」）
+ * ## 引擎真实语义：**一条规则的多条件 = 同一设备上的合取条件组（真 AND，2026-10-15 起）**
  *
- * 后端候选是「规则 × **单个**点位条件 × 设备」（`AlertCandidateResolver.java:114-117` 逐条件建
- * `Candidate`，`AlertTenantEvaluator.java:196-206` 逐候选独立判定），去重键
- * `AlertRules.dedupKey(ruleId, deviceId, propertyId)` **不含条件行身份** ⇒ **每条条件独立判定、
- * 各自产生告警实例**；且**同一 propertyId 的重复行会被库级唯一键 `uk_alert_active` 静默合并**
- * （只留最先插入的一条）。因此本模块额外把「重复点位」当作**阻断性校验**：宁可不让保存，
- * 也不能让用户以为两条同点位条件都会生效。
+ * 后端 `AlertTenantEvaluator.evaluateGroup` 把同一条规则、同一台设备上的**全部**点位条件当成
+ * **一个**条件组判定：只有组内**每条**条件对同一轮最新值都判定为「越界」才触发；任一条未越界即不触发；
+ * 任一条不可判定且无「未越界」时整组本轮不可判定（不触发也不恢复）。去重键因此由
+ * `ruleId:deviceId:propertyId` 收紧为 `R:ruleId:deviceId`（`AlertRules.groupDedupKey`）：
+ * 一条规则对一台设备**至多一条**活动实例，触发点位取组内「最严重」的那条。
+ *
+ * **由此得到的直接结论（本模块的行为依据）**：
+ * 1. **同一 propertyId 的重复条件行是合法用法**——去重键已不含 propertyId，组内两条同点位条件会
+ *    **各参与判定**（AND 的两个合取项）。旧实现把重复点位当阻断性校验，是旧去重键下的产物，
+ *    已随本轮语义变更**删除**（保留会让用户配不出「同一读数同时 > 80 且 < 100」这类合法条件组）。
+ * 2. 行数与顺序都是语义的一部分：顺序决定通知正文明细与实例快照的顺序，保存时**按界面顺序原样提交**。
+ * 3. 本模块只做「与后端 `buildPoint`/`validate` 同口径的行级校验 + 上限/至少一行的作用域校验」，
+ *    不再附加任何后端不做的阻断（行内问题必须是后端**也会拒**的问题）。
+ *
+ * 证据：`ypbin-iot` 分支 `feat/iot-alert-and`（任务 task-9）的
+ * `alert/AlertRules.java#groupDedupKey`、`alert/AlertTenantEvaluator.java#evaluateGroup`、
+ * `alert/AlertConditionSnapshot.java`。
  */
 
 /**
@@ -162,11 +173,11 @@ export interface ConditionValidationOptions {
 }
 
 /**
- * 逐行校验（与后端 `buildPoint` 同口径），每行**只报第一条**问题（避免一次糊一屏）。
+ * 逐行校验（与后端 `buildPoint`/`validate` **完全同口径**），每行**只报第一条**问题（避免一次糊一屏）。
  *
- * 另加两条后端**不做但前端必须拦**的检查（理由见模块头注释）：
- * 1. 同一 `propertyId` 重复 ⇒ 后端唯一键会静默合并，必须阻断；
- * 2. 行数超上限 ⇒ 与后端同值，先拦避免白跑一次请求。
+ * 只保留后端**也会拒**的检查（回差非负、阈值必须是十进制、布尔只能 EQ/NE 且阈值 0/1、比较符白名单、
+ * 行数上限、点位级至少一行、字段长度上限）。**刻意不再有「重复点位」这条**：真 AND 之后去重键是
+ * `R:ruleId:deviceId`（不含 propertyId），同点位多行是合法条件组（理由见模块头注释）。
  */
 export function validateConditionRows(
   rows: ConditionRowDraft[],
@@ -294,42 +305,5 @@ export function validateConditionRows(
     }
   });
 
-  // 重复点位：后端唯一键只含 propertyId ⇒ 同点位的多行只会留下一条（静默合并）
-  const seen = new Set<string>();
-  rows.forEach((row, position) => {
-    const index = position + 1;
-    const propertyId = row.propertyId.trim();
-    if (propertyId === '') {
-      return;
-    }
-    if (seen.has(propertyId)) {
-      issues.push({
-        args: [index, propertyId],
-        index,
-        key: 'page.iot.alert.rule.condition.duplicatePoint',
-      });
-      return;
-    }
-    seen.add(propertyId);
-  });
-
   return issues;
-}
-
-/** 重复点位的行号（1 起；用于行内高亮）。 */
-export function duplicatedRowIndexes(rows: ConditionRowDraft[]): number[] {
-  const seen = new Set<string>();
-  const duplicated: number[] = [];
-  rows.forEach((row, position) => {
-    const propertyId = row.propertyId.trim();
-    if (propertyId === '') {
-      return;
-    }
-    if (seen.has(propertyId)) {
-      duplicated.push(position);
-      return;
-    }
-    seen.add(propertyId);
-  });
-  return duplicated;
 }
