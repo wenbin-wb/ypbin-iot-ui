@@ -1,5 +1,6 @@
 export * from './alert';
 export * from './availability';
+export * from './board';
 export * from './command';
 export * from './credential';
 export * from './device';

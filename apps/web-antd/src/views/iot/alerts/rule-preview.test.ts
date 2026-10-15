@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   conditionHolds,
   evaluateRulePreview,
+  evaluateRulePreviewPerCondition,
   RULE_PREVIEW_WINDOWS,
   toPreviewConditionViews,
 } from './rule-preview';
@@ -322,5 +323,95 @@ describe('evaluateRulePreview：时间排序 / 时间窗 / 限流裁剪', () => 
   it('时间窗常量覆盖 1h/6h/24h/7d', () => {
     expect(RULE_PREVIEW_WINDOWS['1h']).toBe(3_600_000);
     expect(RULE_PREVIEW_WINDOWS['7d']).toBe(7 * 24 * 3_600_000);
+  });
+});
+
+/**
+ * 逐条件试算（task-4 的存量口径修正）。
+ *
+ * 引擎对**每个点位条件各自建候选、各自判定、各自产生告警实例**，因此多条件规则**不能**
+ * 把多行合并成一个判定：那等价于宣称「同一点位的 AND」，不对应任何线上行为
+ * （旧实现正是把「试算点位」代入所有条件后再合并判定，属错误口径）。
+ */
+describe('evaluateRulePreviewPerCondition：逐条件独立试算（与引擎同口径）', () => {
+  it('两条件、各自不同点位 ⇒ 各自用**自己点位**的序列判定，互不影响', () => {
+    const results = evaluateRulePreviewPerCondition(
+      [num('GT', 30), num('LT', 10)],
+      {
+        temp: [point(1000, '40'), point(2000, '5')],
+        humidity: [point(1000, '40'), point(2000, '5')],
+      },
+    );
+
+    expect(results).toHaveLength(2);
+    // 条件 1（GT 30）：40 命中、5 未命中 ⇒ 1 次
+    expect(results[0]?.propertyId).toBe('temp');
+    expect(results[0]?.result.matchedCount).toBe(1);
+    expect(results[0]?.result.firstTriggerTs).toBe(1000);
+    // 条件 2（LT 10）：40 未命中、5 命中 ⇒ 1 次（若被错误地合并成 AND，结果会是 0）
+    expect(results[1]?.propertyId).toBe('temp');
+    expect(results[1]?.result.matchedCount).toBe(1);
+    expect(results[1]?.result.firstTriggerTs).toBe(2000);
+  });
+
+  it('🔴 多条件**不得**被合并成 AND 判定（旧口径会给出 0 命中）', () => {
+    // 同一点位、GT 30 与 LT 10：没有任何值能同时满足
+    const results = evaluateRulePreviewPerCondition(
+      [num('GT', 30), num('LT', 10)],
+      { temp: [point(1000, '40'), point(2000, '5')] },
+    );
+    // 逐条件：GT30 命中 1 条；LT10 命中 1 条 ⇒ 各 1 条，且**不是** 0
+    expect(results.map((item) => item.result.matchedCount)).toEqual([1, 1]);
+  });
+
+  it('某个点位没有序列 ⇒ 该条件 unsupported（不伪造 0 命中）', () => {
+    const results = evaluateRulePreviewPerCondition(
+      [num('GT', 30), { ...num('GT', 30), propertyId: 'missing' }],
+      { temp: [point(1000, '40')] },
+    );
+    expect(results[0]?.result.kind).toBe('ok');
+    expect(results[1]?.propertyId).toBe('missing');
+    expect(results[1]?.result.kind).toBe('unsupported');
+    expect(results[1]?.result.reason).toBe('empty-conditions');
+  });
+
+  it('非法条件行 ⇒ 该行 unsupported/invalid-condition，其余行照常判定', () => {
+    const results = evaluateRulePreviewPerCondition(
+      [num('GT', 30), num('BOGUS', 1)],
+      { temp: [point(1000, '40')] },
+    );
+    expect(results[0]?.result.kind).toBe('ok');
+    expect(results[1]?.result.kind).toBe('unsupported');
+    expect(results[1]?.result.reason).toBe('invalid-condition');
+    expect(results[1]?.view).toBeNull();
+  });
+
+  it('无条件行 ⇒ 空数组（断档类没有可试算的东西，页面据此如实提示）', () => {
+    expect(evaluateRulePreviewPerCondition([], {})).toEqual([]);
+  });
+
+  it('行顺序与条件顺序一一对应（结果不得重排）', () => {
+    const results = evaluateRulePreviewPerCondition(
+      [
+        { ...num('GT', 1), propertyId: 'a' },
+        { ...num('GT', 2), propertyId: 'b' },
+        { ...num('GT', 3), propertyId: 'c' },
+      ],
+      { a: [], b: [], c: [] },
+    );
+    expect(results.map((item) => item.propertyId)).toEqual(['a', 'b', 'c']);
+    expect(results.map((item) => item.index)).toEqual([0, 1, 2]);
+  });
+
+  it('时间窗与 limit 透传到每个条件', () => {
+    const results = evaluateRulePreviewPerCondition(
+      [num('GT', 30)],
+      {
+        temp: [point(1000, '40'), point(2000, '40'), point(3000, '40')],
+      },
+      { limit: 2 },
+    );
+    expect(results[0]?.result.usedSamples).toBe(2);
+    expect(results[0]?.result.truncatedSamples).toBe(1);
   });
 });

@@ -10,6 +10,17 @@
  * - 比较严格按 operator（GT 读 30 且阈值 30 不触发，边界值由用例钉住）；
  * - `deadband` 只作用于**恢复侧**，触发侧不受影响（`recoverThreshold` 仅用于 UI 说明）。
  *
+ * ## ⚠️ 多条件 = **逐条件独立判定**（引擎真实语义，**不是 AND**）
+ *
+ * 输入的 `conditions` 即使有多条，本模块**单条**调用的语义仍是「一个点位、一条条件」。
+ * 后端候选是「规则 × 单个点位条件 × 设备」（`AlertCandidateResolver` 逐条件建 Candidate，
+ * `AlertTenantEvaluator` 逐候选独立判定），每条条件**各自产生告警实例**；
+ * 去重键 `AlertRules.dedupKey(ruleId, deviceId, propertyId)` 不含条件行身份。
+ * 因此 {@link evaluateRulePreview} 把多条条件合并成一个值序列去判定的用法**只对「同一点位的多条件」**
+ * 有意义，且**不代表引擎行为**；规则表单的多条件试算一律走
+ * {@link evaluateRulePreviewPerCondition}（逐行、逐点位，与引擎一致）。
+ * 任何 UI 文案都**不得**把多条件描述成「且 / AND / 同时满足」。
+ *
  * 与线上评估的差异（如实注明，不美化）：
  * 线上按评估周期读取最新值，并叠加 triggerMode（连续 N 次 / 持续 T 秒）、
  * pendingTtl 与陈旧判定；本试算按采样点逐点判定，连续命中合并为一段，
@@ -278,7 +289,13 @@ function unsupportedResult(
   };
 }
 
-/** 对一个点的原始值判定：返回 `true`=命中 / `false`=明确未命中 / `null`=不可判定。 */
+/**
+ * 对一个点的原始值判定：返回 `true`=命中 / `false`=明确未命中 / `null`=不可判定。
+ *
+ * `views` **必须只有一条**（一个点位、一条条件）——与引擎的候选粒度一致。
+ * 传多条会被当成「同一点位的多条件合并判定」，那**不对应任何线上行为**，
+ * 仅供 {@link evaluateRulePreview} 的兼容路径使用；规则表单不得走这条路径。
+ */
 function evaluateSample(
   value: null | string,
   quality: null | string | undefined,
@@ -392,6 +409,78 @@ export function evaluateRulePreview(
     truncatedSamples,
     usedSamples: samples.length,
   };
+}
+
+/**
+ * 一条条件的试算结果（逐条件试算的输出单元）。
+ *
+ * `propertyId` 是**条件自己的点位**（引擎按候选的点位取值，不是外部代入的试算点位）。
+ */
+export interface RulePreviewConditionEvaluation {
+  /** 原始条件在列表中的序号（0 起；用于与表单行一一对应）。 */
+  index: number;
+  /** 该条件的原点位标识。 */
+  propertyId: string;
+  /** 归一化后的条件视图（非法时为 `null`）。 */
+  view: null | RulePreviewConditionView;
+  /** 单条件判定结果（空条件行/非法条件/缺序列时为 unsupported）。 */
+  result: RulePreviewResult;
+}
+
+/**
+ * 逐条件试算（**与引擎逐条件独立判定同口径**）。
+ *
+ * 后端对一条规则的每个点位条件**各自建立候选、各自判定、各自产生告警实例**
+ * （`AlertCandidateResolver` 逐条件建 Candidate），因此试算也必须**逐行、按该行的点位**
+ * 判历史序列，而**不能**把多行合并成一个判定（合并是「同一点位的 AND」，不对应任何线上行为）。
+ *
+ * `seriesByPropertyId`：行点位 → 已加载的历史样本。表单对每个**有合法点位**的行各查一次
+ * （两个行共用同一点位时只查一次，由调用方复用结果），缺失即该行 `unsupported`
+ * （**不伪造 0 命中**：没有序列 ≠ 都没命中）。
+ *
+ * @param conditions 条件行（字段与后端 `AlertRulePointResp` 同名）
+ * @param seriesByPropertyId 行点位 → 历史样本
+ * @param options `limit` 参与判定的样本上限；其余字段透传给单条件试算
+ */
+export function evaluateRulePreviewPerCondition(
+  conditions: RulePreviewCondition[],
+  seriesByPropertyId: Record<string, IotSeriesApi.TimeSeriesPointResp[]>,
+  options: { from?: number; limit?: number; to?: number } = {},
+): RulePreviewConditionEvaluation[] {
+  return (conditions ?? []).map((condition, index) => {
+    const propertyId = (condition.propertyId ?? '').trim();
+    const views = toPreviewConditionViews([condition]);
+    const view = views?.[0] ?? null;
+    const points =
+      propertyId === '' ? undefined : seriesByPropertyId[propertyId];
+    if (!view || !points) {
+      return {
+        index,
+        propertyId,
+        result: evaluateRulePreview({
+          conditions: points ? [condition] : [],
+          from: options.from,
+          limit: options.limit,
+          points: [],
+          to: options.to,
+        }),
+        view,
+      };
+    }
+    return {
+      index,
+      propertyId,
+      result: evaluateRulePreview({
+        // 单条件：与引擎的候选粒度一致
+        conditions: [condition],
+        from: options.from,
+        limit: options.limit,
+        points,
+        to: options.to,
+      }),
+      view,
+    };
+  });
 }
 
 /** 时间窗选项 → 毫秒（供 rule-form 试算区使用）。 */

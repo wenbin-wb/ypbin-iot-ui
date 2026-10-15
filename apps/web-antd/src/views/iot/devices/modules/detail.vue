@@ -58,7 +58,7 @@ import DetailAlert from './detail-alert.vue';
 import DetailDebug from './detail-debug.vue';
 import DetailPoints from './detail-points.vue';
 import Series from './series.vue';
-import ShadowEdit from './shadow-edit.vue';
+import ShadowDiff from './shadow-diff.vue';
 import DeviceTags from './tags.vue';
 import Trace from './trace.vue';
 
@@ -726,15 +726,17 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
                   type="error"
                 />
                 <template v-else>
-                  <Alert
-                    :message="$t('page.iot.shadow.reportedDisabled')"
-                    show-icon
-                    type="info"
-                  />
-                  <Empty
-                    v-if="shadowRows(shadow?.reported).length === 0"
-                    :description="$t('page.iot.shadow.empty')"
-                  />
+                  <!--
+                    如实语义：这里只展示「平台已写入影子的上报值」。
+                    为空只能说「当前没有可展示的上报记录」，**不得**推断成「设备没上报」
+                    （后端 reported 写入链路已存在，见 AvailabilityServiceImpl#shadowReportedWriter）。
+                  -->
+                  <template v-if="shadowRows(shadow?.reported).length === 0">
+                    <Empty :description="$t('page.iot.shadow.reportedEmpty')" />
+                    <div class="mt-2 text-xs text-muted-foreground">
+                      {{ $t('page.iot.shadow.reportedEmptyHint') }}
+                    </div>
+                  </template>
                   <div v-else class="overflow-x-auto">
                     <table class="w-full min-w-[320px] text-sm">
                       <tbody>
@@ -762,18 +764,9 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
                 class="rounded-xl border border-border/80 bg-card p-4"
                 data-section="overview-shadow-desired"
               >
-                <div
-                  class="mb-3 flex flex-wrap items-center justify-between gap-2"
-                >
-                  <h3 class="text-sm font-semibold">
-                    {{ $t('page.iot.shadow.desired') }}
-                  </h3>
-                  <ShadowEdit
-                    :device-id="deviceId"
-                    :initial-desired="shadow?.desired"
-                    @saved="load"
-                  />
-                </div>
+                <h3 class="mb-3 text-sm font-semibold">
+                  {{ $t('page.iot.shadow.desired') }}
+                </h3>
                 <Empty
                   v-if="shadowRows(shadow?.desired).length === 0"
                   :description="$t('page.iot.shadow.empty')"
@@ -800,6 +793,22 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
                 </div>
               </section>
             </div>
+
+            <!--
+              影子差异对比：reported / desired 逐键四态，与两张卡同区但独立成卡。
+              只读区块（无 iot:shadow:update 也完整可见），写入口（手工编辑 / 一键应用）在其内部把门。
+            -->
+            <section
+              class="rounded-xl border border-border/80 bg-card p-4"
+              data-section="overview-shadow-diff"
+            >
+              <ShadowDiff
+                :desired="shadow?.desired"
+                :device-id="deviceId"
+                :reported="shadow?.reported"
+                @saved="load"
+              />
+            </section>
 
             <!-- 标签 + 凭据：两卡响应式并排（组件自带标题，外层只负责卡片容器） -->
             <div class="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
