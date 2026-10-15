@@ -1356,7 +1356,7 @@
     "board": {
       "title": "Dashboard board",
       "entry": "Dashboard board",
-      "desc": "Build custom widgets (value / gauge / line / status) that follow device latest values in real time. The layout is stored in this browser.",
+      "desc": "Custom widgets (value / gauge / line / status / boolean switch / multi-series comparison / text table) follow device latest values in real time. Widgets and their order are shared per tenant on the platform; this browser keeps only an offline draft.",
       "addWidget": "Add widget",
       "editWidget": "Edit widget",
       "removeWidget": "Delete widget",
@@ -1400,7 +1400,7 @@
       "reorderHint": "Drag cards to reorder, or use the Move up / Move down buttons on each card (works with keyboard and touch). Order is saved to the platform.",
       "sourcePlatform": "Synced to platform",
       "sourceLocalDraft": "Local draft (not synced)",
-      "localDraftNotice": "Showing a local draft (not synced to the platform): the platform read failed or has no configuration yet, so this page shows and saves a draft stored on this browser only.",
+      "localDraftNotice": "Showing the local draft (not synced to the platform): either the platform config could not be read, or the platform has none yet. Saving attempts to write to the platform; if that fails the draft stays local.",
       "loadFailed": "Failed to load the board configuration from the platform",
       "saveToPlatform": "Save to platform",
       "saveSuccess": "Board saved to the platform",
