@@ -579,7 +579,10 @@
       "batchSelectPlaceholder": "选择要加入分组的设备（可多选）",
       "batchDeviceLabel": "设备",
       "batchAddSuccess": "新增 {0} 台，已存在 {1} 台",
-      "batchSelectRequired": "请至少选择一台设备"
+      "batchSelectRequired": "请至少选择一台设备",
+      "memberBatchRemove": "批量移除",
+      "memberBatchRemoveConfirm": "确认移除选中的 {0} 台设备？",
+      "memberBatchRemoveSuccess": "已移除 {0} 台设备"
     },
     "availability": {
       "title": "可用率 / 断档{0}",

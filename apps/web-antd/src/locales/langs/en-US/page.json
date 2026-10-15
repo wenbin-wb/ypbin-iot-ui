@@ -579,7 +579,10 @@
       "batchSelectPlaceholder": "Select devices to add (multiple)",
       "batchDeviceLabel": "Devices",
       "batchAddSuccess": "Added {0}, already existed {1}",
-      "batchSelectRequired": "Select at least one device"
+      "batchSelectRequired": "Select at least one device",
+      "memberBatchRemove": "Batch remove",
+      "memberBatchRemoveConfirm": "Remove the selected {0} device(s)?",
+      "memberBatchRemoveSuccess": "Removed {0} device(s)"
     },
     "availability": {
       "title": "Availability / outages{0}",
