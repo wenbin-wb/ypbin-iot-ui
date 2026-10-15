@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import type { RulePreviewResult, RulePreviewWindowKey } from '../rule-preview';
+
 import type { IotAlertApi } from '#/api/iot';
 
 import { computed, onMounted, ref, watch } from 'vue';
@@ -10,6 +12,8 @@ import {
   Button,
   Checkbox,
   CheckboxGroup,
+  Descriptions,
+  DescriptionsItem,
   Input,
   InputNumber,
   message,
@@ -25,6 +29,7 @@ import {
   createAlertRule,
   getAlertPresets,
   getDeviceOptions,
+  getDeviceSeries,
   getPublishedProductOptions,
   listProperties,
   listServices,
@@ -34,12 +39,14 @@ import { UserSelect } from '#/components/user-select';
 import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
 
+import { formatDateTime } from '../../shared/display';
 import { notifyHintKey, resolveNotifyRisk } from '../notify-risk';
 import {
   findInvalidEmails,
   joinNotifyTargets,
   splitNotifyTargets,
 } from '../notify-targets';
+import { evaluateRulePreview, RULE_PREVIEW_WINDOWS } from '../rule-preview';
 import { buildRuleSummary, resolveArgs } from '../summary';
 
 const emit = defineEmits<{ saved: [] }>();
@@ -79,6 +86,7 @@ const [Drawer, drawerApi] = useVbenDrawer({
     } else {
       applyPreset(data?.presetCode);
     }
+    syncBacktestFromForm();
   },
 });
 
@@ -188,6 +196,203 @@ const deviceLabel = computed(() => {
   const hit = devices.value.find((item) => item.id === form.value.deviceId);
   return hit?.deviceName ?? hit?.deviceCode ?? '';
 });
+
+// ---------------------------------------------------------------- 历史试算（仅预览）
+
+/** 试算单次取多少条历史样本：与后端上限（5000）留出余量，够看清时间窗又不拖垮抽屉。 */
+const BACKTEST_SERIES_LIMIT = 500;
+
+/** 样本明细最多展示最近多少条（结果里仍按 limit 参与判定）。 */
+const BACKTEST_SAMPLE_ROWS = 20;
+
+const backtestDeviceId = ref('');
+
+const backtestPropertyId = ref('');
+
+const backtestWindow = ref<RulePreviewWindowKey>('24h');
+
+const backtestPropertyOptions = ref<
+  { label: string; unit?: string; value: string }[]
+>([]);
+
+const backtestLoading = ref(false);
+
+const backtestError = ref('');
+
+const backtestResult = ref<RulePreviewResult>();
+
+/** 设备+点位都选了才允许试算（缺哪个由按钮旁提示说清楚）。 */
+const backtestReady = computed(
+  () => backtestDeviceId.value !== '' && backtestPropertyId.value !== '',
+);
+
+/** 试算条件与保存请求**同源**（同一 `toRequest().points`），避免预览/提交两套口径。 */
+const backtestConditions = computed(() => toRequest().points ?? []);
+
+const backtestPropertyLabel = computed(() => {
+  const hit = backtestPropertyOptions.value.find(
+    (item) => item.value === backtestPropertyId.value,
+  );
+  return hit?.label ?? backtestPropertyId.value;
+});
+
+/** 结果里命中条件的人话（如「温度 (temp) > 30」）。 */
+const backtestConditionTexts = computed(() =>
+  (backtestResult.value?.conditions ?? []).map(
+    (condition) =>
+      `${backtestPropertyLabel.value} ${condition.symbol} ${condition.threshold}`,
+  ),
+);
+
+/** 样本明细：取最近 BACKTEST_SAMPLE_ROWS 条，倒序展示（最近在前）。 */
+const backtestSampleRows = computed(() =>
+  (backtestResult.value?.samples ?? []).slice(-BACKTEST_SAMPLE_ROWS).reverse(),
+);
+
+/**
+ * 按试算设备所属产品加载点位候选（与主表单 `loadPropertiesForProduct` 同一数据源，
+ * 但不改主表单状态：试算区是独立选择，不能悄悄覆盖用户正在编辑的规则点位）。
+ */
+async function loadBacktestProperties(deviceId: string) {
+  backtestPropertyOptions.value = [];
+  // 与主表单同一设备且候选已加载：直接复用，不重复打 services/properties 两串请求
+  if (deviceId === form.value.deviceId && propertyOptions.value.length > 0) {
+    backtestPropertyOptions.value = propertyOptions.value.map((item) => ({
+      ...item,
+    }));
+    return;
+  }
+  const hit = devices.value.find((item) => item.id === deviceId);
+  const productId = hit?.productId ?? '';
+  if (!productId) {
+    return;
+  }
+  try {
+    const services = await listServices(productId);
+    const options: { label: string; unit?: string; value: string }[] = [];
+    for (const service of services) {
+      const properties = await listProperties(productId, service.id);
+      for (const property of properties) {
+        options.push({
+          label: `${property.propertyName} (${property.identifier})`,
+          unit: property.unit ?? undefined,
+          value: property.identifier,
+        });
+      }
+    }
+    backtestPropertyOptions.value = options;
+  } catch (error) {
+    backtestResult.value = undefined;
+    backtestError.value = extractErrorMessage(
+      error,
+      $t('page.iot.alert.rule.propertyLoadFailed'),
+    );
+  }
+}
+
+/** 切换试算设备：清空上一个点位并重载候选。 */
+function onBacktestDeviceChange(deviceId: unknown) {
+  const id = deviceId ? String(deviceId) : '';
+  backtestResult.value = undefined;
+  backtestError.value = '';
+  backtestPropertyId.value = '';
+  if (id) {
+    void loadBacktestProperties(id);
+  } else {
+    backtestPropertyOptions.value = [];
+  }
+}
+
+/**
+ * 规则条件/时间窗一改，上一次试算结果立即失效（避免用户拿着旧阈值的结果当真）。
+ * 试算设备与点位由各自 change 处理器清理，不在此重复。
+ */
+watch(
+  () =>
+    [
+      form.value.operator,
+      form.value.threshold,
+      form.value.valueType,
+      backtestWindow.value,
+    ] as const,
+  () => {
+    backtestResult.value = undefined;
+    backtestError.value = '';
+  },
+);
+
+/** 打开抽屉时把主表单已有设备/点位同步成试算默认值（编辑规则时少点两下）。 */
+function syncBacktestFromForm() {
+  backtestResult.value = undefined;
+  backtestError.value = '';
+  const deviceId = form.value.deviceId;
+  backtestDeviceId.value = deviceId || '';
+  backtestPropertyId.value = deviceId ? form.value.propertyId || '' : '';
+  if (deviceId) {
+    void loadBacktestProperties(deviceId).then(() => {
+      // 点位候选加载完成后，若主表单已有合法点位则保持选中
+      if (form.value.propertyId) {
+        backtestPropertyId.value = form.value.propertyId;
+      }
+    });
+  } else {
+    backtestPropertyOptions.value = [];
+  }
+}
+
+/**
+ * 执行历史试算。
+ *
+ * - 断档/离线类（无 points）：**不发历史请求**，直接给出「无法试算」的诚实结论；
+ * - 失败原样展示后端 message（例如时序库未启用），绝不伪装成「没有数据」；
+ * - `backtestLoading` 期间按钮 loading 且点击短路 ⇒ 防重复请求。
+ */
+async function runBacktest() {
+  if (backtestLoading.value || !backtestReady.value) {
+    return;
+  }
+  backtestError.value = '';
+  backtestResult.value = undefined;
+  const to = Date.now();
+  const from = to - RULE_PREVIEW_WINDOWS[backtestWindow.value];
+  const conditions = (backtestConditions.value ?? []).map((condition) => ({
+    ...condition,
+    propertyId: backtestPropertyId.value,
+  }));
+  if (conditions.length === 0) {
+    backtestResult.value = evaluateRulePreview({
+      conditions: [],
+      from,
+      points: [],
+      to,
+    });
+    return;
+  }
+  backtestLoading.value = true;
+  try {
+    const points = await getDeviceSeries(backtestDeviceId.value, {
+      from,
+      limit: BACKTEST_SERIES_LIMIT,
+      propertyId: backtestPropertyId.value,
+      to,
+    });
+    backtestResult.value = evaluateRulePreview({
+      conditions,
+      from,
+      limit: BACKTEST_SERIES_LIMIT,
+      points,
+      to,
+    });
+  } catch (error) {
+    backtestResult.value = undefined;
+    backtestError.value = extractErrorMessage(
+      error,
+      $t('page.iot.alert.rule.backtest.loadFailed'),
+    );
+  } finally {
+    backtestLoading.value = false;
+  }
+}
 
 /** 人话预览（与保存请求**同源**：两者都只读 `form`）。 */
 const summary = computed(() =>
@@ -830,6 +1035,274 @@ onMounted(loadPresets);
           </div>
         </template>
       </Alert>
+
+      <!-- ⑥ 历史试算（只读预览：不改保存逻辑，断档类如实说明无法试算） -->
+      <div class="rounded border border-solid border-gray-200 p-3">
+        <div class="mb-1 text-sm font-semibold">
+          {{ $t('page.iot.alert.rule.backtest.title') }}
+        </div>
+        <div class="mb-2 text-xs text-muted-foreground">
+          {{ $t('page.iot.alert.rule.backtest.hint') }}
+        </div>
+
+        <!-- 断档/离线类没有阈值条件：当场说清「无法试算、去哪核验」，而不是给一个永远点不动的按钮 -->
+        <Alert
+          v-if="!needsPoint"
+          class="mb-2"
+          :message="$t('page.iot.alert.rule.backtest.unsupportedNoCondition')"
+          show-icon
+          type="warning"
+        />
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <div class="mb-1 text-sm">{{ $t('page.iot.device.name') }}</div>
+            <Select
+              v-model:value="backtestDeviceId"
+              allow-clear
+              show-search
+              style="width: 100%"
+              :placeholder="
+                $t('page.iot.alert.rule.backtest.devicePlaceholder')
+              "
+              @change="onBacktestDeviceChange"
+            >
+              <SelectOption
+                v-for="item in devices"
+                :key="item.id"
+                :label="item.deviceName ?? item.deviceCode ?? item.id"
+                :value="item.id"
+              >
+                {{ item.deviceName ?? item.deviceCode }} ({{ item.deviceCode }})
+              </SelectOption>
+            </Select>
+          </div>
+          <div>
+            <div class="mb-1 text-sm">{{ $t('page.iot.alert.property') }}</div>
+            <Select
+              v-model:value="backtestPropertyId"
+              allow-clear
+              show-search
+              style="width: 100%"
+              :placeholder="
+                $t('page.iot.alert.rule.backtest.propertyPlaceholder')
+              "
+              @change="
+                () => {
+                  backtestResult = undefined;
+                  backtestError = '';
+                }
+              "
+            >
+              <SelectOption
+                v-for="item in backtestPropertyOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
+            </Select>
+          </div>
+          <div>
+            <div class="mb-1 text-sm">
+              {{ $t('page.iot.alert.rule.backtest.window') }}
+            </div>
+            <RadioGroup v-model:value="backtestWindow" size="small">
+              <Radio value="1h">
+                {{ $t('page.iot.alert.rule.backtest.window1h') }}
+              </Radio>
+              <Radio value="6h">
+                {{ $t('page.iot.alert.rule.backtest.window6h') }}
+              </Radio>
+              <Radio value="24h">
+                {{ $t('page.iot.alert.rule.backtest.window24h') }}
+              </Radio>
+              <Radio value="7d">
+                {{ $t('page.iot.alert.rule.backtest.window7d') }}
+              </Radio>
+            </RadioGroup>
+          </div>
+          <div class="flex items-end">
+            <Button
+              :disabled="!backtestReady"
+              :loading="backtestLoading"
+              type="primary"
+              @click="runBacktest"
+            >
+              {{
+                backtestLoading
+                  ? $t('page.iot.alert.rule.backtest.running')
+                  : $t('page.iot.alert.rule.backtest.run')
+              }}
+            </Button>
+            <span
+              v-if="!backtestReady"
+              class="ml-2 text-xs text-muted-foreground"
+            >
+              {{ $t('page.iot.alert.rule.backtest.needSelection') }}
+            </span>
+          </div>
+        </div>
+
+        <Alert
+          v-if="backtestError"
+          class="mt-2"
+          :message="backtestError"
+          show-icon
+          type="error"
+        />
+
+        <Alert
+          v-else-if="backtestResult?.kind === 'unsupported'"
+          class="mt-2"
+          :message="
+            backtestResult.reason === 'empty-conditions'
+              ? $t('page.iot.alert.rule.backtest.unsupportedNoCondition')
+              : $t('page.iot.alert.summary.needNumber')
+          "
+          show-icon
+          type="warning"
+        />
+
+        <template v-else-if="backtestResult?.kind === 'ok'">
+          <div class="mt-2 text-sm font-semibold">
+            {{ $t('page.iot.alert.rule.backtest.resultTitle') }}
+          </div>
+          <Descriptions class="mt-1" :column="2" size="small" bordered>
+            <DescriptionsItem
+              :label="$t('page.iot.alert.rule.backtest.triggerCount')"
+            >
+              <span class="font-semibold">
+                {{ backtestResult.triggerCount }}
+              </span>
+            </DescriptionsItem>
+            <DescriptionsItem
+              :label="$t('page.iot.alert.rule.backtest.matchedCount')"
+            >
+              {{ backtestResult.matchedCount }}
+            </DescriptionsItem>
+            <DescriptionsItem
+              :label="$t('page.iot.alert.rule.backtest.sampleCount')"
+            >
+              {{ backtestResult.usedSamples }}
+            </DescriptionsItem>
+            <DescriptionsItem
+              :label="$t('page.iot.alert.rule.backtest.firstTrigger')"
+            >
+              {{
+                backtestResult.firstTriggerTs === null
+                  ? '-'
+                  : formatDateTime(backtestResult.firstTriggerTs)
+              }}
+            </DescriptionsItem>
+            <DescriptionsItem
+              :label="$t('page.iot.alert.rule.backtest.lastTrigger')"
+            >
+              {{
+                backtestResult.lastTriggerTs === null
+                  ? '-'
+                  : formatDateTime(backtestResult.lastTriggerTs)
+              }}
+            </DescriptionsItem>
+          </Descriptions>
+
+          <div
+            v-if="backtestConditionTexts.length > 0"
+            class="mt-1 text-xs text-muted-foreground"
+          >
+            {{ $t('page.iot.alert.rule.backtest.conditionNote') }}:
+            {{ backtestConditionTexts.join('; ') }}
+          </div>
+          <div class="mt-1 text-xs text-muted-foreground">
+            {{ $t('page.iot.alert.rule.backtest.conditionsAppliedToProperty') }}
+          </div>
+
+          <Alert
+            v-if="backtestResult.usedSamples === 0"
+            class="mt-2"
+            :message="$t('page.iot.alert.rule.backtest.emptyData')"
+            show-icon
+            type="warning"
+          />
+          <Alert
+            v-else-if="backtestResult.matchedCount === 0"
+            class="mt-2"
+            :message="$t('page.iot.alert.rule.backtest.noneTriggered')"
+            show-icon
+            type="info"
+          />
+
+          <div
+            v-if="backtestResult.skippedSamples > 0"
+            class="mt-1 text-xs text-orange-600"
+          >
+            {{
+              $t('page.iot.alert.rule.backtest.skipped', [
+                backtestResult.skippedSamples,
+              ])
+            }}
+          </div>
+          <div
+            v-if="backtestResult.truncatedSamples > 0"
+            class="mt-1 text-xs text-orange-600"
+          >
+            {{
+              $t('page.iot.alert.rule.backtest.truncated', [
+                backtestResult.usedSamples,
+              ])
+            }}
+          </div>
+          <div
+            v-if="backtestResult.conditions.length > 1"
+            class="mt-1 text-xs text-muted-foreground"
+          >
+            {{ $t('page.iot.alert.rule.backtest.andNote') }}
+          </div>
+          <div class="mt-1 text-xs text-muted-foreground">
+            {{ $t('page.iot.alert.rule.backtest.approximationNote') }}
+          </div>
+
+          <div v-if="backtestSampleRows.length > 0" class="mt-2">
+            <div class="mb-1 text-xs font-semibold">
+              {{
+                $t('page.iot.alert.rule.backtest.samplesTitle', [
+                  Math.min(BACKTEST_SAMPLE_ROWS, backtestResult.usedSamples),
+                ])
+              }}
+            </div>
+            <table class="w-full text-xs">
+              <thead>
+                <tr class="text-left text-muted-foreground">
+                  <th>{{ $t('page.iot.alert.rule.backtest.sampleTime') }}</th>
+                  <th>{{ $t('page.iot.alert.rule.backtest.sampleValue') }}</th>
+                  <th>
+                    {{ $t('page.iot.alert.rule.backtest.sampleMatched') }}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="sample in backtestSampleRows"
+                  :key="`${sample.ts}-${sample.value}`"
+                >
+                  <td>{{ formatDateTime(sample.ts) }}</td>
+                  <td class="font-mono">
+                    {{ sample.value === '' ? '-' : sample.value }}
+                  </td>
+                  <td>
+                    <Tag :color="sample.matched ? 'success' : 'default'">
+                      {{
+                        sample.matched
+                          ? $t('page.iot.alert.rule.backtest.matched')
+                          : $t('page.iot.alert.rule.backtest.notMatched')
+                      }}
+                    </Tag>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
+      </div>
 
       <Alert v-if="submitError" :message="submitError" show-icon type="error" />
     </div>

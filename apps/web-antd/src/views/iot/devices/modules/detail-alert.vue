@@ -219,6 +219,7 @@ watch(
       :loading="loading"
       :pagination="false"
       :row-key="(row: any) => row.id"
+      :scroll="{ x: 1000 }"
       size="small"
       :expanded-row-keys="expandedKeys"
       @expanded-rows-change="
@@ -360,6 +361,7 @@ watch(
         showSizeChanger: false,
       }"
       :row-key="(row: any) => row.id"
+      :scroll="{ x: 760 }"
       size="small"
       @change="
         (pagination: any) => {

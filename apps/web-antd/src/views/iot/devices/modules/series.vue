@@ -908,7 +908,7 @@ function onExport(): void {
 }
 </script>
 <template>
-  <Drawer class="w-[960px] max-w-[calc(100vw-40px)]">
+  <Drawer class="w-[min(1200px,96vw)]">
     <div class="mb-3 text-sm text-muted-foreground">
       {{ $t('page.iot.series.device') }}：{{ deviceLabel || '-' }}
     </div>
@@ -1212,7 +1212,7 @@ function onExport(): void {
             />
 
             <div class="mt-3 max-h-[320px] overflow-auto">
-              <table class="w-full text-sm">
+              <table class="w-full min-w-[560px] text-sm">
                 <thead>
                   <tr class="text-left text-gray-500">
                     <th v-if="multiSeries" class="py-1">
