@@ -666,7 +666,18 @@
       "partialNumeric": "{0} point(s) have non-numeric values; the curve breaks at them",
       "ts": "Time",
       "value": "Value",
-      "quality": "Quality"
+      "quality": "Quality",
+      "liveFollow": "Live follow",
+      "liveFollowHint": "When on, newly reported points are appended to the chart (keeps the latest {0} points per series) without re-querying history.",
+      "liveActive": "Live",
+      "liveConnecting": "Connecting",
+      "liveReconnecting": "Reconnecting",
+      "liveOff": "Off",
+      "liveUnavailable": "Run a query with a chart before enabling live follow",
+      "liveFollowed": "Followed {0} points",
+      "liveDropped": "Ignored {0} live points that could not be appended (duplicate or invalid timestamp, or the series query failed)",
+      "liveNonGood": "{0} of them have non-good quality; the chart shows raw values and the detail table keeps the quality code",
+      "liveReconnectingDesc": "Live connection interrupted, reconnecting automatically. New points are not appended until it recovers."
     },
     "maintenance": {
       "title": "Maintenance windows",
@@ -1243,7 +1254,8 @@
       "disconnected": "Realtime connection lost",
       "disconnectedHint": "Data may be out of date while the page reconnects automatically (manual refresh still works). Last error: {0}",
       "live": "Live",
-      "connecting": "Connecting"
+      "connecting": "Connecting",
+      "reconnecting": "Realtime offline"
     },
     "topology": {
       "title": "Access topology",

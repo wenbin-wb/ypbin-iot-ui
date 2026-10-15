@@ -2,7 +2,7 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { IotDeviceApi } from '#/api/iot';
 
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { Page, useVbenDrawer } from '@vben/common-ui';
@@ -25,6 +25,10 @@ import {
   batchUpdateDeviceStatus,
   exportDevicesCsv,
 } from '#/api/iot/device';
+import {
+  createTrailingDebounce,
+  deviceStatusTouchesDevices,
+} from '#/api/iot/realtime';
 import { $t } from '#/locales';
 import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
@@ -33,6 +37,7 @@ import { downloadBlobSafe } from '#/utils/file';
 import EmptyGuide from '../onboarding/modules/empty-guide.vue';
 import OnboardingGuide from '../onboarding/modules/guide.vue';
 import ListErrorAlert from '../shared/list-error-alert.vue';
+import { useIotRealtime } from '../shared/use-iot-realtime';
 import TenantLedger from '../tenant-ledger/modules/ledger.vue';
 import { useColumns, useGridFormSchema } from './data';
 import Availability from './modules/availability.vue';
@@ -145,6 +150,15 @@ const initialProductId =
     ? route.query.productId
     : undefined;
 
+/**
+ * `device-status` 实时事件的去抖窗口（800ms）。
+ *
+ * 启停/删除本身是低频写操作，但批量启停会一次推一条 `deviceIds`、紧接着可能还有别的写事件；
+ * 800ms 合并既不会让用户觉得「状态没更新」，也不会把列表打成请求风暴。
+ * 明确**不订阅** `latest`（高频读数事件），避免一屏点位上报把台账重查成轮询。
+ */
+const REALTIME_DEVICE_STATUS_DEBOUNCE_MS = 800;
+
 const [Grid, gridApi] = useVbenVxeGrid({
   // 搜索表单字段名与后端 `IotDeviceQuery` 同名（keyword/productId/protocol），submitOnChange 即时查询
   formOptions: {
@@ -198,6 +212,66 @@ const [Grid, gridApi] = useVbenVxeGrid({
       zoom: true,
     },
   } as VxeTableGridOptions<IotDeviceApi.DeviceResp>,
+});
+
+// ---------------------------------------------------------------- 实时状态
+
+const {
+  error: realtimeError,
+  onEvent: onRealtimeEvent,
+  state: realtimeState,
+} = useIotRealtime();
+
+/** 断线/重连中才提示；首次 `connecting` 不闪提示（与告警中心同一口径）。 */
+const realtimeDisconnected = computed(
+  () => realtimeState.value === 'reconnecting',
+);
+
+/** 工具栏实时状态 Tag：`closed`（无 token/已释放）不渲染，避免误报「实时」。 */
+const realtimeTag = computed(() => {
+  switch (realtimeState.value) {
+    case 'connecting': {
+      return {
+        color: 'processing',
+        text: $t('page.iot.realtime.connecting'),
+      };
+    }
+    case 'live': {
+      return { color: 'success', text: $t('page.iot.realtime.live') };
+    }
+    case 'reconnecting': {
+      return { color: 'warning', text: $t('page.iot.realtime.reconnecting') };
+    }
+    default: {
+      return null;
+    }
+  }
+});
+
+/** 当前表格可见行的设备 id（vxe 拿不到数据时返回空集合，不刷新）。 */
+function currentVisibleDeviceIds(): string[] {
+  const rows = (gridApi.grid?.getData?.() ?? []) as IotDeviceApi.DeviceResp[];
+  return rows.map((row) => String(row.id));
+}
+
+/**
+ * `device-status` → 当前页去抖刷新。
+ *
+ * 只对**命中当前可见行**的事件刷新（单台 deviceId / 批量 deviceIds / 删除 deviceIds 或
+ * deletedIds）；无关设备的事件不产生任何请求。无设备上下文的事件按保守策略刷新一次。
+ */
+const refreshOnDeviceStatus = createTrailingDebounce(() => {
+  void gridApi.query();
+}, REALTIME_DEVICE_STATUS_DEBOUNCE_MS);
+
+onRealtimeEvent('device-status', (payload) => {
+  if (deviceStatusTouchesDevices(payload, currentVisibleDeviceIds())) {
+    refreshOnDeviceStatus();
+  }
+});
+
+onUnmounted(() => {
+  refreshOnDeviceStatus.cancel();
 });
 
 /**
@@ -545,12 +619,23 @@ function openImport() {
       type="warning"
       @close="alertCountError = ''"
     />
+    <!-- 实时连接中断：可见提示但不阻塞页面（列表仍可手动刷新） -->
+    <ListErrorAlert
+      v-if="realtimeDisconnected"
+      :error="$t('page.iot.realtime.disconnectedHint', [realtimeError || '-'])"
+      :title="$t('page.iot.realtime.disconnected')"
+      type="warning"
+    />
     <ListErrorAlert
       :error="listError"
       :title="$t('page.iot.device.listLoadFailed')"
     />
     <Grid @checkbox-change="onCheckboxChange">
       <template #toolbar-tools>
+        <!-- 实时连接状态：live/connecting/reconnecting；closed（无 token）不渲染 -->
+        <Tag v-if="realtimeTag" :color="realtimeTag.color" class="mr-2">
+          {{ realtimeTag.text }}
+        </Tag>
         <!-- 接入向导入口：不带权限码（所有角色可见，先知道下一步做什么）； -->
         <!-- 向导里的写动作各自沿用 iot:product:create / iot:product:publish / iot:device:create。 -->
         <Button class="mr-2" @click="openGuide">

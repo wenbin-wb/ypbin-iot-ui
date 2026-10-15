@@ -6,7 +6,8 @@
  *
  * 后端契约（`IotRealtimeController`，网关去 `/iot` 前缀）：
  * - `event: latest`        `data: { deviceId, propertyId, value, quality, ts }`
- * - `event: device-status` `data: { deviceId, status }`
+ * - `event: device-status` `data: { deviceId, status }`（单台启停）/ `{ deviceIds, status }`
+ *   （批量启停）/ `{ deviceIds }`（批量删除；同时兼容 `deletedIds` 别名）
  * - `event: alert`         `data: { ...发布点上下文 }`（前端只把它当「告警发生变化」的刷新信号）
  * - 心跳是 `:hb` 这类注释行（无 data ⇒ 不派发事件）
  *
@@ -47,9 +48,21 @@ export interface IotRealtimeLatestPayload {
   [key: string]: unknown;
 }
 
-/** `device-status` 事件：设备启停/在线状态变化。 */
+/**
+ * `device-status` 事件：设备启停/在线状态变化。
+ *
+ * 后端三类事件共用该事件名（`IotRealtimeService`）：
+ * - 单台启停：`{ deviceId, status }`（`DeviceStatusEvent`）；
+ * - 批量启停：`{ deviceIds, status }`（`DeviceStatusBatchEvent`）；
+ * - 批量删除：`{ deviceIds }`（`DeviceDeletedBatchEvent`）。
+ *
+ * 同时容忍 `deletedIds` 别名（并行开发/未来契约调整时前端不因字段改名失联），
+ * 页面用 {@link deviceStatusTouchesDevices} 统一判断是否命中当前可见行。
+ */
 export interface IotRealtimeDeviceStatusPayload {
   deviceId?: null | number | string;
+  deviceIds?: Array<null | number | string> | null;
+  deletedIds?: Array<null | number | string> | null;
   status?: null | number | string;
   [key: string]: unknown;
 }
@@ -76,6 +89,53 @@ export function isIotRealtimeEventName(
   value: string,
 ): value is IotRealtimeEventName {
   return (IOT_REALTIME_EVENTS as readonly string[]).includes(value);
+}
+
+/**
+ * `device-status` 事件是否命中给定的一批设备 id。
+ *
+ * 规则（与 `alertTouchesDevice` 同口径）：
+ * - payload 里所有 `deviceId` / `deviceIds` / `deletedIds` 归一化成字符串后与可见 id 求交集；
+ * - 有交集 ⇒ true；
+ * - 事件**完全不带**设备上下文（脏数据/契约变更）⇒ true（保守刷新：宁可多刷一次，不可漏刷）；
+ * - 可见 id 为空（表格没有行）⇒ false（没有可刷新的目标）。
+ */
+export function deviceStatusTouchesDevices(
+  payload: IotRealtimeDeviceStatusPayload | null | undefined,
+  visibleDeviceIds: Iterable<null | number | string>,
+): boolean {
+  const visible = new Set<string>();
+  for (const id of visibleDeviceIds) {
+    const text = String(id ?? '').trim();
+    if (text !== '') {
+      visible.add(text);
+    }
+  }
+  if (visible.size === 0) {
+    return false;
+  }
+  if (!payload) {
+    return true;
+  }
+
+  const touched: string[] = [];
+  const collect = (value: null | number | string | undefined) => {
+    const text = String(value ?? '').trim();
+    if (text !== '') {
+      touched.push(text);
+    }
+  };
+  collect(payload.deviceId);
+  for (const value of payload.deviceIds ?? []) {
+    collect(value);
+  }
+  for (const value of payload.deletedIds ?? []) {
+    collect(value);
+  }
+  if (touched.length === 0) {
+    return true;
+  }
+  return touched.some((id) => visible.has(id));
 }
 
 /**
