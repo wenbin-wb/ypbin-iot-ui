@@ -6,9 +6,10 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { Page, useVbenDrawer } from '@vben/common-ui';
-import { Plus } from '@vben/icons';
+import { Download, Plus } from '@vben/icons';
 
 import { Button, message, Popconfirm, Switch, Tag } from 'ant-design-vue';
+import dayjs from 'dayjs';
 
 import { useVbenVxeGrid, VbenTableAction } from '#/adapter/vxe-table';
 import {
@@ -19,10 +20,15 @@ import {
 } from '#/api/iot';
 // 批量端点从全路径导入（skill 的值导入约定）：既不与聚合器 mock 的既有测试互相牵制，
 // 也避免「聚合器多导出一个函数」就把老测试的固定 mock 打破。
-import { batchDeleteDevices, batchUpdateDeviceStatus } from '#/api/iot/device';
+import {
+  batchDeleteDevices,
+  batchUpdateDeviceStatus,
+  exportDevicesCsv,
+} from '#/api/iot/device';
 import { $t } from '#/locales';
 import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
+import { downloadBlobSafe } from '#/utils/file';
 
 import EmptyGuide from '../onboarding/modules/empty-guide.vue';
 import OnboardingGuide from '../onboarding/modules/guide.vue';
@@ -30,6 +36,7 @@ import ListErrorAlert from '../shared/list-error-alert.vue';
 import TenantLedger from '../tenant-ledger/modules/ledger.vue';
 import { useColumns, useGridFormSchema } from './data';
 import Availability from './modules/availability.vue';
+import BatchTags from './modules/batch-tags.vue';
 import Detail from './modules/detail.vue';
 import Form from './modules/form.vue';
 import DeviceImport from './modules/import.vue';
@@ -76,6 +83,16 @@ const [LedgerDrawer, LedgerDrawerApi] = useVbenDrawer();
  */
 const [ImportDrawer, ImportDrawerApi] = useVbenDrawer();
 
+/**
+ * 批量打标签 / 批量移除标签抽屉（同一组件按 mode 切换表单与接口）。
+ *
+ * 权限：打标签入口按 iot:tag:create/update（后端 SaMode.OR）显示，
+ * 移除入口按 iot:tag:delete；目标设备来自当前勾选（ids 全程字符串，铁律 9）。
+ */
+const [BatchTagsDrawer, BatchTagsDrawerApi] = useVbenDrawer({
+  connectedComponent: BatchTags,
+});
+
 /** 批量导入面板的实例（用来在打开抽屉时触发一次列表刷新）。 */
 const ImportPanel = ref<InstanceType<typeof DeviceImport> | null>(null);
 
@@ -106,6 +123,9 @@ const selectedIds = ref<string[]>([]);
 
 /** 批量请求在途：防重复提交（按钮同时进入禁用态）。 */
 const batchPending = ref(false);
+
+/** 导出请求在途：按钮 loading + 防重复点击。 */
+const exportLoading = ref(false);
 
 /** 批量按钮禁用条件：未勾选任何行，或已有批量请求在途。 */
 const batchActionDisabled = computed(
@@ -336,6 +356,61 @@ async function onBatchDelete() {
   }
 }
 
+/**
+ * 打开批量标签抽屉：目标 = 当前勾选设备（字符串 id），`mode` 决定表单与接口。
+ *
+ * 未勾选时按钮已禁用，这里再短路一道防呆（避免程序化调用时对空清单发请求）。
+ */
+function openBatchTags(mode: 'remove' | 'set') {
+  if (selectedIds.value.length === 0) {
+    return;
+  }
+  BatchTagsDrawerApi.setData({
+    deviceIds: [...selectedIds.value],
+    mode,
+  }).open();
+}
+
+/** 批量标签成功：清空勾选 + 刷新列表（与批量启停/删除同口径）。 */
+function onBatchTagsSuccess() {
+  clearSelection();
+  gridApi.query();
+}
+
+/**
+ * 导出当前筛选条件下的设备台账 CSV。
+ *
+ * - 参数取搜索表单当前值（与列表 query 同一份字段名，不另做映射）；
+ * - 文件名 `设备台账_YYYYMMDD.csv`（日期由 dayjs 生成，避免同名覆盖）；
+ * - `downloadBlobSafe` 处理「HTTP 200 但响应体是业务失败 JSON」的伪文件；
+ * - 请求级失败原样展示后端 message（不静默）；loading 防重复点击。
+ */
+async function onExportCsv() {
+  if (exportLoading.value) {
+    return;
+  }
+  exportLoading.value = true;
+  try {
+    const formValues = (gridApi.formApi?.form?.values ??
+      {}) as IotDeviceApi.DeviceQuery;
+    const blob = await exportDevicesCsv(formValues);
+    const downloaded = await downloadBlobSafe(
+      blob,
+      `${$t('page.iot.device.exportName')}_${dayjs().format('YYYYMMDD')}.csv`,
+      $t('page.iot.device.exportFailed'),
+    );
+    if (downloaded) {
+      message.success($t('common.success'));
+    }
+  } catch (error) {
+    message.error(
+      extractErrorMessage(error, $t('page.iot.device.exportFailed')),
+    );
+  } finally {
+    exportLoading.value = false;
+  }
+}
+
 /** 打开接入向导抽屉（空态引导与工具栏按钮共用同一个入口）。 */
 function openGuide() {
   GuideDrawerApi.open();
@@ -451,6 +526,7 @@ function openImport() {
     >
       <DeviceImport ref="ImportPanel" />
     </ImportDrawer>
+    <BatchTagsDrawer @success="onBatchTagsSuccess" />
     <!--
       🔴 失败态**必须挂在表格之外**（不能只放 `#empty` 槽里）：
       真实 vxe 只在**表体没有行**时才渲染 `#empty` 槽 ⇒ 若把失败提示只放槽里，
@@ -540,6 +616,36 @@ function openImport() {
             {{ $t('page.iot.device.batchDelete') }}
           </Button>
         </Popconfirm>
+        <!-- 批量打标签：后端权限为 iot:tag:create/update 任一（SaMode.OR），故两码都放行 -->
+        <Button
+          v-access:code="['iot:tag:create', 'iot:tag:update']"
+          class="mr-2"
+          data-testid="batch-tag-set"
+          :disabled="selectedIds.length === 0"
+          @click="openBatchTags('set')"
+        >
+          {{ $t('page.iot.device.batchTagSet') }}
+        </Button>
+        <Button
+          v-access:code="['iot:tag:delete']"
+          class="mr-2"
+          data-testid="batch-tag-remove"
+          :disabled="selectedIds.length === 0"
+          @click="openBatchTags('remove')"
+        >
+          {{ $t('page.iot.device.batchTagRemove') }}
+        </Button>
+        <!-- 导出当前筛选结果（服务端全量，不是当前页）；权限沿用列表读权限 -->
+        <Button
+          v-access:code="['iot:device:list']"
+          class="mr-2"
+          data-testid="export-csv"
+          :loading="exportLoading"
+          @click="onExportCsv"
+        >
+          <template #icon><Download /></template>
+          {{ $t('page.iot.device.exportCsv') }}
+        </Button>
         <!-- 批量导入（CSV）：一次能建上万台设备 ⇒ 独立权限码 iot:device:import -->
         <Button
           v-access:code="['iot:device:import']"

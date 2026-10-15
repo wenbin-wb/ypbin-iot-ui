@@ -238,6 +238,17 @@ export async function getAlertPage(params: IotAlertApi.InstanceQuery) {
   );
 }
 
+/**
+ * 导出告警实例 CSV（按当前筛选条件导出**全量**，不是当前页）。
+ *
+ * 走 `requestClient.download`（内部 `responseReturn:'body'`）而不是 `get + responseType:'blob'`：
+ * 后者沿用实例默认 `responseReturn:'data'`，默认响应拦截器会去读裸 CSV Blob 的 `code`
+ * 而误判失败。口径同 `api/iot/device-import.ts`、`api/system/log.ts`。
+ */
+export function exportAlertsCsv(params: IotAlertApi.InstanceQuery) {
+  return requestClient.download<Blob>('/iot/alerts/export', { params });
+}
+
 /** 分页查询某设备的告警（设备详情「告警」页签）。 */
 export async function getDeviceAlertPage(
   deviceId: string,
@@ -321,10 +332,16 @@ export async function updateAlertRule(
   id: string,
   data: IotAlertApi.RuleSaveReq,
 ) {
-  return requestClient.put<IotAlertApi.RuleResp>(`/iot/alerts/rules/${id}`, data);
+  return requestClient.put<IotAlertApi.RuleResp>(
+    `/iot/alerts/rules/${id}`,
+    data,
+  );
 }
 
 /** 批量启用/停用规则（停用会收口该规则的活动实例）。 */
 export async function setAlertRulesEnabled(ids: string[], enabled: boolean) {
-  return requestClient.post<number>('/iot/alerts/rules/enabled', { ids, enabled });
+  return requestClient.post<number>('/iot/alerts/rules/enabled', {
+    ids,
+    enabled,
+  });
 }
