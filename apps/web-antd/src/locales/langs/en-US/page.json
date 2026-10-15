@@ -561,7 +561,13 @@
       "parentName": "Parent group",
       "parentPlaceholder": "Select parent group",
       "parentHelp": "Empty = root group (top level)",
-      "parentRoot": "Root group"
+      "parentRoot": "Root group",
+      "memberBatchAdd": "Batch add",
+      "batchTitle": "Batch add devices",
+      "batchSelectPlaceholder": "Select devices to add (multiple)",
+      "batchDeviceLabel": "Devices",
+      "batchAddSuccess": "Added {0}, already existed {1}",
+      "batchSelectRequired": "Select at least one device"
     },
     "availability": {
       "title": "Availability / outages{0}",
@@ -1220,6 +1226,17 @@
       "disconnectedHint": "Data may be out of date while the page reconnects automatically (manual refresh still works). Last error: {0}",
       "live": "Live",
       "connecting": "Connecting"
+    },
+    "topology": {
+      "title": "Access topology",
+      "desc": "Direct links from the platform to access nodes and tenants. Bigger nodes hold more tenants/devices; colors reflect lease and reporting health.",
+      "platform": "IoT platform",
+      "accessNodes": "Access nodes",
+      "tenants": "Tenants",
+      "holdingShort": "holds {0} tenants",
+      "deviceShort": "{0} devices",
+      "empty": "No access nodes or tenants to show yet. They appear automatically after an access node registers or a tenant is onboarded.",
+      "noOwnershipHint": "The backend does not expose an access-node-to-tenant ownership mapping, so the graph only draws direct links from the platform instead of guessing ownership."
     }
   },
   "auth": {

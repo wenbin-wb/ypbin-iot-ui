@@ -2,9 +2,10 @@
 import type { IotGroupApi } from '#/api/iot';
 
 import { computed, ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 import { useAccess } from '@vben/access';
-import { useVbenDrawer } from '@vben/common-ui';
+import { useVbenDrawer, useVbenModal } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
 import {
@@ -17,10 +18,11 @@ import {
   Spin,
   Table,
 } from 'ant-design-vue';
-import { useRouter } from 'vue-router';
 
+import { useVbenForm } from '#/adapter/form';
 import {
   addGroupMember,
+  addGroupMembersBatch,
   getDeviceOptions,
   getGroupMembers,
   removeGroupMember,
@@ -31,8 +33,8 @@ import { extractErrorMessage } from '#/utils/error';
 /**
  * 分组成员管理：查看 / 加入 / 移出，入口在「设备分组」页。
  *
- * 接口全部是**既有** members 接口：
- * `GET /groups/{id}/members`、`POST /groups/{id}/members`、`DELETE /groups/{id}/members/{memberId}`。
+ * 成员接口：`GET /groups/{id}/members`、`POST /groups/{id}/members`、
+ * `POST /groups/{id}/members/batch`（批量）、`DELETE /groups/{id}/members/{memberId}`。
  * 移除传的是**成员行主键**（`member.id`），不是 deviceId —— 传错会「点得动但删不掉」。
  *
  * 空分组必须有**空态引导**（不是一句「暂无数据」）：说明设备在设备台账创建，并给一个能点过去的按钮。
@@ -72,9 +74,94 @@ const members = ref<IotGroupApi.GroupMemberResp[]>([]);
 const loadError = ref('');
 
 const devices = ref<Array<{ label: string; value: string }>>([]);
-const selectedDeviceId = ref<undefined | string>();
+const selectedDeviceId = ref<string | undefined>();
 const adding = ref(false);
 const removingId = ref('');
+const batchSubmitting = ref(false);
+
+/**
+ * 批量加入表单：ApiSelect 多选，api 直接复用 `getDeviceOptions`。
+ *
+ * 这里**不做**「已在分组中」的前端过滤：后端会返回 `skipped` 数量，成功提示里如实展示
+ * 「新增 X 台、已存在 Y 台」，避免用户以为点击无效。
+ */
+const [BatchForm, batchFormApi] = useVbenForm({
+  schema: [
+    {
+      component: 'ApiSelect',
+      componentProps: {
+        allowClear: true,
+        api: getDeviceOptions,
+        class: 'w-full',
+        labelField: 'deviceName',
+        maxTagCount: 'responsive',
+        mode: 'multiple',
+        placeholder: $t('page.iot.group.batchSelectPlaceholder'),
+        showSearch: true,
+        valueField: 'id',
+      },
+      fieldName: 'deviceIds',
+      label: $t('page.iot.group.batchDeviceLabel'),
+      rules: 'required',
+    },
+  ],
+  showDefaultActions: false,
+});
+
+/**
+ * 提交批量加入。
+ *
+ * 防重复：`batchSubmitting` 在**任何 await 之前**置位，模态框同时 lock（提交中禁用
+ * 取消/确认，覆盖 loading），因此连续点击/重复触发只会发一次请求。
+ */
+async function submitBatchAdd() {
+  if (batchSubmitting.value) {
+    return;
+  }
+  batchSubmitting.value = true;
+  batchModalApi.lock();
+  try {
+    const { valid } = await batchFormApi.validate();
+    if (!valid) {
+      return;
+    }
+    const values = await batchFormApi.getValues<{ deviceIds?: string[] }>();
+    const deviceIds = values.deviceIds ?? [];
+    if (deviceIds.length === 0) {
+      message.warning($t('page.iot.group.batchSelectRequired'));
+      return;
+    }
+    const result = await addGroupMembersBatch(groupId.value, deviceIds);
+    message.success(
+      $t('page.iot.group.batchAddSuccess', [
+        String(result.added),
+        String(result.skipped),
+      ]),
+    );
+    batchModalApi.close();
+    await loadMembers();
+  } catch (error) {
+    // 原样展示后端 message（含「设备不存在」等拒绝原因），不静默
+    message.error(extractErrorMessage(error, $t('common.requestFailed')));
+  } finally {
+    batchSubmitting.value = false;
+    batchModalApi.unlock();
+  }
+}
+
+const [BatchModal, batchModalApi] = useVbenModal({
+  async onConfirm() {
+    await submitBatchAdd();
+  },
+  onCancel() {
+    batchModalApi.close();
+  },
+  onOpenChange(isOpen: boolean) {
+    if (isOpen) {
+      batchFormApi.reset();
+    }
+  },
+});
 
 /** 可加入的设备 = 全部设备 - 已在分组中的设备（避免必错的「设备已在分组中」往返）。 */
 const selectableDevices = computed(() => {
@@ -83,14 +170,33 @@ const selectableDevices = computed(() => {
 });
 
 const columns = computed(() => [
-  { dataIndex: 'deviceName', key: 'deviceName', title: $t('page.iot.device.name') },
-  { dataIndex: 'deviceCode', key: 'deviceCode', title: $t('page.iot.device.code'), width: 180 },
-  { dataIndex: 'productName', key: 'productName', title: $t('page.iot.device.product'), width: 180 },
-  { dataIndex: 'createTime', key: 'createTime', title: $t('common.createTime'), width: 170 },
+  {
+    dataIndex: 'deviceName',
+    key: 'deviceName',
+    title: $t('page.iot.device.name'),
+  },
+  {
+    dataIndex: 'deviceCode',
+    key: 'deviceCode',
+    title: $t('page.iot.device.code'),
+    width: 180,
+  },
+  {
+    dataIndex: 'productName',
+    key: 'productName',
+    title: $t('page.iot.device.product'),
+    width: 180,
+  },
+  {
+    dataIndex: 'createTime',
+    key: 'createTime',
+    title: $t('common.createTime'),
+    width: 170,
+  },
   { key: 'action', title: $t('common.action'), width: 110 },
 ]);
 
-const [Drawer, drawerApi] = useVbenDrawer<null | IotGroupApi.GroupResp>({
+const [Drawer, drawerApi] = useVbenDrawer<IotGroupApi.GroupResp | null>({
   onOpenChange(isOpen: boolean) {
     if (!isOpen) {
       return;
@@ -192,7 +298,14 @@ defineExpose({ drawerApi });
           <template #icon><Plus /></template>
           {{ $t('page.iot.group.memberAdd') }}
         </Button>
+        <Button @click="batchModalApi.open()">
+          {{ $t('page.iot.group.memberBatchAdd') }}
+        </Button>
       </div>
+
+      <BatchModal :title="$t('page.iot.group.batchTitle')" class="w-[600px]">
+        <BatchForm />
+      </BatchModal>
 
       <Alert v-if="loadError" :message="loadError" show-icon type="error" />
 
@@ -235,7 +348,10 @@ defineExpose({ drawerApi });
         </Table>
 
         <!-- 空态引导：只有在**确实读到了空成员**时才显示（读取失败走上面的 Alert） -->
-        <Empty v-else-if="!loadError" :description="$t('page.iot.group.memberEmpty')">
+        <Empty
+          v-else-if="!loadError"
+          :description="$t('page.iot.group.memberEmpty')"
+        >
           <div class="text-muted-foreground mb-3 text-sm">
             {{ $t('page.iot.group.memberEmptyHint') }}
           </div>

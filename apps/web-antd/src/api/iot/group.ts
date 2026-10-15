@@ -46,6 +46,20 @@ export namespace IotGroupApi {
   export interface GroupMemberSaveReq {
     deviceId: string;
   }
+
+  /** 批量加入请求（后端 `IotDeviceGroupMemberBatchReq`，一次最多 200 个）。 */
+  export interface GroupMemberBatchSaveReq {
+    deviceIds: string[];
+  }
+
+  /**
+   * 批量加入结果（后端 `BatchMemberAddResp`）：
+   * `added` 为新增数，`skipped` 为已在分组中、被跳过的数量。
+   */
+  export interface GroupMemberBatchAddResp {
+    added: number;
+    skipped: number;
+  }
 }
 
 export async function getGroupList() {
@@ -162,6 +176,23 @@ export async function addGroupMember(groupId: string, deviceId: string) {
   return requestClient.post<number>(`/iot/groups/${groupId}/members`, {
     deviceId,
   });
+}
+
+/**
+ * 批量把设备加入分组。
+ *
+ * 后端一次批量校验/插入，返回新增与已存在数量；存在无效设备时后端会以业务错误
+ * 列出缺失设备并整体拒绝，前端不预判、不吞异常。
+ */
+export async function addGroupMembersBatch(
+  groupId: string,
+  deviceIds: string[],
+) {
+  const data: IotGroupApi.GroupMemberBatchSaveReq = { deviceIds };
+  return requestClient.post<IotGroupApi.GroupMemberBatchAddResp>(
+    `/iot/groups/${groupId}/members/batch`,
+    data,
+  );
 }
 
 /**

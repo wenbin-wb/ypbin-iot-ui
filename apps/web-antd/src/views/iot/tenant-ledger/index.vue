@@ -8,6 +8,7 @@ import { Tabs } from 'ant-design-vue';
 import { $t } from '#/locales';
 
 import AccessOverview from './modules/access-overview.vue';
+import AccessTopology from './modules/access-topology.vue';
 import TenantLedger from './modules/ledger.vue';
 
 /**
@@ -39,10 +40,15 @@ import TenantLedger from './modules/ledger.vue';
  * 之所以做成**页签**而不是新菜单：两者受众完全相同（平台管理员）、权限码也相同
  * （`iot:ledger:list`）⇒ 复用既有菜单/授权面，不新造跨租户可见入口；
  * 后端契约见 `AccessOverviewController`（`GET /iot/access-overview`）。
+ *
+ * 2026-10-15：新增第三个页签「接入拓扑」（`modules/access-topology.vue`，只读）。
+ * 它同样复用平台级 `iot:ledger:list` 权限与既有菜单，消费 `getAccessOverview()`
+ * + `getTenantLedgerList()`（+ 系统租户接口解析名称）；图里只画平台 → 接入节点、
+ * 平台 → 租户两类直连边，不画后端未提供的「节点 → 租户」归属边。
  */
 
 /** 当前页签（默认「租户台账」）。 */
-const activeKey = ref<'ledger' | 'overview'>('ledger');
+const activeKey = ref<'ledger' | 'overview' | 'topology'>('ledger');
 </script>
 
 <template>
@@ -58,6 +64,9 @@ const activeKey = ref<'ledger' | 'overview'>('ledger');
       </Tabs.TabPane>
       <Tabs.TabPane key="overview" :tab="$t('page.iot.overview.overview')">
         <div class="h-full"><AccessOverview /></div>
+      </Tabs.TabPane>
+      <Tabs.TabPane key="topology" :tab="$t('page.iot.topology.title')">
+        <div class="h-full"><AccessTopology /></div>
       </Tabs.TabPane>
     </Tabs>
   </Page>
