@@ -326,6 +326,137 @@ export function hasNumericPoints(
   return numericCount(points) > 0;
 }
 
+/** 实时跟随每个点位在内存里保留的最大点数。 */
+export const IOT_SERIES_LIVE_MAX_POINTS = 500;
+
+/**
+ * 质量码是否 good（大小写不敏感；null/空视为未知 ⇒ 非 good）。
+ *
+ * 与告警 sparkline 的 `isGood` 同口径，但这里是曲线的展示规则：
+ * 非 good 的点**不伪装成 good**（明细表保留原始质量码），只用于提示用户核对。
+ */
+export function isGoodQuality(quality?: null | string): boolean {
+  return (quality ?? '').trim().toUpperCase() === 'GOOD';
+}
+
+/** 实时事件里的一条点位读数（`ts` 可能是 Long 字符串）。 */
+export interface SeriesLivePointInput {
+  propertyId: string;
+  quality: null | string;
+  ts: null | number | string;
+  value: null | string;
+}
+
+/** 实时点被丢弃的原因：`unknown-property` 表示事件与本次查询无关（调用方应静默忽略）。 */
+export type SeriesLiveDropReason =
+  | ''
+  | 'duplicate-ts'
+  | 'invalid-ts'
+  | 'series-failed'
+  | 'unknown-property';
+
+export interface SeriesLiveAppendOutcome {
+  /** 是否真的追加成功。 */
+  appended: boolean;
+  /** 追加成功的点质量是否 good（未追加时恒为 false）。 */
+  good: boolean;
+  /** 是否命中本次查询的点位（false ⇒ 事件与本曲线的点位无关）。 */
+  matched: boolean;
+  /** 丢弃原因（空串 = 未丢弃）。 */
+  reason: SeriesLiveDropReason;
+  /** 新结果数组；未追加时原样返回入参（引用不变，调用方据此跳过重渲染）。 */
+  results: SeriesQueryResult[];
+}
+
+/**
+ * 把一条实时读数追加到对应曲线（**纯函数**，不改写入参）。
+ *
+ * 规则（与历史曲线的展示口径保持一致，避免「历史里画、实时里丢」的双标）：
+ * - 只有 `propertyId` 命中本次查询结果才追加；没命中说明事件不属于当前曲线 ⇒ 静默忽略；
+ * - `ts` 必须可解析且**严格大于**该系列最后一个点的时间戳：重复/回退一律拒绝（避免曲线回头）；
+ * - 数值/文本都追加（文本点由 {@link buildChartModel} 渲染成 null 断点，明细表原本就会展示）；
+ * - 质量非 good 的点**照常追加**，但 `good=false`：曲线仍显示原始值，调用方负责计数并给可见提示，
+ *   不把 bad/uncertain 静默洗成 normal；
+ * - 超过 `maxPoints` 时保留**最近**的 maxPoints 个点（历史数据可用「查询」按时间窗重拉）。
+ */
+export function appendLiveSeriesPoint(
+  results: SeriesQueryResult[],
+  point: SeriesLivePointInput,
+  maxPoints: number = IOT_SERIES_LIVE_MAX_POINTS,
+): SeriesLiveAppendOutcome {
+  const propertyId = point.propertyId.trim();
+  const index = results.findIndex((item) => item.propertyId === propertyId);
+  if (index === -1) {
+    return {
+      appended: false,
+      good: false,
+      matched: false,
+      reason: 'unknown-property',
+      results,
+    };
+  }
+  const item = results[index];
+  if (!item) {
+    return {
+      appended: false,
+      good: false,
+      matched: false,
+      reason: 'unknown-property',
+      results,
+    };
+  }
+  // 查询失败的系列不追加：追加出一条曲线会把「查询失败」演成「有数据」
+  if (item.error !== '') {
+    return {
+      appended: false,
+      good: false,
+      matched: true,
+      reason: 'series-failed',
+      results,
+    };
+  }
+  const ts = Number(point.ts);
+  if (!Number.isFinite(ts) || ts <= 0) {
+    return {
+      appended: false,
+      good: false,
+      matched: true,
+      reason: 'invalid-ts',
+      results,
+    };
+  }
+  const lastTs = item.points.at(-1)?.ts;
+  const lastMillis = lastTs === undefined ? Number.NaN : Number(lastTs);
+  if (Number.isFinite(lastMillis) && ts <= lastMillis) {
+    return {
+      appended: false,
+      good: false,
+      matched: true,
+      reason: 'duplicate-ts',
+      results,
+    };
+  }
+  const cap = Number.isFinite(maxPoints)
+    ? Math.max(1, Math.floor(maxPoints))
+    : IOT_SERIES_LIVE_MAX_POINTS;
+  const appended = [
+    ...item.points,
+    { quality: point.quality, ts, value: point.value },
+  ];
+  const trimmed =
+    appended.length > cap ? appended.slice(appended.length - cap) : appended;
+  const nextResults = results.map((entry, entryIndex) =>
+    entryIndex === index ? { ...entry, points: trimmed } : entry,
+  );
+  return {
+    appended: true,
+    good: isGoodQuality(point.quality),
+    matched: true,
+    reason: '',
+    results: nextResults,
+  };
+}
+
 /** 有数据可画的结果（失败与空结果都不进图）。 */
 export function chartableResults(
   results: SeriesQueryResult[],
@@ -397,9 +528,7 @@ export interface SeriesDetailRow {
   value: string;
 }
 
-function sortPoints(
-  results: SeriesQueryResult[],
-): {
+function sortPoints(results: SeriesQueryResult[]): {
   name: string;
   point: IotSeriesApi.TimeSeriesPointResp;
   propertyId: string;

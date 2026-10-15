@@ -12,6 +12,7 @@ import type {
 } from './series-utils';
 
 import type { IotPointApi, IotThingModelApi } from '#/api/iot';
+import type { IotRealtimeLatestPayload } from '#/api/iot/realtime';
 
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 
@@ -52,7 +53,9 @@ import { extractErrorMessage } from '#/utils/error';
 import { downloadByBlob } from '#/utils/file';
 
 import { displayOrFallback, qualityLabel } from '../../shared/display';
+import { useIotRealtime } from '../../shared/use-iot-realtime';
 import {
+  appendLiveSeriesPoint,
   buildChartModel,
   buildCsv,
   buildCsvRows,
@@ -65,6 +68,7 @@ import {
   formatRangeLabel,
   IOT_SERIES_AUTO_REFRESH_MS,
   IOT_SERIES_DEFAULT_RANGE_MODE,
+  IOT_SERIES_LIVE_MAX_POINTS,
   IOT_SERIES_MAX_SELECTED_POINTS,
   IOT_SERIES_TABLE_MAX_ROWS,
   isValidPropertyId,
@@ -147,6 +151,13 @@ const queried = ref(false);
  * 避免用户改了输入框却仍在看（或被导出成）上一次口径的数据。
  */
 const results = ref<SeriesQueryResult[]>([]);
+/**
+ * 查询返回时各点位的原始条数。
+ *
+ * 为什么单独存：实时跟随会往 `results[*].points` 追加点，若用「当前长度 >= limit」判断截断，
+ * 追加几个点就会把原本没打满 limit 的查询误报成「可能截断了较晚的数据」。
+ */
+const queryPointCounts = ref<Record<string, number>>({});
 const usedPoints = ref<string[]>([]);
 const usedRange = ref<SeriesResolvedRange>({ unbounded: false });
 const usedLimit = ref<number>(IOT_SERIES_DEFAULT_LIMIT);
@@ -165,10 +176,13 @@ let refreshTimer: ReturnType<typeof setInterval> | undefined;
 const [Drawer, drawerApi] = useVbenDrawer<SeriesDrawerData>({
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) {
-      // 关掉抽屉必须停表：否则切走后仍在后台按周期打后端
+      // 关掉抽屉必须停表、退订：否则切走后仍在后台按周期打后端，或在内存里继续追加实时点
       stopAutoRefresh();
+      resetLiveFollow();
       return;
     }
+    // 换设备 / 重新打开：跟随开关回到关闭，清空上一轮的计数与订阅
+    resetLiveFollow();
     const device = drawerApi.getData();
     // 每次打开都回到初始态：不把上一台设备的查询结果留在抽屉里
     deviceId.value = device?.id ?? '';
@@ -414,6 +428,8 @@ async function runQuery(
   limitValue: number,
 ): Promise<void> {
   loading.value = true;
+  // 每次重查都会**替换** results：上一轮内存里跟随的点不复存在，计数必须归零（不能虚报已跟随）
+  resetLiveCounters();
   try {
     const settled = await Promise.allSettled(
       targets.map(
@@ -448,6 +464,9 @@ async function runQuery(
   } finally {
     loading.value = false;
   }
+  queryPointCounts.value = Object.fromEntries(
+    results.value.map((item) => [item.propertyId, item.points.length]),
+  );
   queried.value = true;
   usedPoints.value = [...targets];
   usedRange.value = range;
@@ -594,7 +613,10 @@ watch(autoRefresh, (enabled) => {
   }
 });
 
-onBeforeUnmount(stopAutoRefresh);
+onBeforeUnmount(() => {
+  stopAutoRefresh();
+  stopLiveFollow();
+});
 
 // ---------- 图表与明细 ----------
 
@@ -622,7 +644,9 @@ const valueHint = computed(() => {
 
 /** 条数打满本次请求的上限 ⇒ 升序返回，可能截断了较晚的数据（不静默当成「就这么多」）。 */
 function reachedLimit(item: SeriesQueryResult): boolean {
-  return item.points.length > 0 && item.points.length >= usedLimit.value;
+  // 只看**查询返回时**的条数：实时跟随追加的点不能把提示误触出来
+  const count = queryPointCounts.value[item.propertyId] ?? 0;
+  return count > 0 && count >= usedLimit.value;
 }
 
 const failedCount = computed(
@@ -710,6 +734,145 @@ async function renderChart(): Promise<void> {
   };
   await renderEcharts(option);
 }
+
+// ---------- 实时跟随 ----------
+
+/**
+ * 「实时跟随」：订阅 SSE `latest`，把匹配当前设备/点位的新点**追加进内存 results**。
+ *
+ * 三条纪律：
+ * 1. 只在已出图时可用（没曲线时打开只会订阅一个永远匹配不到的流）；
+ * 2. 事件必须设备与点位都匹配才追加；不匹配的静默忽略（不是本曲线的数据）；
+ * 3. 关闭开关 / 关抽屉 / 换设备 / 组件卸载都退订；重查时清空计数（内存点已被新结果替换）。
+ *
+ * 质量口径：非 good 的点**照常追加**（与历史曲线一致：数值照画、质量码在明细表可见），
+ * 同时计数并给出可见提示，绝不把它洗成 good；时间戳重复/非法或该点位查询失败的点忽略并计数。
+ */
+const liveFollow = ref(false);
+const liveFollowedCount = ref(0);
+const liveDroppedCount = ref(0);
+const liveNonGoodCount = ref(0);
+
+const {
+  error: realtimeError,
+  onEvent,
+  state: realtimeState,
+} = useIotRealtime();
+
+/** 当前订阅的退订函数（未订阅时为 undefined）。 */
+let liveUnsubscribe: (() => void) | undefined;
+
+/** 实时状态 Tag：未开启 = 已关闭；开启后按 SSE 连接状态显示。 */
+const liveState = computed<{ color: string; text: string }>(() => {
+  if (!liveFollow.value) {
+    return { color: 'default', text: $t('page.iot.series.liveOff') };
+  }
+  switch (realtimeState.value) {
+    case 'connecting': {
+      return {
+        color: 'processing',
+        text: $t('page.iot.series.liveConnecting'),
+      };
+    }
+    case 'live': {
+      return { color: 'success', text: $t('page.iot.series.liveActive') };
+    }
+    case 'reconnecting': {
+      return {
+        color: 'warning',
+        text: $t('page.iot.series.liveReconnecting'),
+      };
+    }
+    default: {
+      return { color: 'default', text: $t('page.iot.series.liveOff') };
+    }
+  }
+});
+
+function resetLiveCounters(): void {
+  liveFollowedCount.value = 0;
+  liveDroppedCount.value = 0;
+  liveNonGoodCount.value = 0;
+}
+
+function startLiveFollow(): void {
+  if (liveUnsubscribe !== undefined) {
+    return;
+  }
+  liveUnsubscribe = onEvent('latest', onLatestEvent);
+}
+
+function stopLiveFollow(): void {
+  liveUnsubscribe?.();
+  liveUnsubscribe = undefined;
+}
+
+/** 关闭跟随并清空计数（关抽屉 / 换设备 / 卸载时调用）。 */
+function resetLiveFollow(): void {
+  stopLiveFollow();
+  liveFollow.value = false;
+  resetLiveCounters();
+}
+
+/** `latest` 事件：设备 + 点位双匹配才追加；质量/时间戳规则见 {@link appendLiveSeriesPoint}。 */
+function onLatestEvent(payload: IotRealtimeLatestPayload): void {
+  if (!liveFollow.value || !hasChart.value) {
+    return;
+  }
+  const eventDeviceId =
+    payload.deviceId === null || payload.deviceId === undefined
+      ? ''
+      : String(payload.deviceId).trim();
+  // 其它设备的事件不属于本曲线：静默忽略（不计数，计数只统计「本设备但追加失败」的）
+  if (eventDeviceId === '' || eventDeviceId !== deviceId.value) {
+    return;
+  }
+  const propertyId = String(payload.propertyId ?? '').trim();
+  if (propertyId === '') {
+    return;
+  }
+  const outcome = appendLiveSeriesPoint(
+    results.value,
+    {
+      propertyId,
+      quality: payload.quality ?? null,
+      ts: payload.ts ?? null,
+      value: payload.value ?? null,
+    },
+    IOT_SERIES_LIVE_MAX_POINTS,
+  );
+  if (!outcome.matched) {
+    // 事件点位不在本次查询内：与本曲线无关，静默忽略
+    return;
+  }
+  if (!outcome.appended) {
+    liveDroppedCount.value += 1;
+    return;
+  }
+  results.value = outcome.results;
+  liveFollowedCount.value += 1;
+  if (!outcome.good) {
+    liveNonGoodCount.value += 1;
+  }
+  void renderChart();
+}
+
+watch(liveFollow, (enabled) => {
+  if (!enabled) {
+    stopLiveFollow();
+    return;
+  }
+  // 实时跟随已在内存追加，关掉周期全量重查：避免 30s 一次 IoTDB 查询把刚跟随的点整批覆盖
+  autoRefresh.value = false;
+  startLiveFollow();
+});
+
+// 曲线消失（重查为空 / 失败 / 点位全被清掉）就自动关闭跟随，避免「开着却永远追加不进」
+watch(hasChart, (value) => {
+  if (!value && liveFollow.value) {
+    liveFollow.value = false;
+  }
+});
 
 // ---------- CSV 导出 ----------
 
@@ -886,6 +1049,24 @@ function onExport(): void {
           }}
         </span>
       </span>
+      <span class="flex items-center gap-2 text-sm">
+        <Switch
+          v-model:checked="liveFollow"
+          :disabled="!hasChart"
+          size="small"
+        />
+        {{ $t('page.iot.series.liveFollow') }}
+        <Tag :color="liveState.color">{{ liveState.text }}</Tag>
+        <span class="text-xs text-muted-foreground">
+          {{
+            hasChart
+              ? $t('page.iot.series.liveFollowHint', [
+                  String(IOT_SERIES_LIVE_MAX_POINTS),
+                ])
+              : $t('page.iot.series.liveUnavailable')
+          }}
+        </span>
+      </span>
     </div>
 
     <Collapse class="mt-3" ghost>
@@ -969,6 +1150,34 @@ function onExport(): void {
             show-icon
             type="info"
           />
+          <template v-if="liveFollow">
+            <!-- 断线必须可见（Tag 变黄 + 这条 Alert），不得让曲线静止而用户以为设备没上报 -->
+            <Alert
+              v-if="realtimeState === 'reconnecting'"
+              class="mb-2"
+              :description="realtimeError || undefined"
+              :message="$t('page.iot.series.liveReconnectingDesc')"
+              show-icon
+              type="warning"
+            />
+            <div class="mb-2 text-xs text-muted-foreground">
+              {{
+                $t('page.iot.series.liveFollowed', [String(liveFollowedCount)])
+              }}
+              <span v-if="liveDroppedCount > 0">
+                ·
+                {{
+                  $t('page.iot.series.liveDropped', [String(liveDroppedCount)])
+                }}
+              </span>
+              <span v-if="liveNonGoodCount > 0">
+                ·
+                {{
+                  $t('page.iot.series.liveNonGood', [String(liveNonGoodCount)])
+                }}
+              </span>
+            </div>
+          </template>
 
           <!-- 逐点位状态：失败原样展示后端 message，空数据与失败严格分开 -->
           <div v-for="item in results" :key="item.propertyId" class="mb-2">

@@ -666,7 +666,18 @@
       "partialNumeric": "有 {0} 个点的值非数值，曲线在这些点断开",
       "ts": "时间",
       "value": "数值",
-      "quality": "质量码"
+      "quality": "质量码",
+      "liveFollow": "实时跟随",
+      "liveFollowHint": "打开后，新上报的点会直接追加到曲线（每个点位最多保留最近 {0} 点），不重查历史。",
+      "liveActive": "实时",
+      "liveConnecting": "连接中",
+      "liveReconnecting": "重连中",
+      "liveOff": "已关闭",
+      "liveUnavailable": "需先查询出曲线后才能实时跟随",
+      "liveFollowed": "已跟随 {0} 点",
+      "liveDropped": "已忽略 {0} 条无法追加的实时点（时间戳重复/非法，或该点位查询失败）",
+      "liveNonGood": "其中 {0} 点质量非 good，曲线按原始值展示，明细表保留质量码",
+      "liveReconnectingDesc": "实时连接中断，正在自动重连；恢复前不会追加新点。"
     },
     "maintenance": {
       "title": "维护窗口（计划停机）",
@@ -1243,7 +1254,8 @@
       "disconnected": "实时连接中断",
       "disconnectedHint": "页面数据可能不是最新，正在自动重连（也可手动刷新）。最近错误：{0}",
       "live": "实时连接",
-      "connecting": "实时连接中"
+      "connecting": "实时连接中",
+      "reconnecting": "实时中断"
     },
     "topology": {
       "title": "接入拓扑",
