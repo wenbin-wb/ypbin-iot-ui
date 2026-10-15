@@ -561,7 +561,13 @@
       "parentName": "上级分组",
       "parentPlaceholder": "请选择上级分组",
       "parentHelp": "留空 = 根分组（顶级分组）",
-      "parentRoot": "根分组"
+      "parentRoot": "根分组",
+      "memberBatchAdd": "批量加入",
+      "batchTitle": "批量加入设备",
+      "batchSelectPlaceholder": "选择要加入分组的设备（可多选）",
+      "batchDeviceLabel": "设备",
+      "batchAddSuccess": "新增 {0} 台，已存在 {1} 台",
+      "batchSelectRequired": "请至少选择一台设备"
     },
     "availability": {
       "title": "可用率 / 断档{0}",
@@ -1220,6 +1226,17 @@
       "disconnectedHint": "页面数据可能不是最新，正在自动重连（也可手动刷新）。最近错误：{0}",
       "live": "实时连接",
       "connecting": "实时连接中"
+    },
+    "topology": {
+      "title": "接入拓扑",
+      "desc": "平台到接入节点、平台到租户的直连关系；节点越大代表采集中租户数 / 设备数越多，颜色反映租约与上报健康状态。",
+      "platform": "IoT 平台",
+      "accessNodes": "接入节点",
+      "tenants": "租户",
+      "holdingShort": "持有 {0} 个租户",
+      "deviceShort": "{0} 台设备",
+      "empty": "暂无可展示的接入节点与租户：等待 access 节点注册或租户首次接入后自动出现。",
+      "noOwnershipHint": "后端暂未提供「接入节点 → 租户」的归属映射，图中只画平台到两者的直连关系，不猜归属。"
     }
   },
   "ai": {
