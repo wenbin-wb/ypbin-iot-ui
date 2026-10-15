@@ -52,6 +52,11 @@ export namespace IotGroupApi {
     deviceIds: string[];
   }
 
+  /** 批量移除请求（后端 `IotDeviceGroupMemberBatchRemoveReq`，一次最多 500 个）。 */
+  export interface GroupMemberBatchRemoveReq {
+    memberIds: string[];
+  }
+
   /**
    * 批量加入结果（后端 `BatchMemberAddResp`）：
    * `added` 为新增数，`skipped` 为已在分组中、被跳过的数量。
@@ -191,6 +196,23 @@ export async function addGroupMembersBatch(
   const data: IotGroupApi.GroupMemberBatchSaveReq = { deviceIds };
   return requestClient.post<IotGroupApi.GroupMemberBatchAddResp>(
     `/iot/groups/${groupId}/members/batch`,
+    data,
+  );
+}
+
+/**
+ * 批量把成员移出分组。
+ *
+ * ⚠️ `memberIds` 是**成员行主键**（`GroupMemberResp.id`）列表，不是 `deviceId`；
+ * 后端整批校验分组归属，缺失/跨组会整体拒绝并列出 ID，前端不预判、不吞异常。
+ */
+export async function removeGroupMembersBatch(
+  groupId: string,
+  memberIds: string[],
+) {
+  const data: IotGroupApi.GroupMemberBatchRemoveReq = { memberIds };
+  return requestClient.post<number>(
+    `/iot/groups/${groupId}/members/batch-remove`,
     data,
   );
 }

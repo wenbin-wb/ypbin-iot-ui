@@ -26,6 +26,7 @@ import {
   getDeviceOptions,
   getGroupMembers,
   removeGroupMember,
+  removeGroupMembersBatch,
 } from '#/api/iot';
 import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
@@ -34,7 +35,8 @@ import { extractErrorMessage } from '#/utils/error';
  * 分组成员管理：查看 / 加入 / 移出，入口在「设备分组」页。
  *
  * 成员接口：`GET /groups/{id}/members`、`POST /groups/{id}/members`、
- * `POST /groups/{id}/members/batch`（批量）、`DELETE /groups/{id}/members/{memberId}`。
+ * `POST /groups/{id}/members/batch`（批量加入）、`POST /groups/{id}/members/batch-remove`
+ * （批量移除）、`DELETE /groups/{id}/members/{memberId}`。
  * 移除传的是**成员行主键**（`member.id`），不是 deviceId —— 传错会「点得动但删不掉」。
  *
  * 空分组必须有**空态引导**（不是一句「暂无数据」）：说明设备在设备台账创建，并给一个能点过去的按钮。
@@ -78,6 +80,9 @@ const selectedDeviceId = ref<string | undefined>();
 const adding = ref(false);
 const removingId = ref('');
 const batchSubmitting = ref(false);
+/** 批量移除选中的成员行主键（`GroupMemberResp.id`，不是 deviceId）。 */
+const selectedMemberIds = ref<string[]>([]);
+const batchRemoving = ref(false);
 
 /**
  * 批量加入表单：ApiSelect 多选，api 直接复用 `getDeviceOptions`。
@@ -196,8 +201,26 @@ const columns = computed(() => [
   { key: 'action', title: $t('common.action'), width: 110 },
 ]);
 
+/**
+ * 成员表行选择：仅 iot:group:update 用户可勾选（无权限连选择列都不出现）。
+ * `selectedRowKeys` 用成员行主键 id，批量移除直接把它交给后端。
+ */
+const rowSelection = computed(() => {
+  if (!canUpdateGroup.value) {
+    return undefined;
+  }
+  return {
+    onChange: (selectedRowKeys: Array<number | string>) => {
+      selectedMemberIds.value = selectedRowKeys.map(String);
+    },
+    selectedRowKeys: selectedMemberIds.value,
+  };
+});
+
 const [Drawer, drawerApi] = useVbenDrawer<IotGroupApi.GroupResp | null>({
   onOpenChange(isOpen: boolean) {
+    // 抽屉开/关都清空勾选：避免把上一个分组的成员 id 带到下一次批量移除
+    selectedMemberIds.value = [];
     if (!isOpen) {
       return;
     }
@@ -221,9 +244,12 @@ async function loadMembers() {
   loadError.value = '';
   try {
     members.value = await getGroupMembers(groupId.value);
+    // 列表刷新后旧勾选可能已不存在（被他人移除/切分页）⇒ 一律清空，避免失效 ID 提交
+    selectedMemberIds.value = [];
   } catch (error) {
     // 失败不画成空态：清空列表但把错误显示出来
     members.value = [];
+    selectedMemberIds.value = [];
     loadError.value = extractErrorMessage(error, $t('common.requestFailed'));
   } finally {
     loading.value = false;
@@ -258,6 +284,37 @@ async function onAdd() {
     // 提示由全局请求拦截器统一处理（如「设备已在分组中」），这里只兜底避免未处理拒绝
   } finally {
     adding.value = false;
+  }
+}
+
+/**
+ * 批量移除选中成员。
+ *
+ * 防重复：`batchRemoving` 在任何 await 之前置位，按钮同时进入 disabled/loading，
+ * Popconfirm 也据此禁用，连续确认只会发一次请求。
+ */
+async function onBatchRemove() {
+  if (batchRemoving.value) {
+    return;
+  }
+  const memberIds = [...selectedMemberIds.value];
+  if (memberIds.length === 0) {
+    return;
+  }
+  batchRemoving.value = true;
+  try {
+    const removed = await removeGroupMembersBatch(groupId.value, memberIds);
+    message.success(
+      $t('page.iot.group.memberBatchRemoveSuccess', [String(removed)]),
+    );
+    // 成功先清选再刷新，保证按钮立刻回到禁用态
+    selectedMemberIds.value = [];
+    await loadMembers();
+  } catch (error) {
+    // 原样展示后端 message（含缺失/跨组成员等整批拒绝原因），不静默
+    message.error(extractErrorMessage(error, $t('common.requestFailed')));
+  } finally {
+    batchRemoving.value = false;
   }
 }
 
@@ -301,6 +358,25 @@ defineExpose({ drawerApi });
         <Button @click="batchModalApi.open()">
           {{ $t('page.iot.group.memberBatchAdd') }}
         </Button>
+        <Popconfirm
+          :cancel-text="$t('common.cancel')"
+          :disabled="selectedMemberIds.length === 0 || batchRemoving"
+          :ok-text="$t('common.confirm')"
+          :title="
+            $t('page.iot.group.memberBatchRemoveConfirm', [
+              String(selectedMemberIds.length),
+            ])
+          "
+          @confirm="onBatchRemove"
+        >
+          <Button
+            danger
+            :disabled="selectedMemberIds.length === 0 || batchRemoving"
+            :loading="batchRemoving"
+          >
+            {{ $t('page.iot.group.memberBatchRemove') }}
+          </Button>
+        </Popconfirm>
       </div>
 
       <BatchModal :title="$t('page.iot.group.batchTitle')" class="w-[600px]">
@@ -310,11 +386,13 @@ defineExpose({ drawerApi });
       <Alert v-if="loadError" :message="loadError" show-icon type="error" />
 
       <Spin :spinning="loading">
+        <!-- vben-ui-dev-exempt: R3 分组成员是抽屉内轻量列表，沿用既有 a-table；task-29 明确要求 a-table row-selection -->
         <Table
           v-if="members.length > 0"
           :columns="columns"
           :data-source="members"
           :pagination="false"
+          :row-selection="rowSelection"
           row-key="id"
           size="small"
         >
