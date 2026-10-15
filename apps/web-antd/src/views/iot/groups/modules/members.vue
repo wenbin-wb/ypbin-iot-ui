@@ -340,15 +340,15 @@ defineExpose({ drawerApi });
 </script>
 
 <template>
-  <Drawer class="w-[900px]">
+  <Drawer class="w-full max-w-[900px]">
     <div class="flex flex-col gap-3">
-      <div v-if="canUpdateGroup" class="flex items-center gap-2">
+      <div v-if="canUpdateGroup" class="flex flex-wrap items-center gap-2">
         <Select
           v-model:value="selectedDeviceId"
           :options="selectableDevices"
           :placeholder="$t('page.iot.group.memberSelectPlaceholder')"
           allow-clear
-          class="min-w-[280px]"
+          class="w-full min-w-0 sm:w-[280px]"
           show-search
         />
         <Button type="primary" :loading="adding" @click="onAdd">
@@ -379,7 +379,10 @@ defineExpose({ drawerApi });
         </Popconfirm>
       </div>
 
-      <BatchModal :title="$t('page.iot.group.batchTitle')" class="w-[600px]">
+      <BatchModal
+        :title="$t('page.iot.group.batchTitle')"
+        class="w-full max-w-[600px]"
+      >
         <BatchForm />
       </BatchModal>
 
@@ -393,6 +396,7 @@ defineExpose({ drawerApi });
           :data-source="members"
           :pagination="false"
           :row-selection="rowSelection"
+          :scroll="{ x: 'max-content' }"
           row-key="id"
           size="small"
         >

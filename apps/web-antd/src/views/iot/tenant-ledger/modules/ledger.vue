@@ -364,19 +364,24 @@ function onToggleAssignable(row: IotLedgerApi.LedgerResp, assignable: boolean) {
         </template>
 
         <template #toolbar-tools>
-          <InputSearch
-            v-model:value="tenantKeyword"
-            allow-clear
-            class="w-56"
-            :placeholder="$t('page.iot.ledger.tenantSearchPlaceholder')"
-            @change="onTenantKeywordChange"
-            @search="onTenantSearch"
-          />
-          <!-- 本页没有 create 类页面级写操作，故用**读**权限码门禁刷新按钮；
+          <div class="flex flex-wrap items-center gap-2">
+            <InputSearch
+              v-model:value="tenantKeyword"
+              allow-clear
+              class="w-56"
+              :placeholder="$t('page.iot.ledger.tenantSearchPlaceholder')"
+              @change="onTenantKeywordChange"
+              @search="onTenantSearch"
+            />
+            <!-- 本页没有 create 类页面级写操作，故用**读**权限码门禁刷新按钮；
                写操作（暂停/恢复接入）在行内，用 `iot:ledger:update`。 -->
-          <Button v-access:code="['iot:ledger:list']" @click="gridApi.query()">
-            {{ $t('common.refresh') }}
-          </Button>
+            <Button
+              v-access:code="['iot:ledger:list']"
+              @click="gridApi.query()"
+            >
+              {{ $t('common.refresh') }}
+            </Button>
+          </div>
         </template>
 
         <!-- 聚合字段三列：undefined（后端未提供）才显示「待接入」；0 / 空串是真实值 -->

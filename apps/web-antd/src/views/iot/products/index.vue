@@ -119,7 +119,10 @@ function openGuide() {
   <Page auto-content-height>
     <FormDrawer @reload="gridApi.query()" />
     <DetailDrawer @reload="gridApi.query()" />
-    <GuideDrawer :title="$t('page.iot.onboarding.title')" class="w-[900px]">
+    <GuideDrawer
+      :title="$t('page.iot.onboarding.title')"
+      class="w-full max-w-[900px]"
+    >
       <OnboardingGuide @done="gridApi.query()" />
     </GuideDrawer>
     <!--
@@ -134,17 +137,19 @@ function openGuide() {
     />
     <Grid>
       <template #toolbar-tools>
-        <Button class="mr-2" @click="openGuide">
-          {{ $t('page.iot.onboarding.openGuide') }}
-        </Button>
-        <Button
-          v-access:code="['iot:product:create']"
-          type="primary"
-          @click="FormDrawerApi.setData(null).open()"
-        >
-          <template #icon><Plus /></template>
-          {{ $t('ui.actionTitle.create', [$t('page.iot.product.name')]) }}
-        </Button>
+        <div class="flex flex-wrap items-center gap-2">
+          <Button @click="openGuide">
+            {{ $t('page.iot.onboarding.openGuide') }}
+          </Button>
+          <Button
+            v-access:code="['iot:product:create']"
+            type="primary"
+            @click="FormDrawerApi.setData(null).open()"
+          >
+            <template #icon><Plus /></template>
+            {{ $t('ui.actionTitle.create', [$t('page.iot.product.name')]) }}
+          </Button>
+        </div>
       </template>
 
       <!-- 空态引导：说明「为什么是空的 + 下一步点哪里」，而不是一张空白表格 -->
