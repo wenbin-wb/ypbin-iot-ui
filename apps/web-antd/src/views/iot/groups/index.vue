@@ -118,14 +118,16 @@ function onDelete(row: GroupRow) {
       </template>
 
       <template #toolbar-tools>
-        <Button
-          v-access:code="['iot:group:create']"
-          type="primary"
-          @click="FormDrawerApi.setData(null).open()"
-        >
-          <template #icon><Plus /></template>
-          {{ $t('ui.actionTitle.create', [$t('page.iot.group.name')]) }}
-        </Button>
+        <div class="flex flex-wrap items-center gap-2">
+          <Button
+            v-access:code="['iot:group:create']"
+            type="primary"
+            @click="FormDrawerApi.setData(null).open()"
+          >
+            <template #icon><Plus /></template>
+            {{ $t('ui.actionTitle.create', [$t('page.iot.group.name')]) }}
+          </Button>
+        </div>
       </template>
 
       <template #action="{ row }">

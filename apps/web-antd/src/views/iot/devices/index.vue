@@ -588,15 +588,21 @@ function openImport() {
     <DetailDrawer />
     <AvailabilityDrawer />
     <SeriesDrawer />
-    <GuideDrawer :title="$t('page.iot.onboarding.title')" class="w-[900px]">
+    <GuideDrawer
+      :title="$t('page.iot.onboarding.title')"
+      class="w-full max-w-[900px]"
+    >
       <OnboardingGuide @add-device="onGuideAddDevice" @done="gridApi.query()" />
     </GuideDrawer>
-    <LedgerDrawer :title="$t('page.iot.ledger.pageTitle')" class="w-[1000px]">
+    <LedgerDrawer
+      :title="$t('page.iot.ledger.pageTitle')"
+      class="w-full max-w-[1000px]"
+    >
       <TenantLedger />
     </LedgerDrawer>
     <ImportDrawer
       :title="$t('page.iot.device.import.title')"
-      class="w-[1000px]"
+      class="w-full max-w-[1000px]"
     >
       <DeviceImport ref="ImportPanel" />
     </ImportDrawer>
@@ -632,121 +638,109 @@ function openImport() {
     />
     <Grid @checkbox-change="onCheckboxChange">
       <template #toolbar-tools>
-        <!-- 实时连接状态：live/connecting/reconnecting；closed（无 token）不渲染 -->
-        <Tag v-if="realtimeTag" :color="realtimeTag.color" class="mr-2">
-          {{ realtimeTag.text }}
-        </Tag>
-        <!-- 接入向导入口：不带权限码（所有角色可见，先知道下一步做什么）； -->
-        <!-- 向导里的写动作各自沿用 iot:product:create / iot:product:publish / iot:device:create。 -->
-        <Button class="mr-2" @click="openGuide">
-          {{ $t('page.iot.onboarding.openGuide') }}
-        </Button>
-        <!-- 租户接入台账：平台级权限（platform_only=1），非平台管理员看不到这个按钮 -->
-        <Button
-          v-access:code="['iot:ledger:list']"
-          class="mr-2"
-          @click="openLedger"
-        >
-          {{ $t('page.iot.ledger.pageTitle') }}
-        </Button>
-        <!--
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- 实时连接状态：live/connecting/reconnecting；closed（无 token）不渲染 -->
+          <Tag v-if="realtimeTag" :color="realtimeTag.color">
+            {{ realtimeTag.text }}
+          </Tag>
+          <!-- 接入向导入口：不带权限码（所有角色可见，先知道下一步做什么）； -->
+          <!-- 向导里的写动作各自沿用 iot:product:create / iot:product:publish / iot:device:create。 -->
+          <Button @click="openGuide">
+            {{ $t('page.iot.onboarding.openGuide') }}
+          </Button>
+          <!-- 租户接入台账：平台级权限（platform_only=1），非平台管理员看不到这个按钮 -->
+          <Button v-access:code="['iot:ledger:list']" @click="openLedger">
+            {{ $t('page.iot.ledger.pageTitle') }}
+          </Button>
+          <!--
           批量运维：按钮按权限码显示（iot:device:update / iot:device:delete），
           未勾选或批量请求在途时禁用。启用无破坏性后果直接执行；停用/删除必须 Popconfirm 讲清后果。
         -->
-        <Button
-          v-access:code="['iot:device:update']"
-          class="mr-2"
-          data-testid="batch-enable"
-          :disabled="batchActionDisabled"
-          @click="onBatchStatus(DEVICE_ENABLED)"
-        >
-          {{ $t('page.iot.device.batchEnable') }}
-        </Button>
-        <Popconfirm
-          :cancel-text="$t('common.cancel')"
-          :ok-text="$t('page.iot.device.disabled')"
-          :title="
-            $t('page.iot.device.batchDisableConfirm', [
-              String(selectedIds.length),
-            ])
-          "
-          @confirm="onBatchStatus(DEVICE_DISABLED)"
-        >
           <Button
             v-access:code="['iot:device:update']"
-            class="mr-2"
-            data-testid="batch-disable"
+            data-testid="batch-enable"
             :disabled="batchActionDisabled"
+            @click="onBatchStatus(DEVICE_ENABLED)"
           >
-            {{ $t('page.iot.device.batchDisable') }}
+            {{ $t('page.iot.device.batchEnable') }}
           </Button>
-        </Popconfirm>
-        <Popconfirm
-          :cancel-text="$t('common.cancel')"
-          :ok-text="$t('common.delete')"
-          :title="
-            $t('page.iot.device.batchDeleteConfirm', [
-              String(selectedIds.length),
-            ])
-          "
-          @confirm="onBatchDelete"
-        >
+          <Popconfirm
+            :cancel-text="$t('common.cancel')"
+            :ok-text="$t('page.iot.device.disabled')"
+            :title="
+              $t('page.iot.device.batchDisableConfirm', [
+                String(selectedIds.length),
+              ])
+            "
+            @confirm="onBatchStatus(DEVICE_DISABLED)"
+          >
+            <Button
+              v-access:code="['iot:device:update']"
+              data-testid="batch-disable"
+              :disabled="batchActionDisabled"
+            >
+              {{ $t('page.iot.device.batchDisable') }}
+            </Button>
+          </Popconfirm>
+          <Popconfirm
+            :cancel-text="$t('common.cancel')"
+            :ok-text="$t('common.delete')"
+            :title="
+              $t('page.iot.device.batchDeleteConfirm', [
+                String(selectedIds.length),
+              ])
+            "
+            @confirm="onBatchDelete"
+          >
+            <Button
+              v-access:code="['iot:device:delete']"
+              danger
+              data-testid="batch-delete"
+              :disabled="batchActionDisabled"
+            >
+              {{ $t('page.iot.device.batchDelete') }}
+            </Button>
+          </Popconfirm>
+          <!-- 批量打标签：后端权限为 iot:tag:create/update 任一（SaMode.OR），故两码都放行 -->
           <Button
-            v-access:code="['iot:device:delete']"
-            class="mr-2"
-            danger
-            data-testid="batch-delete"
-            :disabled="batchActionDisabled"
+            v-access:code="['iot:tag:create', 'iot:tag:update']"
+            data-testid="batch-tag-set"
+            :disabled="selectedIds.length === 0"
+            @click="openBatchTags('set')"
           >
-            {{ $t('page.iot.device.batchDelete') }}
+            {{ $t('page.iot.device.batchTagSet') }}
           </Button>
-        </Popconfirm>
-        <!-- 批量打标签：后端权限为 iot:tag:create/update 任一（SaMode.OR），故两码都放行 -->
-        <Button
-          v-access:code="['iot:tag:create', 'iot:tag:update']"
-          class="mr-2"
-          data-testid="batch-tag-set"
-          :disabled="selectedIds.length === 0"
-          @click="openBatchTags('set')"
-        >
-          {{ $t('page.iot.device.batchTagSet') }}
-        </Button>
-        <Button
-          v-access:code="['iot:tag:delete']"
-          class="mr-2"
-          data-testid="batch-tag-remove"
-          :disabled="selectedIds.length === 0"
-          @click="openBatchTags('remove')"
-        >
-          {{ $t('page.iot.device.batchTagRemove') }}
-        </Button>
-        <!-- 导出当前筛选结果（服务端全量，不是当前页）；权限沿用列表读权限 -->
-        <Button
-          v-access:code="['iot:device:list']"
-          class="mr-2"
-          data-testid="export-csv"
-          :loading="exportLoading"
-          @click="onExportCsv"
-        >
-          <template #icon><Download /></template>
-          {{ $t('page.iot.device.exportCsv') }}
-        </Button>
-        <!-- 批量导入（CSV）：一次能建上万台设备 ⇒ 独立权限码 iot:device:import -->
-        <Button
-          v-access:code="['iot:device:import']"
-          class="mr-2"
-          @click="openImport"
-        >
-          {{ $t('page.iot.device.import.title') }}
-        </Button>
-        <Button
-          v-access:code="['iot:device:create']"
-          type="primary"
-          @click="FormDrawerApi.setData(null).open()"
-        >
-          <template #icon><Plus /></template>
-          {{ $t('ui.actionTitle.create', [$t('page.iot.device.name')]) }}
-        </Button>
+          <Button
+            v-access:code="['iot:tag:delete']"
+            data-testid="batch-tag-remove"
+            :disabled="selectedIds.length === 0"
+            @click="openBatchTags('remove')"
+          >
+            {{ $t('page.iot.device.batchTagRemove') }}
+          </Button>
+          <!-- 导出当前筛选结果（服务端全量，不是当前页）；权限沿用列表读权限 -->
+          <Button
+            v-access:code="['iot:device:list']"
+            data-testid="export-csv"
+            :loading="exportLoading"
+            @click="onExportCsv"
+          >
+            <template #icon><Download /></template>
+            {{ $t('page.iot.device.exportCsv') }}
+          </Button>
+          <!-- 批量导入（CSV）：一次能建上万台设备 ⇒ 独立权限码 iot:device:import -->
+          <Button v-access:code="['iot:device:import']" @click="openImport">
+            {{ $t('page.iot.device.import.title') }}
+          </Button>
+          <Button
+            v-access:code="['iot:device:create']"
+            type="primary"
+            @click="FormDrawerApi.setData(null).open()"
+          >
+            <template #icon><Plus /></template>
+            {{ $t('ui.actionTitle.create', [$t('page.iot.device.name')]) }}
+          </Button>
+        </div>
       </template>
 
       <!-- 空态引导：说明「为什么是空的 + 下一步点哪里」，而不是一张空白表格 -->

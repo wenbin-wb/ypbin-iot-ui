@@ -716,7 +716,7 @@ onUnmounted(() => {
             @checkbox-change="onCheckboxChange"
           >
             <template #toolbar-tools>
-              <Space>
+              <Space wrap>
                 <!-- 导出当前筛选结果（服务端全量，不是当前页）；权限沿用列表读权限 -->
                 <Button
                   v-access:code="['iot:alert:list']"
@@ -780,7 +780,9 @@ onUnmounted(() => {
 
             <!-- 展开行：触发值 / 阈值 / 时间线 / 投递记录 / 该点位近期曲线缩略 -->
             <template #expand="{ row }">
-              <div class="grid grid-cols-3 gap-4 p-2 text-sm">
+              <div
+                class="grid grid-cols-1 gap-4 p-2 text-sm sm:grid-cols-2 md:grid-cols-3"
+              >
                 <div class="space-y-1">
                   <div>
                     <span class="text-muted-foreground">
@@ -924,7 +926,7 @@ onUnmounted(() => {
             @checkbox-change="onRuleCheckboxChange"
           >
             <template #toolbar-tools>
-              <Space>
+              <Space wrap>
                 <Button
                   v-if="canSaveRule"
                   :disabled="selectedRuleIds.length === 0"

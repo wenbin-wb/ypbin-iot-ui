@@ -390,7 +390,9 @@ function onProjectClick(item: WorkbenchProjectItem) {
         {{ $t('page.dashboard.headerDesc') }}
       </template>
       <template #actions>
-        <div class="flex items-center gap-6 md:gap-10">
+        <div
+          class="flex flex-wrap items-center justify-end gap-x-6 gap-y-2 md:gap-10"
+        >
           <div class="flex flex-col items-end">
             <span class="text-xs text-muted-foreground">{{
               $t('page.dashboard.deviceTotal')
@@ -441,7 +443,7 @@ function onProjectClick(item: WorkbenchProjectItem) {
     </WorkbenchHeader>
 
     <!-- 今日概览指标条 -->
-    <div class="mt-5 grid grid-cols-2 gap-4 xl:grid-cols-4">
+    <div class="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <div
         v-for="(m, i) in metricCards"
         :key="m.key"

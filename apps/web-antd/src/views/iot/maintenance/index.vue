@@ -153,7 +153,10 @@ function openGuide() {
 <template>
   <Page auto-content-height>
     <FormDrawer @reload="gridApi.query()" />
-    <GuideDrawer :title="$t('page.iot.onboarding.title')" class="w-[900px]">
+    <GuideDrawer
+      :title="$t('page.iot.onboarding.title')"
+      class="w-full max-w-[900px]"
+    >
       <OnboardingGuide @done="gridApi.query()" />
     </GuideDrawer>
     <!-- 失败态必须挂在表格之外：真实 vxe 只在表体无行时渲染 `#empty` 槽，
@@ -165,17 +168,19 @@ function openGuide() {
     />
     <Grid>
       <template #toolbar-tools>
-        <Button class="mr-2" @click="openGuide">
-          {{ $t('page.iot.onboarding.openGuide') }}
-        </Button>
-        <Button
-          v-access:code="['iot:maintenance:create']"
-          type="primary"
-          @click="FormDrawerApi.setData(null).open()"
-        >
-          <template #icon><Plus /></template>
-          {{ $t('page.iot.maintenance.create') }}
-        </Button>
+        <div class="flex flex-wrap items-center gap-2">
+          <Button @click="openGuide">
+            {{ $t('page.iot.onboarding.openGuide') }}
+          </Button>
+          <Button
+            v-access:code="['iot:maintenance:create']"
+            type="primary"
+            @click="FormDrawerApi.setData(null).open()"
+          >
+            <template #icon><Plus /></template>
+            {{ $t('page.iot.maintenance.create') }}
+          </Button>
+        </div>
       </template>
 
       <!-- 空态引导：维护窗口为空时说明「为什么是空的 + 下一步点哪里」 -->

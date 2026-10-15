@@ -9,8 +9,9 @@ import {
   AnalysisChartsTabs,
   useVbenDrawer,
 } from '@vben/common-ui';
+import { LayoutGrid } from '@vben/icons';
 
-import { Alert, Tag, Tooltip } from 'ant-design-vue';
+import { Alert, Button, Tag, Tooltip } from 'ant-design-vue';
 
 import { $t } from '#/locales';
 
@@ -26,6 +27,7 @@ import AnalyticsVisitsData from './analytics-visits-data.vue';
 import AnalyticsVisitsSales from './analytics-visits-sales.vue';
 import AnalyticsVisitsSource from './analytics-visits-source.vue';
 import AnalyticsVisits from './analytics-visits.vue';
+import BoardDrawer from './board/board-drawer.vue';
 
 // ---- 统一视觉（与工作台同一套语言）----
 const BRAND_GRAD =
@@ -42,6 +44,11 @@ const { error: realtimeError, state: realtimeState } = useDashboardRealtime(
 // 术语词典抽屉：与工作台/接入向导共用同一份内容（view 层只负责打开）
 const [HelpDrawerContainer, helpDrawerApi] = useVbenDrawer({
   connectedComponent: HelpDrawer,
+});
+
+// 组态看板：本页入口，布局/数据/实时订阅都在 board-drawer 内部（不改后端菜单）
+const [BoardDrawerContainer, boardDrawerApi] = useVbenDrawer({
+  connectedComponent: BoardDrawer,
 });
 
 /** 演示数据兜底时页面数据可能为 null，模板统一走空对象口径 */
@@ -187,6 +194,10 @@ function goAlerts() {
 function openHelp() {
   helpDrawerApi.open();
 }
+
+function openBoard() {
+  boardDrawerApi.open();
+}
 </script>
 
 <template>
@@ -266,6 +277,14 @@ function openHelp() {
       show-icon
       type="warning"
     />
+
+    <!-- 组态看板入口：自定义组件 + 实时值 -->
+    <div class="mt-3 flex justify-end">
+      <Button @click="openBoard">
+        <LayoutGrid class="size-4" />
+        {{ $t('page.iot.board.entry') }}
+      </Button>
+    </div>
 
     <!-- 新手快速上手：面向第一次接入的物业/值班人员，术语问题统一走帮助抽屉 -->
     <NoviceGuideCard class="mt-5" @open-help="openHelp" />
@@ -446,6 +465,7 @@ function openHelp() {
     </div>
 
     <HelpDrawerContainer />
+    <BoardDrawerContainer />
   </div>
 </template>
 

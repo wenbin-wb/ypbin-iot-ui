@@ -548,7 +548,7 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
             </section>
 
             <!-- 最新值 + 可用率：两卡响应式并排（窄屏上下堆叠，不互相压缩） -->
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div class="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
               <section
                 class="rounded-xl border border-border/80 bg-card p-4"
                 data-section="overview-latest"
@@ -711,7 +711,7 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
             </section>
 
             <!-- 设备影子：reported / desired 两卡响应式并排 -->
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div class="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
               <section
                 class="rounded-xl border border-border/80 bg-card p-4"
                 data-section="overview-shadow-reported"
@@ -802,7 +802,7 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
             </div>
 
             <!-- 标签 + 凭据：两卡响应式并排（组件自带标题，外层只负责卡片容器） -->
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div class="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
               <section
                 class="rounded-xl border border-border/80 bg-card p-4"
                 data-section="overview-tags"

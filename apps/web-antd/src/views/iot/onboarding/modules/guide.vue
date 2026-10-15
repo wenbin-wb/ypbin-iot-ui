@@ -303,7 +303,7 @@ onMounted(async () => {
           {{ $t('page.iot.onboarding.step1Desc') }}
         </p>
 
-        <div class="grid grid-cols-2 gap-3">
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <button
             v-for="template in templates"
             :key="template.key"
@@ -340,7 +340,7 @@ onMounted(async () => {
           </button>
         </div>
 
-        <div v-if="selected" class="mt-3 grid grid-cols-2 gap-3">
+        <div v-if="selected" class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <div class="mb-1 text-sm">{{ $t('page.iot.product.name') }}</div>
             <Input v-model:value="productName" :maxlength="128" />

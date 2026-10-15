@@ -229,7 +229,7 @@ async function copyText(text: string) {
 <template>
   <!-- 架构对齐：根节点用 Page auto-content-height（其余 8 个 IoT 列表页的范式） -->
   <Page v-if="canList" auto-content-height>
-    <div class="mb-3 flex items-center gap-3">
+    <div class="mb-3 flex flex-wrap items-center gap-3">
       <div class="font-semibold">
         {{ $t('page.iot.openApiKey.title') }}
       </div>
@@ -351,6 +351,7 @@ async function copyText(text: string) {
   <Modal
     v-model:open="createOpen"
     :title="$t('page.iot.openApiKey.createTitle')"
+    width="min(520px, 92vw)"
     :confirm-loading="creating"
     :ok-text="$t('page.iot.openApiKey.create')"
     :cancel-text="$t('page.iot.openApiKey.cancel')"
@@ -391,7 +392,7 @@ async function copyText(text: string) {
           </div>
         </div>
       </div>
-      <div class="flex gap-3">
+      <div class="flex flex-col gap-3 sm:flex-row">
         <div class="flex-1">
           <div class="mb-1 text-sm">{{ $t('page.iot.openApiKey.qps') }}</div>
           <InputNumber v-model:value="formQps" :min="1" class="w-full" />
@@ -418,6 +419,7 @@ async function copyText(text: string) {
     v-model:open="issuedOpen"
     :title="$t('page.iot.openApiKey.issueResult')"
     :footer="null"
+    width="min(520px, 92vw)"
   >
     <Alert
       :message="$t('page.iot.openApiKey.oneTime')"

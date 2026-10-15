@@ -138,7 +138,7 @@ function reloadOnFilter() {
   <!-- 架构对齐：补上 auto-content-height（此前高度链与其它页不一致） -->
   <Page auto-content-height>
     <template v-if="canView">
-      <div class="mb-3 flex items-center gap-3">
+      <div class="mb-3 flex flex-wrap items-center gap-3">
         <div class="font-semibold">
           {{ $t('page.iot.platformAlert.title') }}
         </div>
@@ -146,7 +146,7 @@ function reloadOnFilter() {
           v-model:value="stateFilter"
           allow-clear
           :placeholder="$t('page.iot.platformAlert.allStates')"
-          class="w-40"
+          class="w-40 max-w-full"
           @change="reloadOnFilter"
         >
           <Select.Option value="PENDING">
@@ -163,7 +163,7 @@ function reloadOnFilter() {
           v-model:value="severityFilter"
           allow-clear
           :placeholder="$t('page.iot.platformAlert.allSeverities')"
-          class="w-40"
+          class="w-40 max-w-full"
           @change="reloadOnFilter"
         >
           <Select.Option value="CRITICAL">
