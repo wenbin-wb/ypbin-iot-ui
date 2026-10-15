@@ -221,7 +221,10 @@
       "notifyExtraEmailsPlaceholder": "Type an email and press Enter; multiple allowed",
       "notifyExtraEmailsInvalid": "These entries are not valid emails and will be ignored on save: {0}",
       "notifyExtraEmailsHint": "For mailboxes that are not system users (e.g. a shared alert group); if left empty, email only uses platform fallback mailboxes (nothing is delivered if none is configured).",
-      "notifyUnrecognized": "These legacy entries are neither users nor emails; they are kept as-is (the platform will not send to them): {0}"
+      "notifyUnrecognized": "These legacy entries are neither users nor emails; they are kept as-is (the platform will not send to them): {0}",
+      "exportCsv": "Export CSV",
+      "exportName": "alerts",
+      "exportFailed": "Failed to export alerts"
     },
     "display": {
       "unknown": "Unknown",
@@ -443,7 +446,16 @@
       "batchStatusFailed": "Failed to update selected devices",
       "batchDeleteFailed": "Failed to delete selected devices",
       "batchDisableConfirm": "This will disable the {0} selected device(s): the access side unbinds them and stops collection (point subscriptions are revoked). Continue?",
-      "batchDeleteConfirm": "This will delete the {0} selected device(s): they will be removed from the ledger and cannot be restored. Continue?"
+      "batchDeleteConfirm": "This will delete the {0} selected device(s): they will be removed from the ledger and cannot be restored. Continue?",
+      "exportCsv": "Export CSV",
+      "exportName": "devices",
+      "exportFailed": "Failed to export devices",
+      "batchTagSet": "Apply tag",
+      "batchTagRemove": "Remove tag",
+      "batchTagSetTitle": "Apply tag to {0} device(s)",
+      "batchTagRemoveTitle": "Remove tag from {0} device(s)",
+      "batchTagSetDone": "Tags applied: {0} created, {1} updated",
+      "batchTagRemoveDone": "Tags removed: {0}"
     },
     "event": {
       "title": "Runtime events",
@@ -934,8 +946,11 @@
         "keyRequired": "Tag key is required",
         "valueRequired": "Tag value is required",
         "keyTooLong": "Tag key exceeds the {0}-character limit",
-        "valueTooLong": "Tag value exceeds the {0}-character limit"
-      }
+        "valueTooLong": "Tag value exceeds the {0}-character limit",
+        "keysRequired": "Select at least one tag key"
+      },
+      "keys": "Tag keys",
+      "keysPlaceholder": "Type a tag key and press Enter; multiple allowed"
     },
     "credential": {
       "get": "View device credential",

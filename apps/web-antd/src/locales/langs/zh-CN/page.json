@@ -221,7 +221,10 @@
       "notifyExtraEmailsPlaceholder": "输入邮箱后回车，可填多个",
       "notifyExtraEmailsInvalid": "以下条目不是合法邮箱，保存后会被忽略：{0}",
       "notifyExtraEmailsHint": "用于非系统用户的邮箱（如公共告警组）；留空时邮件仅走平台兜底邮箱（未配置则不送达）。",
-      "notifyUnrecognized": "以下历史条目既不是用户也不是邮箱，将原样保留（平台不会向它们发送）：{0}"
+      "notifyUnrecognized": "以下历史条目既不是用户也不是邮箱，将原样保留（平台不会向它们发送）：{0}",
+      "exportCsv": "导出 CSV",
+      "exportName": "告警列表",
+      "exportFailed": "告警列表导出失败"
     },
     "display": {
       "unknown": "未知",
@@ -443,7 +446,16 @@
       "batchStatusFailed": "批量启停失败",
       "batchDeleteFailed": "批量删除失败",
       "batchDisableConfirm": "将停用选中的 {0} 台设备：停用后接入侧会解绑设备并停止采集（点位订阅一并撤销），确定吗？",
-      "batchDeleteConfirm": "将删除选中的 {0} 台设备：删除后设备从台账移除，且不可恢复，确定吗？"
+      "batchDeleteConfirm": "将删除选中的 {0} 台设备：删除后设备从台账移除，且不可恢复，确定吗？",
+      "exportCsv": "导出 CSV",
+      "exportName": "设备台账",
+      "exportFailed": "设备台账导出失败",
+      "batchTagSet": "批量打标签",
+      "batchTagRemove": "批量移除标签",
+      "batchTagSetTitle": "批量打标签（{0} 台设备）",
+      "batchTagRemoveTitle": "批量移除标签（{0} 台设备）",
+      "batchTagSetDone": "批量打标签完成：新增 {0} 条，更新 {1} 条",
+      "batchTagRemoveDone": "批量移除标签完成：删除 {0} 条"
     },
     "event": {
       "title": "运行期事件",
@@ -934,8 +946,11 @@
         "keyRequired": "标签键不能为空",
         "valueRequired": "标签值不能为空",
         "keyTooLong": "标签键超过 {0} 字符限制",
-        "valueTooLong": "标签值超过 {0} 字符限制"
-      }
+        "valueTooLong": "标签值超过 {0} 字符限制",
+        "keysRequired": "至少选择一个标签键"
+      },
+      "keys": "标签键（可多个）",
+      "keysPlaceholder": "输入标签键后回车，可多个"
     },
     "credential": {
       "get": "查看设备凭据",

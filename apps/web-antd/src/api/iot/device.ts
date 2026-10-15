@@ -115,6 +115,17 @@ export async function getDevicePage(params: IotDeviceApi.DeviceQuery) {
   );
 }
 
+/**
+ * 导出设备台账 CSV（按当前筛选条件导出**全量**，不是当前页）。
+ *
+ * 走 `requestClient.download`（内部 `responseReturn:'body'`）而不是 `get + responseType:'blob'`：
+ * 实例默认 `responseReturn:'data'` 会让默认响应拦截器去读 Blob 的 `code` 字段而误判失败；
+ * `download` 由拦截器直接返回 Blob。口径同 `api/iot/device-import.ts`、`api/system/log.ts`。
+ */
+export function exportDevicesCsv(params: IotDeviceApi.DeviceQuery) {
+  return requestClient.download<Blob>('/iot/devices/export', { params });
+}
+
 /** 查询设备下拉（维护窗口声明用；取前 200 条）。 */
 export async function getDeviceOptions(keyword?: string) {
   const result = await getDevicePage({ keyword, page: 1, pageSize: 200 });

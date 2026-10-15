@@ -9,6 +9,7 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { useAccess } from '@vben/access';
 import { Page, useVbenDrawer } from '@vben/common-ui';
+import { Download } from '@vben/icons';
 
 import {
   Alert,
@@ -19,6 +20,7 @@ import {
   Tabs,
   Tag,
 } from 'ant-design-vue';
+import dayjs from 'dayjs';
 
 import { useVbenVxeGrid, VbenTableAction } from '#/adapter/vxe-table';
 import {
@@ -30,10 +32,12 @@ import {
   setAlertRulesEnabled,
   silenceAlerts,
 } from '#/api/iot';
+import { exportAlertsCsv } from '#/api/iot/alert';
 import { createTrailingDebounce } from '#/api/iot/realtime';
 import { $t } from '#/locales';
 import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
+import { downloadBlobSafe } from '#/utils/file';
 
 import { formatDateTime } from '../shared/display';
 import {
@@ -199,6 +203,9 @@ const listError = ref('');
 
 const selectedIds = ref<string[]>([]);
 
+/** 导出请求在途：按钮 loading + 防重复点击。 */
+const exportLoading = ref(false);
+
 /**
  * 实例表的「静默丢弃」守卫（见 refresh-guard.ts）。
  *
@@ -341,6 +348,45 @@ const refreshOnRealtimeAlert = createTrailingDebounce(() => {
 onRealtimeEvent('alert', () => {
   refreshOnRealtimeAlert();
 });
+
+/**
+ * 导出当前筛选条件下的告警实例 CSV。
+ *
+ * 参数 = 搜索表单当前值 + `resolveDeviceFilter` 合并后的 URL 设备过滤（与列表查询同一规则），
+ * 否则「从设备台账带 ?deviceId= 进来」时，导出结果会比屏幕上看到的列表多。
+ * 文件名带日期；`downloadBlobSafe` 处理「HTTP 200 但响应体是业务失败 JSON」的伪文件。
+ */
+async function onExportCsv() {
+  if (exportLoading.value) {
+    return;
+  }
+  exportLoading.value = true;
+  try {
+    const formValues = (instanceGridApi.formApi?.form?.values ??
+      {}) as IotAlertApi.InstanceQuery;
+    const blob = await exportAlertsCsv({
+      ...formValues,
+      deviceId: resolveDeviceFilter(
+        formValues.deviceId,
+        presetDeviceId.value || undefined,
+      ),
+    });
+    const downloaded = await downloadBlobSafe(
+      blob,
+      `${$t('page.iot.alert.exportName')}_${dayjs().format('YYYYMMDD')}.csv`,
+      $t('page.iot.alert.exportFailed'),
+    );
+    if (downloaded) {
+      message.success($t('common.success'));
+    }
+  } catch (error) {
+    message.error(
+      extractErrorMessage(error, $t('page.iot.alert.exportFailed')),
+    );
+  } finally {
+    exportLoading.value = false;
+  }
+}
 
 async function onAck(ids: string[]) {
   try {
@@ -671,6 +717,16 @@ onUnmounted(() => {
           >
             <template #toolbar-tools>
               <Space>
+                <!-- 导出当前筛选结果（服务端全量，不是当前页）；权限沿用列表读权限 -->
+                <Button
+                  v-access:code="['iot:alert:list']"
+                  data-testid="export-csv"
+                  :loading="exportLoading"
+                  @click="onExportCsv"
+                >
+                  <template #icon><Download /></template>
+                  {{ $t('page.iot.alert.exportCsv') }}
+                </Button>
                 <Button
                   v-if="canAck"
                   :disabled="selectedIds.length === 0"
