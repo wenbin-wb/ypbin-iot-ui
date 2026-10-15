@@ -228,7 +228,7 @@ describe('设备详情抽屉宽度契约', () => {
 });
 
 describe('概览卡片分区', () => {
-  it('概览按卡片分区：8 个 section 标记 + space-y-4 节奏', async () => {
+  it('概览按卡片分区：9 个 section 标记 + space-y-4 节奏', async () => {
     const container = await mountDetail();
     for (const marker of [
       'overview-basic',
@@ -237,6 +237,7 @@ describe('概览卡片分区', () => {
       'overview-recent-events',
       'overview-shadow-reported',
       'overview-shadow-desired',
+      'overview-shadow-diff',
       'overview-tags',
       'overview-credential',
     ]) {
@@ -300,6 +301,33 @@ describe('概览卡片分区', () => {
       expect(table).toBeTruthy();
       expect(table?.closest('.overflow-x-auto')).toBeTruthy();
     }
+  });
+
+  it('🔴 影子区不再有过时误导文案：reported 空态不得推断成「设备没上报」', async () => {
+    const container = await mountDetail();
+    const reportedCard = container.querySelector(
+      '[data-section="overview-shadow-reported"]',
+    );
+    expect(reportedCard).toBeTruthy();
+    // 旧文案把「reported 为空」说成「生产代码无写入方」——后端上报链路已存在，属过时结论
+    expect(detailSource).not.toContain('reportedDisabled');
+    expect(reportedCard?.textContent).not.toContain('尚无数据不代表设备没上报');
+    // 有上报数据时直接展示表格（不再无条件挂一条 Alert）
+    expect(reportedCard?.querySelector('table')).toBeTruthy();
+  });
+
+  it('影子差异区块已接线（data-section + 真实差异表）', async () => {
+    const container = await mountDetail();
+    const diffSection = container.querySelector(
+      '[data-section="overview-shadow-diff"]',
+    );
+    expect(diffSection).toBeTruthy();
+    // mock 里 reported={temperature:20} / desired={temperature:21} ⇒ 一行「值不一致」
+    const differ = diffSection?.querySelector(
+      '[data-diff-status="value-differs"]',
+    );
+    expect(differ).toBeTruthy();
+    expect(differ?.textContent).toContain('temperature');
   });
 
   it('事件与断档页签：卡片分组 + 断档表横向滚动', async () => {

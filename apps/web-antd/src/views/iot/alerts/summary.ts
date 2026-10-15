@@ -70,6 +70,14 @@ export interface RuleSummary {
   ready: boolean;
   /** 「这样配会发生什么」（随模式变化的固定几条）。 */
   expectations: string[];
+  /**
+   * 多条件规则的**逐条**陈述（可选；单条件时为 undefined）。
+   *
+   * 引擎对每个点位条件各自独立判定、各自产生告警实例（**不是 AND**），
+   * 故这里按行列出「点位 比较符 阈值」，由调用方在摘要下方逐条渲染，
+   * 而不是把多条件压成一句会被误读为「且」的话。
+   */
+  conditionClauses?: { args: SummaryArg[]; key: string }[];
   /** 需要注意/修正的点（人话；后端返回的 message 也走同一条展示链路）。 */
   warnings: SummaryWarning[];
 }
