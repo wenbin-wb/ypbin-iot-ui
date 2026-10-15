@@ -2,6 +2,9 @@ import { createApp, h, nextTick } from 'vue';
 
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import AnalyticsAlertTrend from './analytics-alert-trend.vue';
+import AnalyticsDeviceGrowth from './analytics-device-growth.vue';
+import AnalyticsRuleTop from './analytics-rule-top.vue';
 import AnalyticsTrends from './analytics-trends.vue';
 import AnalyticsVisitsData from './analytics-visits-data.vue';
 import AnalyticsVisitsSales from './analytics-visits-sales.vue';
@@ -120,6 +123,87 @@ describe('dashboard 图表空态', () => {
       (item: { name: string }) => item.name,
     );
     expect(names).toEqual(['MQTT', 'Modbus TCP', '未知（coap）']);
+  });
+
+  it('告警趋势/设备增长空数据：同样走「暂无趋势数据」空态，不渲染画布', async () => {
+    const containers = [
+      mount(AnalyticsAlertTrend, { points: [] }),
+      mount(AnalyticsDeviceGrowth, { points: [] }),
+    ];
+    await nextTick();
+
+    for (const container of containers) {
+      expect(container.textContent).toContain(
+        '暂无趋势数据，设备接入并上报后自动展示',
+      );
+      expect(container.querySelector('.echarts-stub')).toBeNull();
+    }
+  });
+
+  it('规则 TOP 空数据：给出「近 30 天没有规则告警」，不渲染空列表', async () => {
+    const container = mount(AnalyticsRuleTop, { items: [] });
+    await nextTick();
+    expect(container.textContent).toContain('近 30 天没有规则告警');
+  });
+
+  it('告警趋势：按严重级别堆叠，图例复用告警中心级别文案', async () => {
+    mount(AnalyticsAlertTrend, {
+      points: [
+        { critical: 2, date: '2026-10-13', info: 5, warning: 3 },
+        { critical: 1, date: '2026-10-14', info: 4, warning: 2 },
+      ],
+    });
+    await nextTick();
+
+    const options = chartOptions.at(-1);
+    expect(options?.legend?.data).toEqual(['严重', '警告', '提示']);
+    const series = (options?.series ?? []) as Array<Record<string, any>>;
+    expect(series).toHaveLength(3);
+    expect(
+      series.every((item) => item.type === 'bar' && item.stack === 'alert'),
+    ).toBe(true);
+    expect(series.map((item) => item.data)).toEqual([
+      [2, 1],
+      [3, 2],
+      [5, 4],
+    ]);
+  });
+
+  it('设备增长：按日期输出每日新增柱', async () => {
+    mount(AnalyticsDeviceGrowth, {
+      points: [
+        { added: 3, date: '2026-10-13' },
+        { added: 5, date: '2026-10-14' },
+      ],
+    });
+    await nextTick();
+
+    const options = chartOptions.at(-1);
+    expect(options?.xAxis?.data).toEqual(['2026-10-13', '2026-10-14']);
+    expect(options?.series?.[0]?.data).toEqual([3, 5]);
+  });
+
+  it('规则 TOP：告警数降序展示，最多 5 条且长名不丢', async () => {
+    const container = mount(AnalyticsRuleTop, {
+      items: [
+        { name: '规则A', value: 5 },
+        { name: '规则B', value: 12 },
+        { name: '规则C', value: 8 },
+      ],
+    });
+    await nextTick();
+
+    const text = container.textContent ?? '';
+    for (const name of ['规则A', '规则B', '规则C']) {
+      expect(text).toContain(name);
+    }
+    expect(text.indexOf('规则B')).toBeLessThan(text.indexOf('规则C'));
+    expect(text.indexOf('规则C')).toBeLessThan(text.indexOf('规则A'));
+    // 第一名占满相对占比条（width: 100%）
+    const bars = [
+      ...container.querySelectorAll<HTMLElement>('[style*="width"]'),
+    ];
+    expect(bars.some((bar) => bar.style.width === '100%')).toBe(true);
   });
 
   it('有数据时正常渲染画布（空态不误伤真实数据）', async () => {

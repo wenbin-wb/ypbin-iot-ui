@@ -433,7 +433,17 @@
       "searchKeywordPlaceholder": "Device name / code",
       "protocolFilterPlaceholder": "All protocols",
       "onlineStatusFilterPlaceholder": "All online statuses",
-      "productFilterPlaceholder": "All products"
+      "productFilterPlaceholder": "All products",
+      "batchEnable": "Enable selected",
+      "batchDisable": "Disable selected",
+      "batchDelete": "Delete selected",
+      "batchEnableDone": "Enabled {0} device(s)",
+      "batchDisableDone": "Disabled {0} device(s)",
+      "batchDeleteDone": "Deleted {0} device(s)",
+      "batchStatusFailed": "Failed to update selected devices",
+      "batchDeleteFailed": "Failed to delete selected devices",
+      "batchDisableConfirm": "This will disable the {0} selected device(s): the access side unbinds them and stops collection (point subscriptions are revoked). Continue?",
+      "batchDeleteConfirm": "This will delete the {0} selected device(s): they will be removed from the ledger and cannot be restored. Continue?"
     },
     "event": {
       "title": "Runtime events",
@@ -547,7 +557,11 @@
       "memberEmptyHint": "Create devices under Devices and bind a product, then add them here. Members can be reviewed and removed on this page.",
       "memberGoDevices": "Go to Devices",
       "emptyHint": "This tenant has no device groups yet: groups collect devices by purpose or location for easier review and maintenance.",
-      "listLoadFailed": "Failed to load the device group list"
+      "listLoadFailed": "Failed to load the device group list",
+      "parentName": "Parent group",
+      "parentPlaceholder": "Select parent group",
+      "parentHelp": "Empty = root group (top level)",
+      "parentRoot": "Root group"
     },
     "availability": {
       "title": "Availability / outages{0}",
@@ -1200,6 +1214,12 @@
       "termOpenApiKeyWhen": "Issue one when integrating third-party systems or custom dashboards. The secret is shown only once, so save it immediately.",
       "termPlatformAlertWhat": "Alerts about the platform's own health, such as stalled collection scheduling or failed notifications, not a specific device fault.",
       "termPlatformAlertWhen": "Check platform alerts first to tell a platform issue from a device issue."
+    },
+    "realtime": {
+      "disconnected": "Realtime connection lost",
+      "disconnectedHint": "Data may be out of date while the page reconnects automatically (manual refresh still works). Last error: {0}",
+      "live": "Live",
+      "connecting": "Connecting"
     }
   },
   "auth": {
@@ -1733,7 +1753,11 @@
     "todoNoMessage": "Check today's data ingestion",
     "todoNoMessageContent": "No messages have been received today. Check device online status and point mapping configuration.",
     "todoAllGood": "All good",
-    "todoAllGoodContent": "No unresolved alerts or offline devices. Keep monitoring as usual."
+    "todoAllGoodContent": "No unresolved alerts or offline devices. Keep monitoring as usual.",
+    "alertTrend": "Alert trend",
+    "deviceGrowth": "Device growth",
+    "ruleTopTitle": "Top alert rules (last 30 days)",
+    "ruleTopEmpty": "No rule alerts in the last 30 days"
   },
   "admin": {
     "title": "Administration"

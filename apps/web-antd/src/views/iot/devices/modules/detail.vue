@@ -5,8 +5,9 @@ import type {
   IotEventApi,
   IotShadowApi,
 } from '#/api/iot';
+import type { IotRealtimeLatestPayload } from '#/api/iot/realtime';
 
-import { computed, ref } from 'vue';
+import { computed, onUnmounted, ref } from 'vue';
 
 import { useAccess } from '@vben/access';
 import { useVbenDrawer } from '@vben/common-ui';
@@ -34,6 +35,7 @@ import {
   getDeviceShadow,
   getProductDetail,
 } from '#/api/iot';
+import { alertTouchesDevice, createTrailingDebounce } from '#/api/iot/realtime';
 import { $t } from '#/locales';
 import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
@@ -49,6 +51,7 @@ import {
   qualityLabel,
 } from '../../shared/display';
 import PanelErrorBoundary from '../../shared/panel-error-boundary.vue';
+import { useIotRealtime } from '../../shared/use-iot-realtime';
 import Availability from './availability.vue';
 import Credential from './credential.vue';
 import DetailAlert from './detail-alert.vue';
@@ -148,6 +151,32 @@ const canViewTrace = computed(() => hasAccessByCodes(['iot:debug:get']));
  */
 const canViewAlert = computed(() => hasAccessByCodes(['iot:alert:list']));
 
+const {
+  error: realtimeError,
+  onEvent: onRealtimeEvent,
+  state: realtimeState,
+} = useIotRealtime();
+
+/** 断线/重连中才提示；首次 connecting 不闪提示。 */
+const realtimeDisconnected = computed(
+  () => realtimeState.value === 'reconnecting',
+);
+
+/** alert 事件去抖窗口：一次批量恢复/确认可能连发多条。 */
+const REALTIME_ALERT_DEBOUNCE_MS = 500;
+
+/**
+ * 告警页签的重挂载键：SSE `alert` 到达时 +1 ⇒ DetailAlert 重新拉取。
+ *
+ * 为什么用 key 而不是调子组件方法：`DetailAlert` 是既有组件，其 `reload()` 未
+ * `defineExpose`；本任务写权限只到 detail.vue，用重挂载达到「刷新告警页签」的同等效果。
+ */
+const alertRefreshKey = ref(0);
+
+const refreshAlertTabOnRealtime = createTrailingDebounce(() => {
+  alertRefreshKey.value += 1;
+}, REALTIME_ALERT_DEBOUNCE_MS);
+
 /** 用 `Series`/`Availability` 各自的抽屉组件：曲线与可用率口径只有一份实现。 */
 const [SeriesDrawer, SeriesDrawerApi] = useVbenDrawer({
   connectedComponent: Series,
@@ -210,6 +239,35 @@ function human(seconds?: number | string): string {
 }
 
 const latestLoaded = computed(() => latestError.value === '' && !loading.value);
+
+/**
+ * SSE `latest`：命中当前设备时**就地更新**最新值行（不整表重查）。
+ *
+ * 高频上报下整表重查会把 `/devices/{id}/latest` 打爆；行内更新是幂等的
+ * （按 `propertyId` upsert），新点位则追加。格式化交给既有表格渲染。
+ */
+function upsertLatestValue(payload: IotRealtimeLatestPayload) {
+  const propertyId =
+    typeof payload.propertyId === 'string' ? payload.propertyId : '';
+  if (propertyId === '') {
+    return;
+  }
+  const next: IotDeviceApi.LatestValueResp = {
+    propertyId,
+    quality: payload.quality,
+    ts: payload.ts,
+    value: payload.value,
+  };
+  const index = latest.value.findIndex(
+    (item) => item.propertyId === propertyId,
+  );
+  latest.value =
+    index === -1
+      ? [...latest.value, next]
+      : latest.value.map((item, itemIndex) =>
+          itemIndex === index ? next : item,
+        );
+}
 
 /** 概览卡片：可用率/断档都取自同一个可用率响应，避免两处数字对不上。 */
 const availabilityText = computed(() => {
@@ -360,6 +418,30 @@ async function load() {
   loading.value = false;
 }
 
+/**
+ * 实时事件接线：
+ * - `latest` 且 deviceId 匹配当前设备 ⇒ 就地更新最新值列表；
+ * - `alert` 触及当前设备 ⇒ 去抖后刷新告警页签（见 `alertRefreshKey`）。
+ * `device-status` 本轮设备详情不需要（在线状态仍以打开抽屉时的查询为准）。
+ */
+onRealtimeEvent('latest', (payload) => {
+  if (!deviceId.value || String(payload.deviceId ?? '') !== deviceId.value) {
+    return;
+  }
+  upsertLatestValue(payload);
+});
+
+onRealtimeEvent('alert', (payload) => {
+  if (!alertTouchesDevice(payload, deviceId.value)) {
+    return;
+  }
+  refreshAlertTabOnRealtime();
+});
+
+onUnmounted(() => {
+  refreshAlertTabOnRealtime.cancel();
+});
+
 const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) {
@@ -378,6 +460,17 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
 <template>
   <Drawer class="w-[1100px] max-w-[calc(100vw-40px)]">
     <Spin :spinning="loading">
+      <!-- 实时流断线必须可见（不阻塞页面：各区块仍可手动刷新/重开抽屉） -->
+      <Alert
+        v-if="realtimeDisconnected"
+        class="mb-2"
+        :description="
+          $t('page.iot.realtime.disconnectedHint', [realtimeError || '-'])
+        "
+        :message="$t('page.iot.realtime.disconnected')"
+        show-icon
+        type="warning"
+      />
       <Tabs :animated="false">
         <!-- ===== 概览 ===== -->
         <Tabs.TabPane key="overview" :tab="$t('page.iot.device.tabOverview')">
@@ -844,6 +937,7 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
           <!-- 渲染错误边界：与「在线调试」同款防线（i18n/渲染期异常必须可见，不得整块空白） -->
           <PanelErrorBoundary title-key="page.iot.alert.renderFailed">
             <DetailAlert
+              :key="alertRefreshKey"
               :device-id="deviceId"
               :product-id="device?.productId"
             />

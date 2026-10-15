@@ -1,4 +1,4 @@
-import { createApp, defineComponent, h, nextTick } from 'vue';
+import { createApp, defineComponent, h, nextTick, ref } from 'vue';
 
 import { registerAccessDirective } from '@vben/access';
 
@@ -36,13 +36,29 @@ const { captured, drawerApis, gridApiMock, gridStub, mockApi } = vi.hoisted(
     gridApiMock: { query: vi.fn() },
     /** 表格桩：默认不渲染 `#empty` 槽（证明失败提示不依赖槽位）；可切换渲染 action 槽。 */
     gridStub: { renderAction: false, renderEmpty: false, row: null as any },
-    mockApi: { deleteGroup: vi.fn(), getGroupList: vi.fn() },
+    mockApi: {
+      deleteGroup: vi.fn(),
+      getGroupList: vi.fn(),
+      getGroupTreeOptions: vi.fn(),
+    },
   }),
 );
 
 vi.mock('#/api/iot', () => ({
   deleteGroup: (...args: unknown[]) => mockApi.deleteGroup(...args),
   getGroupList: (...args: unknown[]) => mockApi.getGroupList(...args),
+}));
+
+vi.mock('#/api/iot/group', () => ({
+  getGroupTreeOptions: (...args: unknown[]) =>
+    mockApi.getGroupTreeOptions(...args),
+  // 与 api/iot/group.ts 的真实语义一致：空值/0/"0" 都是根分组
+  isRootGroup: (parentId?: null | number | string) =>
+    parentId === undefined ||
+    parentId === null ||
+    parentId === '' ||
+    parentId === '0' ||
+    parentId === 0,
 }));
 
 vi.mock('@vben/common-ui', () => ({
@@ -216,6 +232,37 @@ describe('groups/index.vue 三态', () => {
 
     expect(container.innerHTML).not.toContain('设备分组列表加载失败');
   });
+
+  it('层级数据 ⇒ 一次批量补 parentIdName；父分组不存在时保持空（列显示 -）', async () => {
+    mockApi.getGroupList.mockResolvedValue([
+      { groupName: '产线 A', id: 'g-1' },
+      { groupName: '产线 B', id: 'g-2', parentId: 'g-1' },
+      { groupName: '设备组 C', id: 'g-3', parentId: 'g-2' },
+      { groupName: '孤儿 D', id: 'g-4', parentId: 'g-404' },
+    ]);
+
+    await mountPage();
+    const rows = await runQuery();
+
+    expect(rows).toEqual([
+      { groupName: '产线 A', id: 'g-1' },
+      {
+        groupName: '产线 B',
+        id: 'g-2',
+        parentId: 'g-1',
+        parentIdName: '产线 A',
+      },
+      {
+        groupName: '设备组 C',
+        id: 'g-3',
+        parentId: 'g-2',
+        parentIdName: '产线 B',
+      },
+      { groupName: '孤儿 D', id: 'g-4', parentId: 'g-404' },
+    ]);
+    // 名称映射来自同一次列表结果，不允许逐行再发请求
+    expect(mockApi.getGroupList).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('groups/index.vue 交互', () => {
@@ -295,5 +342,53 @@ describe('groups/index.vue 交互', () => {
     await nextTick();
     expect(drawerApis[0]?.setData).toHaveBeenCalledWith(null);
     expect(drawerApis[0]?.open).toHaveBeenCalled();
+  });
+});
+
+describe('groups/data.ts 列与表单 schema', () => {
+  it('「上级分组」列渲染 parentIdName；根分组显示「根分组」，无法解析显示 `-`', async () => {
+    const { useColumns } = await import('./data');
+    const columns = useColumns() as any[];
+    const parentColumn = columns.find((item) => item.field === 'parentIdName');
+    expect(parentColumn?.title).toBe('上级分组');
+
+    expect(
+      parentColumn?.formatter({
+        row: {
+          groupName: '产线 B',
+          id: 'g-2',
+          parentId: 'g-1',
+          parentIdName: '产线 A',
+        },
+      }),
+    ).toBe('产线 A');
+    expect(
+      parentColumn?.formatter({ row: { groupName: '产线 A', id: 'g-1' } }),
+    ).toBe('根分组');
+    expect(
+      parentColumn?.formatter({
+        row: { groupName: '孤儿 D', id: 'g-4', parentId: 'g-404' },
+      }),
+    ).toBe('-');
+  });
+
+  it('表单 schema 含 parentId ApiTreeSelect：allowClear/help，api 按最新 rowId 排除当前行', async () => {
+    const { useFormSchema } = await import('./data');
+    const rowId = ref('g-1');
+    const schema = useFormSchema(rowId);
+    const parentField = schema.find((item) => item.fieldName === 'parentId');
+
+    expect(parentField?.component).toBe('ApiTreeSelect');
+    // schema 的 componentProps 是按 component 判别的联合类型；测试只断言运行时契约，收窄为 any
+    const parentProps = parentField?.componentProps as any;
+    expect(parentProps?.allowClear).toBe(true);
+    expect(parentProps?.alwaysLoad).toBe(true);
+    expect(parentProps?.visibleEvent).toBe('onDropdownVisibleChange');
+    expect(parentField?.help).toBe('留空 = 根分组（顶级分组）');
+
+    rowId.value = 'g-2';
+    mockApi.getGroupTreeOptions.mockResolvedValue([]);
+    await parentProps?.api();
+    expect(mockApi.getGroupTreeOptions).toHaveBeenCalledWith('g-2');
   });
 });

@@ -8,7 +8,8 @@ import type { IotDashboardApi } from '#/api/dashboard/iot-overview';
  * 打开页面数字稳定，便于回归与演示。接入真实接口后本文件即不再被消费。
  *
  * 量级口径全部自洽（在线 + 离线 + 停用 = 总数；上行 + 下行 = 今日消息；
- * 待处理告警 = 级别分布之和），前端图表可直接交叉校验。
+ * 待处理告警 = 级别分布之和；告警趋势最后一天 = 今日新增告警；
+ * 设备增长近 7 天之和 = 近 7 日新增设备），前端图表可直接交叉校验。
  */
 
 /**
@@ -79,6 +80,23 @@ const SEVERITY_BASE: Record<string, number> = {
   warning: 23,
   info: 41,
 };
+
+/** 今日新增告警（锚定 `alertToday`）；趋势最后一天按此拆分，保证图与指标卡对得上。 */
+const ALERT_TODAY = 58;
+const ALERT_TODAY_SPLIT = { critical: 8, info: 28, warning: 22 };
+
+/** 近 7 日新增设备（锚定 `newDevicesWeek`）；增长趋势最后 7 天按此取值，保证和值一致。 */
+const NEW_DEVICES_WEEK = 96;
+const GROWTH_LAST_WEEK = [12, 14, 15, 13, 16, 14, 12];
+
+/** 近 30 日告警数 TOP 规则（已按告警数降序；name 是解析后的展示名） */
+const RULE_TOP_BASE: Array<[string, number]> = [
+  ['电流超上限', 62],
+  ['温度越上限(>8℃)', 47],
+  ['离线超时(>5min)', 35],
+  ['振动幅值越限', 24],
+  ['湿度越上限', 18],
+];
 
 /**
  * 最近告警演示条目（设备名 / 规则名与产品/物模型语义一致）。
@@ -183,6 +201,34 @@ export function buildDemoOverview(
     },
   );
 
+  // 近 30 日告警趋势：工作日多、周末少；最后一天严格等于 alertToday 的三级拆分
+  const alertDates = lastNDates(30, now);
+  const alertTrend: IotDashboardApi.AlertTrendPoint[] = alertDates.map(
+    (date, idx) => {
+      if (idx === alertDates.length - 1) {
+        return { date, ...ALERT_TODAY_SPLIT };
+      }
+      const day = new Date(date).getDay();
+      const weekendFactor = day === 0 || day === 6 ? 0.7 : 1;
+      const total = Math.round(52 * weekendFactor * (0.85 + rand() * 0.3));
+      const critical = Math.round(total * 0.14);
+      const warning = Math.round(total * 0.38);
+      return { critical, date, info: total - critical - warning, warning };
+    },
+  );
+
+  // 近 14 日设备增长：最后 7 天用固定序列（和 = newDevicesWeek），更早 7 天走确定性伪随机
+  const growthDates = lastNDates(14, now);
+  const growthSeedStart = growthDates.length - GROWTH_LAST_WEEK.length;
+  const deviceGrowthTrend: IotDashboardApi.DeviceGrowthPoint[] =
+    growthDates.map((date, idx) => ({
+      added:
+        idx >= growthSeedStart
+          ? (GROWTH_LAST_WEEK[idx - growthSeedStart] ?? 0)
+          : Math.round(8 + rand() * 10),
+      date,
+    }));
+
   const protocolDistribution: IotDashboardApi.NameValue[] = PROTOCOL_BASE.map(
     ([name, value]) => ({ name, value }),
   );
@@ -194,6 +240,10 @@ export function buildDemoOverview(
   ];
 
   const productTop: IotDashboardApi.NameValue[] = PRODUCT_BASE.map(
+    ([name, value]) => ({ name, value }),
+  );
+
+  const alertRuleTop: IotDashboardApi.NameValue[] = RULE_TOP_BASE.map(
     ([name, value]) => ({ name, value }),
   );
 
@@ -215,8 +265,11 @@ export function buildDemoOverview(
     // 待处理口径 = 三级级别分布之和（含提示级积压），与饼图交叉自洽
     alertPending: Object.values(SEVERITY_BASE).reduce((acc, v) => acc + v, 0),
     alertResolvedToday: 34,
-    alertToday: 58,
+    alertRuleTop,
+    alertToday: ALERT_TODAY,
+    alertTrend,
     deviceDisabled: DEVICE_DISABLED,
+    deviceGrowthTrend,
     deviceOffline: DEVICE_OFFLINE,
     deviceOnline: DEVICE_ONLINE,
     deviceTotal: DEVICE_TOTAL,
@@ -224,7 +277,7 @@ export function buildDemoOverview(
     messageTrend,
     messageToday: UPLINK_TODAY + DOWNLINK_TODAY,
     messageUplinkToday: UPLINK_TODAY,
-    newDevicesWeek: 96,
+    newDevicesWeek: NEW_DEVICES_WEEK,
     onlineRate: Number(
       ((DEVICE_ONLINE / (DEVICE_TOTAL - DEVICE_DISABLED)) * 100).toFixed(1),
     ),

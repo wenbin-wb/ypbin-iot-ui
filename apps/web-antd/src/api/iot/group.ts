@@ -18,6 +18,13 @@ export namespace IotGroupApi {
     remark?: string;
   }
 
+  /** 父分组下拉树的选项（ApiTreeSelect 契约字段：label / value / children）。 */
+  export interface GroupTreeOption {
+    label: string;
+    value: string;
+    children?: GroupTreeOption[];
+  }
+
   /**
    * 分组成员（后端 `IotDeviceGroupMemberResp`）。
    *
@@ -43,6 +50,92 @@ export namespace IotGroupApi {
 
 export async function getGroupList() {
   return requestClient.get<IotGroupApi.GroupResp[]>('/iot/groups');
+}
+
+/** 根分组判定：`parentId` 为空或 0（Long 全局序列化成字符串时可能是 `"0"`）。 */
+export function isRootGroup(parentId?: null | number | string): boolean {
+  return (
+    parentId === undefined ||
+    parentId === null ||
+    parentId === '' ||
+    parentId === '0' ||
+    parentId === 0
+  );
+}
+
+/** 根分组/0 归一为 undefined，其余 parentId 一律转字符串 id（Long 全局序列化成字符串）。 */
+function parentKeyOf(parentId?: null | number | string): string | undefined {
+  return isRootGroup(parentId) ? undefined : String(parentId);
+}
+
+/**
+ * 由分组列表构建父分组下拉树。
+ *
+ * - `parentId` 为空/0、自引用、或指向列表中不存在的分组时按根分组处理（不隐藏孤儿数据）；
+ * - `excludeId` 及其**全部后代**整棵剔除：后代基于完整父子关系先算出来再裁剪，
+ *   保证编辑分组时不能把上级选成自己或自己的后代；
+ * - 只输出 `label/value/children` 展示契约，不改后端字段名。
+ */
+export function buildGroupTreeOptions(
+  groups: IotGroupApi.GroupResp[],
+  excludeId?: string,
+): IotGroupApi.GroupTreeOption[] {
+  const groupById = new Map(groups.map((group) => [group.id, group]));
+  const childrenByParent = new Map<string, IotGroupApi.GroupResp[]>();
+  const roots: IotGroupApi.GroupResp[] = [];
+
+  for (const group of groups) {
+    const parentId = parentKeyOf(group.parentId);
+    let parent: IotGroupApi.GroupResp | undefined;
+    if (parentId && parentId !== group.id) {
+      parent = groupById.get(parentId);
+    }
+    if (parent) {
+      const siblings = childrenByParent.get(parent.id) ?? [];
+      siblings.push(group);
+      childrenByParent.set(parent.id, siblings);
+    } else {
+      roots.push(group);
+    }
+  }
+
+  const excludedIds = new Set<string>();
+  if (excludeId) {
+    const stack = [excludeId];
+    let current = stack.pop();
+    while (current !== undefined) {
+      if (!excludedIds.has(current)) {
+        excludedIds.add(current);
+        for (const child of childrenByParent.get(current) ?? []) {
+          stack.push(child.id);
+        }
+      }
+      current = stack.pop();
+    }
+  }
+
+  const toOption = (
+    group: IotGroupApi.GroupResp,
+  ): IotGroupApi.GroupTreeOption => {
+    const children = (childrenByParent.get(group.id) ?? [])
+      .filter((child) => !excludedIds.has(child.id))
+      .map((child) => toOption(child));
+    return {
+      label: group.groupName || group.id,
+      value: group.id,
+      ...(children.length > 0 ? { children } : {}),
+    };
+  };
+
+  return roots
+    .filter((root) => !excludedIds.has(root.id))
+    .map((root) => toOption(root));
+}
+
+/** 父分组下拉数据：取全量分组后构树；编辑时传 `excludeId` 排除当前分组及后代。 */
+export async function getGroupTreeOptions(excludeId?: string) {
+  const groups = await getGroupList();
+  return buildGroupTreeOptions(groups, excludeId);
 }
 
 export async function createGroup(data: IotGroupApi.GroupSaveReq) {
