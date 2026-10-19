@@ -158,7 +158,7 @@ catalog:
   ora: ^9.4.1
   oxfmt: ^0.72.0
   oxlint: ^1.75.0
-  oxlint-tsgolint: ^0.25.0
+  oxlint-tsgolint: ^7.0.2004
   pinia: ^4.0.2
   prosemirror-view: ^1.42.6
   pinia-plugin-persistedstate: ^4.7.1
