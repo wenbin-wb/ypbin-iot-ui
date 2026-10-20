@@ -18,6 +18,7 @@ import { $t } from '#/locales';
 import {
   accessModeLabel,
   dataTypeLabel,
+  EMPTY_TEXT,
   serviceOptionLabel,
 } from '../../shared/display';
 import ThingModelForm from './thingmodel-form.vue';
@@ -205,7 +206,7 @@ function onDeleteEvent(row: IotThingModelApi.EventResp) {
             <td class="py-1">
               {{ serviceOptionLabel(service.serviceOption) }}
             </td>
-            <td class="py-1">{{ service.description || '-' }}</td>
+            <td class="py-1">{{ service.description || EMPTY_TEXT }}</td>
             <td class="py-1">
               <Button
                 v-if="isDraft"
@@ -291,7 +292,7 @@ function onDeleteEvent(row: IotThingModelApi.EventResp) {
               <td class="py-1">
                 {{ accessModeLabel(row.accessMode) }}
               </td>
-              <td class="py-1">{{ row.unit || '-' }}</td>
+              <td class="py-1">{{ row.unit || EMPTY_TEXT }}</td>
               <td class="py-1">
                 {{ row.required ? $t('common.yes') : $t('common.no') }}
               </td>
@@ -365,7 +366,7 @@ function onDeleteEvent(row: IotThingModelApi.EventResp) {
             <tr v-for="row in commands" :key="row.id" class="border-t">
               <td class="py-1">{{ row.identifier }}</td>
               <td class="py-1">{{ row.commandName }}</td>
-              <td class="py-1">{{ row.timeoutMs ?? '-' }}</td>
+              <td class="py-1">{{ row.timeoutMs ?? EMPTY_TEXT }}</td>
               <td class="py-1">
                 <Button
                   v-access:code="['iot:product:update']"
@@ -434,7 +435,7 @@ function onDeleteEvent(row: IotThingModelApi.EventResp) {
               <td class="py-1">{{ row.identifier }}</td>
               <td class="py-1">{{ row.eventName }}</td>
               <td class="py-1">{{ dataTypeLabel(row.dataType) }}</td>
-              <td class="py-1">{{ row.unit || '-' }}</td>
+              <td class="py-1">{{ row.unit || EMPTY_TEXT }}</td>
               <td class="py-1">
                 <Button
                   v-access:code="['iot:product:update']"

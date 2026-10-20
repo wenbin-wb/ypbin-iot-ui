@@ -88,6 +88,7 @@ const {
   detail,
   deviceId,
   deviceLabel,
+  exportLoading,
   hasChart,
   limit,
   loading,
@@ -98,7 +99,7 @@ const {
   noData,
   onAddManualPoint,
   onCustomRangeChange,
-  onExport,
+  onExportCsv,
   onPickRange,
   onPointsChange,
   onQuery,
@@ -320,7 +321,11 @@ const [Drawer, drawerApi] = useVbenDrawer<SeriesDrawerData>({
       <!-- 无数据时禁用导出并说明原因（灰按钮不给理由 = 用户以为功能坏了） -->
       <Tooltip :title="detail.total === 0 ? $t('page.iot.series.empty') : ''">
         <span :tabindex="detail.total === 0 ? 0 : -1" class="inline-block">
-          <Button :disabled="detail.total === 0" @click="onExport">
+          <Button
+            :disabled="detail.total === 0"
+            :loading="exportLoading"
+            @click="onExportCsv"
+          >
             {{ $t('page.iot.series.exportCsv') }}
           </Button>
         </span>

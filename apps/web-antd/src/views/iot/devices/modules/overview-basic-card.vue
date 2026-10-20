@@ -10,6 +10,7 @@ import { toBackendNumber } from '#/utils/backend-number';
 
 import CopyText from '../../shared/copy-text.vue';
 import {
+  EMPTY_TEXT,
   formatDateTime,
   formatRelativeTime,
   onlineStatusColor,
@@ -56,7 +57,7 @@ const isDeviceEnabled = computed(
         <CopyText :value="device?.deviceCode" />
       </DescriptionsItem>
       <DescriptionsItem :label="$t('page.iot.device.name')">
-        {{ device?.deviceName ?? '-' }}
+        {{ device?.deviceName ?? EMPTY_TEXT }}
       </DescriptionsItem>
       <DescriptionsItem :label="$t('page.iot.device.product')">
         <template v-if="device?.productId">
@@ -106,7 +107,7 @@ const isDeviceEnabled = computed(
         </Tooltip>
       </DescriptionsItem>
       <DescriptionsItem :label="$t('page.iot.device.remark')">
-        {{ device?.remark || '-' }}
+        {{ device?.remark || EMPTY_TEXT }}
       </DescriptionsItem>
     </Descriptions>
   </section>

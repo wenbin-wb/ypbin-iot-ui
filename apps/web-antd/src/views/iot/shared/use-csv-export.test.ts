@@ -1,3 +1,4 @@
+import { message } from 'ant-design-vue';
 /**
  * `shared/use-csv-export.ts` 的行为用例。
  *
@@ -10,9 +11,6 @@
  * 这些路径页面级用例很难覆盖（要真实下载 + 真实网络），在组合式层用桩断言最稳。
  */
 import dayjs from 'dayjs';
-
-import { message } from 'ant-design-vue';
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useCsvExport } from './use-csv-export';
@@ -26,6 +24,7 @@ vi.mock('#/utils/file', () => fileMock);
 vi.mock('ant-design-vue', () => ({
   message: {
     error: vi.fn(),
+    info: vi.fn(),
     success: vi.fn(),
   },
 }));
@@ -36,6 +35,7 @@ vi.mock('#/locales', () => ({
 
 const SUCCESS = message.success as unknown as ReturnType<typeof vi.fn>;
 const ERROR = message.error as unknown as ReturnType<typeof vi.fn>;
+const INFO = message.info as unknown as ReturnType<typeof vi.fn>;
 
 const TODAY = dayjs().format('YYYYMMDD');
 
@@ -53,6 +53,7 @@ beforeEach(() => {
   fileMock.downloadBlobSafe.mockResolvedValue(true);
   SUCCESS.mockClear();
   ERROR.mockClear();
+  INFO.mockClear();
 });
 
 describe('useCsvExport · 成功路径', () => {
@@ -81,7 +82,7 @@ describe('useCsvExport · 成功路径', () => {
     await onExportCsv();
 
     expect(fileMock.downloadBlobSafe.mock.calls[0]?.[1]).toMatch(
-      new RegExp(`^alert-export_\\d{8}\\.csv$`),
+      /^alert-export_\d{8}\.csv$/,
     );
   });
 });
@@ -147,6 +148,82 @@ describe('useCsvExport · 异常与空数据', () => {
 
     await onExportCsv();
 
+    expect(fileMock.downloadBlobSafe).not.toHaveBeenCalled();
+    expect(SUCCESS).not.toHaveBeenCalled();
+    expect(ERROR).not.toHaveBeenCalled();
+    expect(exportLoading.value).toBe(false);
+  });
+});
+
+describe('useCsvExport · 文件名口径（批次 8：string 主体 / appendDate 显式关闭）', () => {
+  it('fileName 为字符串 ⇒ 视为**主体**，照旧追加 _YYYYMMDD.csv', async () => {
+    const { onExportCsv } = createExport({ fileName: 'iot-series-dev-1' });
+
+    await onExportCsv();
+
+    expect(fileMock.downloadBlobSafe.mock.calls[0]?.[1]).toBe(
+      `iot-series-dev-1_${TODAY}.csv`,
+    );
+  });
+
+  it('🔴 appendDate: false ⇒ 完整文件名原样使用（series 自备设备/点位/时间窗口名）', async () => {
+    const { onExportCsv } = createExport({
+      appendDate: false,
+      fileName: () => 'iot-series-9300012-temperature-20261020-153000.csv',
+    });
+
+    await onExportCsv();
+
+    const name = fileMock.downloadBlobSafe.mock.calls[0]?.[1] as string;
+    expect(name).toBe('iot-series-9300012-temperature-20261020-153000.csv');
+    // 显式关闭后不再追加第二段 `_YYYYMMDD`
+    expect(name).not.toMatch(/_\d{8}\.csv$/);
+  });
+});
+
+describe('useCsvExport · 自定义成功文案（批次 8 新增）', () => {
+  it('successText 覆盖默认的 common.success', async () => {
+    const { onExportCsv } = createExport({ successText: 'page.iot.series.exportCsv' });
+
+    await onExportCsv();
+
+    expect(SUCCESS).toHaveBeenCalledWith('page.iot.series.exportCsv');
+    expect(SUCCESS).not.toHaveBeenCalledWith('common.success');
+  });
+
+  it('未提供 successText ⇒ 仍用 common.success（既有行为不变）', async () => {
+    const { onExportCsv } = createExport();
+
+    await onExportCsv();
+
+    expect(SUCCESS).toHaveBeenCalledWith('common.success');
+  });
+});
+
+describe('useCsvExport · 零行/空数据的可配提示（批次 8 新增）', () => {
+  it('exportFn 返回 0 字节 Blob ⇒ 视为「无数据」静默跳过（不下载、不弹成功/失败）', async () => {
+    const { exportLoading, onExportCsv } = createExport({
+      exportFn: vi.fn(async () => new Blob([], { type: 'text/csv' })),
+    });
+
+    await onExportCsv();
+
+    expect(fileMock.downloadBlobSafe).not.toHaveBeenCalled();
+    expect(SUCCESS).not.toHaveBeenCalled();
+    expect(ERROR).not.toHaveBeenCalled();
+    expect(INFO).not.toHaveBeenCalled();
+    expect(exportLoading.value).toBe(false);
+  });
+
+  it('exportFn 返回 undefined 且配置 skipEmpty.text ⇒ 提示后静默跳过（不下载、不算失败）', async () => {
+    const { exportLoading, onExportCsv } = createExport({
+      exportFn: vi.fn(async () => undefined),
+      skipEmpty: { text: 'page.iot.series.empty' },
+    });
+
+    await onExportCsv();
+
+    expect(INFO).toHaveBeenCalledWith('page.iot.series.empty');
     expect(fileMock.downloadBlobSafe).not.toHaveBeenCalled();
     expect(SUCCESS).not.toHaveBeenCalled();
     expect(ERROR).not.toHaveBeenCalled();

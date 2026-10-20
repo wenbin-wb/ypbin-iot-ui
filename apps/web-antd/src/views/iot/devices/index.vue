@@ -133,7 +133,13 @@ const {
   openGuide,
   openImport,
   openLedger,
-} = useDeviceDrawers({ getGuard: () => list.guard });
+} = useDeviceDrawers({
+  // 深链/后退恢复：优先复用当前页已加载的设备行（档案字段齐全）；
+  // 不在当前页或未知 id 时抽屉仍按 id 打开，由详情各区块自行取数并展示失败态。
+  findDevice: (deviceId) =>
+    list.readVisibleRows().find((row) => String(row.id) === deviceId),
+  getGuard: () => list.guard,
+});
 
 const { exportLoading, onExportCsv } = useCsvExport({
   // 导出参数与列表查询同源：直接复用列表组合式暴露的筛选值读取器，不另做映射

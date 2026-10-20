@@ -18,6 +18,7 @@ import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
 
 import {
+  EMPTY_TEXT,
   formatDateTime,
   platformHealthRuleLabelKey,
   prettyJson,
@@ -276,7 +277,7 @@ async function reloadOnFilter() {
               class="m-0 max-h-16 max-w-[240px] cursor-help overflow-auto whitespace-pre-wrap break-all text-xs"
               >{{ prettyJson(row.metricSnapshot) }}</pre>
           </Tooltip>
-          <span v-else class="text-muted-foreground">-</span>
+          <span v-else class="text-muted-foreground">{{ EMPTY_TEXT }}</span>
         </template>
         <template #startTs="{ row }">
           {{ formatDateTime(row.startTs) }}

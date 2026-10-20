@@ -38,8 +38,8 @@ import {
 import { listProperties, listServices } from '#/api/iot/thingmodel';
 import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
-import { downloadByBlob } from '#/utils/file';
 
+import { useCsvExport } from '../../shared/use-csv-export';
 import {
   buildChartModel,
   buildCsv,
@@ -582,33 +582,43 @@ export function useSeriesQuery(hooks: SeriesQueryHooks = {}) {
   /**
    * 导出 CSV（含公式注入防护与毫秒精度）。
    *
+   * 数据仍是**前端按当前结果本地生成**（历史曲线是多次扇出查询后合并的结果，后端没有
+   * 「按这几个点位导出」的端点）；骨架（loading 防连点 / `downloadBlobSafe` 伪文件拦截 /
+   * 成功失败提示）统一走 `shared/use-csv-export`，与设备台账、告警中心同一份纪律。
+   *
    * 单点位沿用既有的三列「时间,数值,质量码」；多点位叠加时首列补「点位」，
    * 否则多行数据混在一起无法区分属于哪个点位。
+   * 文件名含「设备 + 点位 + 时间窗口」（`seriesCsvFileName`）⇒ `appendDate: false`：
+   * 时间窗口已经写在名字里，再追加 `_YYYYMMDD` 只会得到重复日期。
    */
-  function onExport(): void {
-    if (detail.value.total === 0) {
-      return;
-    }
-    const withPoint = multiSeries.value;
-    const header = withPoint
-      ? [
-          $t('page.iot.series.pointColumn'),
-          $t('page.iot.series.ts'),
-          $t('page.iot.series.value'),
-          $t('page.iot.series.quality'),
-        ]
-      : [
-          $t('page.iot.series.ts'),
-          $t('page.iot.series.value'),
-          $t('page.iot.series.quality'),
-        ];
-    const csv = buildCsv(header, buildCsvRows(results.value, withPoint));
-    // 前置 BOM：Excel 直接打开 UTF-8 CSV 时不乱码
-    downloadByBlob(
-      new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }),
+  const { exportLoading, onExportCsv } = useCsvExport({
+    errorText: $t('page.iot.series.exportFailed'),
+    exportFn: async () => {
+      // 零行不下载（按钮已禁用，这里是程序化调用/竞态下的兜底）：返回 undefined 会被静默跳过
+      if (detail.value.total === 0) {
+        return undefined;
+      }
+      const withPoint = multiSeries.value;
+      const header = withPoint
+        ? [
+            $t('page.iot.series.pointColumn'),
+            $t('page.iot.series.ts'),
+            $t('page.iot.series.value'),
+            $t('page.iot.series.quality'),
+          ]
+        : [
+            $t('page.iot.series.ts'),
+            $t('page.iot.series.value'),
+            $t('page.iot.series.quality'),
+          ];
+      const csv = buildCsv(header, buildCsvRows(results.value, withPoint));
+      // 前置 BOM：Excel 直接打开 UTF-8 CSV 时不乱码
+      return new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
+    },
+    appendDate: false,
+    fileName: () =>
       seriesCsvFileName(deviceId.value, usedPoints.value, Date.now()),
-    );
-  }
+  });
 
   return {
     chartModel,
@@ -628,9 +638,10 @@ export function useSeriesQuery(hooks: SeriesQueryHooks = {}) {
     modelWarning,
     multiSeries,
     noData,
+    exportLoading,
     onAddManualPoint,
     onCustomRangeChange,
-    onExport,
+    onExportCsv,
     onPickRange,
     onPointsChange,
     onQuery,

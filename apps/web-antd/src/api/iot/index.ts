@@ -10,6 +10,7 @@ export * from './group';
 export * from './ledger';
 export * from './maintenance';
 export * from './open-api-key';
+export * from './page';
 export * from './platform-alert';
 export * from './point';
 export * from './product';

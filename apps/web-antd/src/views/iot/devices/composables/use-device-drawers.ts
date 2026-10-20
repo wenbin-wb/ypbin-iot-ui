@@ -24,6 +24,14 @@ import DeviceImport from '../modules/import.vue';
 import Series from '../modules/series.vue';
 
 export interface UseDeviceDrawersOptions {
+  /**
+   * 按 id 从当前列表找设备行（深链/后退恢复时优先用完整行；找不到返回 undefined）。
+   *
+   * 为什么需要它：URL 只剩一个 id，直接打开详情时「产品/协议/名称」等行级档案字段缺失，
+   * 详情页只能显示 `-`。能拿到行就用行；拿不到（不在当前页/未知 id）仍按 id 打开，
+   * 由详情页各区块自行取数/展示失败——**不静默忽略，也不伪造档案字段**。
+   */
+  findDevice?: (deviceId: string) => DeviceRow | undefined;
   /** 守卫刷新（表单保存成功、向导完成后刷新列表）。 */
   getGuard: () => RefreshGuard;
 }
@@ -38,8 +46,23 @@ export function useDeviceDrawers(options: UseDeviceDrawersOptions) {
   const [FormDrawer, FormDrawerApi] = useVbenDrawer({
     connectedComponent: Form,
   });
+  /**
+   * 详情抽屉的「打开/关闭」是深链的唯一生命周期信号：
+   * 打开时写 `?deviceId=`（由 onDetail/openDetailById 主动写，这里只处理关闭），
+   * 关闭时把 URL 上的 deviceId 清掉——否则刷新/复制 URL 会重新弹出一个已关掉的抽屉。
+   */
   const [DetailDrawer, DetailDrawerApi] = useVbenDrawer({
     connectedComponent: Detail,
+    onOpenChange(isOpen: boolean) {
+      detailOpen = isOpen;
+      if (isOpen) {
+        return;
+      }
+      currentDetailDeviceId = undefined;
+      if (readDeviceIdQuery() !== undefined) {
+        replaceDeviceIdQuery(undefined);
+      }
+    },
   });
   const [AvailabilityDrawer, AvailabilityDrawerApi] = useVbenDrawer({
     connectedComponent: Availability,
@@ -76,12 +99,57 @@ export function useDeviceDrawers(options: UseDeviceDrawersOptions) {
   /** 批量导入面板的实例（用来在打开抽屉时触发一次列表刷新）。 */
   const ImportPanel = ref<InstanceType<typeof DeviceImport> | null>(null);
 
+  /** 详情抽屉当前是否打开（深链 watch 用它判断「外部清 query 时要关闭」）。 */
+  let detailOpen = false;
+
+  /** 当前详情抽屉展示的设备 id（undefined = 未跟踪；用于外部 query 变化时判断是否换设备）。 */
+  let currentDetailDeviceId: string | undefined;
+
+  function readDeviceIdQuery(): string | undefined {
+    const value = route.query.deviceId;
+    return typeof value === 'string' && value !== '' ? value : undefined;
+  }
+
+  /** 把 deviceId 同步进 URL（`router.replace`：不产生历史栈垃圾，后退仍是上一页而不是抽屉次数）。 */
+  function replaceDeviceIdQuery(deviceId: string | undefined) {
+    const before = readDeviceIdQuery();
+    if (before === deviceId) {
+      return;
+    }
+    const next = { ...route.query };
+    if (deviceId === undefined) {
+      delete next.deviceId;
+    } else {
+      next.deviceId = deviceId;
+    }
+    void router.replace({ query: next });
+  }
+
+  /**
+   * 按 id 打开设备详情（深链 / 浏览器前进后退的恢复路径）。
+   *
+   * 行为约定（unknown id 也走这条）：
+   * - 列表里能找到该行 ⇒ 用完整行打开（档案字段齐全）；
+   * - 找不到（不在当前页 / 未知 id / 列表还没加载完）⇒ **仍按 `{ id }` 打开**，
+   *   详情各区块自己按 id 请求；后端 404/失败时各区块展示原样错误，不静默忽略 id、
+   *   也不伪造设备档案字段（用户至少能看到「这条深链指向哪台设备」以及失败原因）。
+   */
+  function openDetailById(deviceId: string) {
+    const row = options.findDevice?.(deviceId);
+    const resolvedId = String(row?.id ?? deviceId);
+    currentDetailDeviceId = resolvedId;
+    DetailDrawerApi.setData(row ?? ({ id: deviceId } as DeviceRow)).open();
+    replaceDeviceIdQuery(resolvedId);
+  }
+
   function onEdit(row: DeviceRow) {
     FormDrawerApi.setData(row).open();
   }
 
   function onDetail(row: DeviceRow) {
+    currentDetailDeviceId = String(row.id);
     DetailDrawerApi.setData(row).open();
+    replaceDeviceIdQuery(String(row.id));
   }
 
   function onAvailability(row: DeviceRow) {
@@ -148,8 +216,49 @@ export function useDeviceDrawers(options: UseDeviceDrawersOptions) {
     void router.replace({ query: {} });
   }
 
-  onMounted(consumeCreateQuery);
+  /**
+   * 挂载时消费 URL 意图。
+   *
+   * 优先级：`?action=create`（产品详情「添加设备」落地面）> `?deviceId=` 深链。
+   * 同一个 URL 同时带两者时以新建表单为准（否则表单 + 详情两个抽屉会叠在一起），
+   * `deviceId` 随 `consumeCreateQuery` 的一次性清理一并移除，避免刷新后又弹详情。
+   */
+  function openDetailFromQuery() {
+    if (route.query.action === 'create') {
+      return;
+    }
+    const deviceId = readDeviceIdQuery();
+    if (deviceId) {
+      openDetailById(deviceId);
+    }
+  }
+
+  /**
+   * URL 上的 deviceId 被**外部**改变时同步抽屉（浏览器前进/后退、粘贴深链、其它入口 push）：
+   * - 出现/切换 id ⇒ 用该 id 打开（列表有行则用行）；
+   * - id 消失 ⇒ 关闭抽屉。
+   * 自身写入的 id 与 `currentDetailDeviceId` 相同 ⇒ 幂等跳过，不会来回震荡。
+   */
+  function onDeviceIdQueryChange(deviceId: string | undefined) {
+    if (deviceId === undefined) {
+      if (detailOpen) {
+        currentDetailDeviceId = undefined;
+        DetailDrawerApi.close();
+      }
+      return;
+    }
+    if (deviceId === currentDetailDeviceId) {
+      return;
+    }
+    openDetailById(deviceId);
+  }
+
+  onMounted(() => {
+    consumeCreateQuery();
+    openDetailFromQuery();
+  });
   watch(() => route.query.action, consumeCreateQuery);
+  watch(() => readDeviceIdQuery(), onDeviceIdQueryChange);
 
   return {
     AvailabilityDrawer,

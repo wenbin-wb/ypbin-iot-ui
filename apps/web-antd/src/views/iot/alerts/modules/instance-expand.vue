@@ -5,7 +5,7 @@ import { Tag } from 'ant-design-vue';
 
 import { $t } from '#/locales';
 
-import { formatDateTime } from '../../shared/display';
+import { EMPTY_TEXT, formatDateTime } from '../../shared/display';
 import { channelLabel } from '../channel';
 import {
   eventLabelKey,
@@ -36,13 +36,15 @@ defineProps<{ row: IotAlertApi.InstanceResp }>();
         <span class="text-muted-foreground">
           {{ $t('page.iot.alert.triggerValue') }}:
         </span>
-        <span class="font-medium">{{ row.triggerValue ?? '-' }}</span>
+        <span class="font-medium">{{ row.triggerValue ?? EMPTY_TEXT }}</span>
       </div>
       <div>
         <span class="text-muted-foreground">
           {{ $t('page.iot.alert.threshold') }}:
         </span>
-        <span class="font-medium">{{ row.thresholdSnapshot ?? '-' }}</span>
+        <span class="font-medium">{{
+          row.thresholdSnapshot ?? EMPTY_TEXT
+        }}</span>
       </div>
       <div>
         <span class="text-muted-foreground">
@@ -111,12 +113,12 @@ defineProps<{ row: IotAlertApi.InstanceResp }>();
       <tbody>
         <tr v-for="record in row.notifications" :key="record.id">
           <td>{{ channelLabel(record.channel) }}</td>
-          <td>{{ record.target || '-' }}</td>
+          <td>{{ record.target || EMPTY_TEXT }}</td>
           <td>{{ $t(eventLabelKey(record.event)) }}</td>
           <td>{{ $t(notifyStatusLabelKey(record.notifyStatus)) }}</td>
           <td>{{ record.attempt ?? 0 }}</td>
           <td class="break-all text-destructive-text">
-            {{ record.lastError || '-' }}
+            {{ record.lastError || EMPTY_TEXT }}
           </td>
         </tr>
       </tbody>

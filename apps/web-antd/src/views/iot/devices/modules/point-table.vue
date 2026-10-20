@@ -11,6 +11,7 @@ import {
   accessModeLabel,
   addressTypeLabel,
   dataTypeLabel,
+  EMPTY_TEXT,
   pointRefTypeLabel,
 } from '../../shared/display';
 import { registerDecodeSegments } from './point-mapping-state';
@@ -119,7 +120,7 @@ function registerDecodeText(point: {
           <td class="py-1">{{ row.serviceId }}</td>
           <td class="py-1">{{ dataTypeLabel(row.dataType) }}</td>
           <td class="py-1">{{ accessModeLabel(row.accessMode) }}</td>
-          <td class="py-1">{{ row.unit || '-' }}</td>
+          <td class="py-1">{{ row.unit || EMPTY_TEXT }}</td>
           <td class="py-1">
             <template v-if="row.point">
               {{ row.point.rawAddress }}
@@ -129,10 +130,10 @@ function registerDecodeText(point: {
             </Tag>
           </td>
           <td class="py-1">
-            {{ row.point ? addressTypeLabel(row.point.addressType) : '-' }}
+            {{ row.point ? addressTypeLabel(row.point.addressType) : EMPTY_TEXT }}
           </td>
           <td class="py-1">
-            {{ row.point ? registerDecodeText(row.point) : '-' }}
+            {{ row.point ? registerDecodeText(row.point) : EMPTY_TEXT }}
           </td>
           <td class="py-1">{{ row.point?.pollIntervalMs ?? '-' }}</td>
           <td class="py-1">{{ row.point?.scaleFactor ?? '-' }}</td>
@@ -140,7 +141,7 @@ function registerDecodeText(point: {
             <Tag v-if="row.point" :color="tagColor(row.point.enabled)">
               {{ row.point.enabled === false ? 'off' : 'on' }}
             </Tag>
-            <span v-else>-</span>
+            <span v-else>{{ EMPTY_TEXT }}</span>
           </td>
           <td class="py-1">
             <template v-if="row.point">
@@ -227,7 +228,7 @@ function registerDecodeText(point: {
           <td class="py-1">{{ point.rawAddress }}</td>
           <td class="py-1">{{ addressTypeLabel(point.addressType) }}</td>
           <td class="py-1">{{ registerDecodeText(point) }}</td>
-          <td class="py-1">{{ point.pollIntervalMs ?? '-' }}</td>
+          <td class="py-1">{{ point.pollIntervalMs ?? EMPTY_TEXT }}</td>
           <td class="py-1">{{ accessModeLabel(point.rw) }}</td>
           <td class="py-1">
             <Tag :color="tagColor(point.enabled)">

@@ -1,3 +1,5 @@
+import type { IotPageResult } from './page';
+
 import { requestClient } from '#/api/request';
 
 /**
@@ -52,18 +54,11 @@ export namespace IotDeviceImportApi {
   }
 
   /**
-   * 分页信封（后端 `PageResult`）。
-   *
-   * ⚠️ 与 `IotDeviceApi.PageResult` 同一口径：`total/page/pageSize` 是 `long`，
-   * 后端全局序列化成**字符串** ⇒ 这里按真实返回声明为 `number | string`，
-   * 消费方用 `toBackendNumber` 显式转数（不许 `as number` 把分歧藏起来）。
+   * 分页信封（后端 `PageResult`）。**唯一定义**见 `./page` 的 {@link IotPageResult}；
+   * `total/page/pageSize` 在后端是 `long` ⇒ 真实返回为 `number | string`，
+   * 消费方必须用 `#/utils/backend-number` 的 `toBackendNumber` 显式转数（禁止 `as number`）。
    */
-  export interface PageResult<T> {
-    items: T[];
-    total: number | string;
-    page: number | string;
-    pageSize: number | string;
-  }
+  export type PageResult<T> = IotPageResult<T>;
 
   /** 批次详情 = 批次头 + 该批次某一页明细（一次请求一份快照，避免「头已显示、明细还空」的中间态）。 */
   export interface BatchDetailResp {
