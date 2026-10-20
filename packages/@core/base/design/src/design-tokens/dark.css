@@ -61,6 +61,52 @@
   --warning: 42 84% 61%;
   --warning-foreground: 0 0% 98%;
 
+  /*
+   * ===== 图表分类色板（暗色档）=====
+   *
+   * 与 default.css 的 `--chart-1..12` **一一对应**（同序号 = 同色相族）：
+   * 只把在白底达标、但在暗底 <3.1:1 的色相向上提亮到 ≥3.10:1
+   * （chart-2 天蓝 / chart-4 沙黄 / chart-7 黑→中性灰 / chart-9 靛蓝 / chart-10 黄 /
+   *  chart-11 酒红 / chart-12 橙），其余色相在暗底本就 ≥3.1:1，保持不变。
+   * 说明与顺序依据见 default.css 同名段落。
+   */
+
+  /* Okabe-Ito bluish green（青绿） */
+  --chart-1: 163.7 100% 31%;
+
+  /* Okabe-Ito sky blue（天蓝，暗底提亮） */
+  --chart-2: 201.6 77% 62.5%;
+
+  /* Okabe-Ito vermillion（朱红） */
+  --chart-3: 26.5 100% 41.8%;
+
+  /* Tol sand（沙黄，暗底提亮） */
+  --chart-4: 50 60% 66.7%;
+
+  /* Okabe-Ito blue（蓝） */
+  --chart-5: 201.6 100% 34.9%;
+
+  /* Okabe-Ito reddish purple（紫红） */
+  --chart-6: 326.7 44.9% 63.7%;
+
+  /* Okabe-Ito black → 中性灰（暗色档提亮，避免黑底不可见） */
+  --chart-7: 0 0% 42%;
+
+  /* Tol teal（蓝绿） */
+  --chart-8: 170 42.9% 46.7%;
+
+  /* Tol indigo（靛蓝，暗底提亮） */
+  --chart-9: 250 60% 58.8%;
+
+  /* Okabe-Ito yellow（黄，暗底提亮） */
+  --chart-10: 55.9 85.3% 60%;
+
+  /* Tol wine（酒红，暗底提亮） */
+  --chart-11: 330 60% 46.8%;
+
+  /* Okabe-Ito orange（橙，暗底提亮） */
+  --chart-12: 41.5 100% 45.1%;
+
   /* 颜色次要 */
   --secondary: 240 5% 17%;
   --secondary-foreground: 0 0% 98%;

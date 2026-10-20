@@ -143,9 +143,10 @@ describe('图表可访问性：canvas 容器必须有 role="img" + aria-label', 
     const card = source('./analytics/board/board-widget-card.vue');
     expect(card).toContain('page.iot.board.disabledFirst');
     expect(card).toContain('page.iot.board.disabledLast');
-    const drawer = source('./analytics/board/board-drawer.vue');
-    expect(drawer).toContain('page.iot.board.empty');
-    expect(drawer).toContain('<Tooltip');
+    // 「保存到平台」禁用原因由工具栏承载（批次6 拆分后从 board-drawer.vue 移出）
+    const toolbar = source('./analytics/board/board-toolbar.vue');
+    expect(toolbar).toContain('page.iot.board.empty');
+    expect(toolbar).toContain('<Tooltip');
   });
 });
 

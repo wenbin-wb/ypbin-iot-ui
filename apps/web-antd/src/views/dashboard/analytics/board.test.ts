@@ -1128,6 +1128,64 @@ describe('看板抽屉：后端共享持久化 / 本地草稿 / 排序', () => {
     expect(container.textContent).toContain('还没有组件');
   });
 
+  // ↓ 批次 6（board-drawer.vue 拆分）补的安全网：这三条覆盖「拆分后才可能接错」的装配点，
+  //   拆分前它们同样走同一条代码路径（测试绿的基线不受影响）。
+  it('配置损坏提示可关闭（关闭按钮接线正确，不是只画一条关不掉的提示）', async () => {
+    window.localStorage.setItem(IOT_BOARD_STORAGE_KEY, '{bad-json');
+    const container = await mountBoardDrawer();
+    expect(container.textContent).toContain('看板配置不兼容或已损坏');
+    const closable = [...container.querySelectorAll('button')].filter(
+      (element) => element.className.includes('ant-alert-close'),
+    );
+    expect(closable.length, '未找到提示的关闭按钮').toBeGreaterThan(0);
+    closable[0]?.click();
+    await flush();
+    expect(container.textContent).not.toContain('看板配置不兼容或已损坏');
+  });
+
+  it('刷新按钮：重新拉平台配置并重载组件数据（拆分后 refresh 装配仍通）', async () => {
+    mockApi.getDashboardBoard.mockResolvedValue({
+      widgets: [widget({ id: 'r1' })],
+    });
+    const container = await mountBoardDrawer();
+    expect(mockApi.getDashboardBoard).toHaveBeenCalledTimes(1);
+    // antd Button 会在「两个汉字」之间自动插空格（「刷 新」），所以按去空白后的文本匹配
+    const refresh = [...container.querySelectorAll('button')].find(
+      (element) =>
+        (element.textContent ?? '').replaceAll(/\s/g, '') ===
+        $t('page.iot.board.refresh'),
+    );
+    expect(refresh, '未找到刷新按钮').toBeTruthy();
+    mockApi.getDashboardBoard.mockResolvedValue({
+      widgets: [widget({ id: 'r2', title: '刷新后组件' })],
+    });
+    refresh?.click();
+    await flush();
+    expect(mockApi.getDashboardBoard).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain('刷新后组件');
+  });
+
+  it('组件数达到上限时「添加组件」给出上限提示，不打开表单', async () => {
+    mockApi.getDashboardBoard.mockResolvedValue({
+      widgets: Array.from({ length: IOT_BOARD_MAX_WIDGETS }, (_, index) =>
+        widget({ id: bulkId('cap', index) }),
+      ),
+    });
+    const container = await mountBoardDrawer();
+    const add = [...container.querySelectorAll('button')].find((element) =>
+      (element.textContent ?? '')
+        .replaceAll(/\s/g, '')
+        .includes($t('page.iot.board.addWidget')),
+    );
+    expect(add, '未找到添加组件按钮').toBeTruthy();
+    add?.click();
+    await flush();
+    expect(toast.warning).toHaveBeenCalledTimes(1);
+    expect(toast.warning.mock.calls[0]?.[0]).toContain(
+      $t('page.iot.board.maxWidgets', [String(IOT_BOARD_MAX_WIDGETS)]),
+    );
+  });
+
   it('getBoard 失败 ⇒ 回落本地草稿并如实标注「本地草稿（未同步）」，不静默降级', async () => {
     window.localStorage.setItem(
       IOT_BOARD_STORAGE_KEY,

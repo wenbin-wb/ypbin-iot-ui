@@ -240,6 +240,30 @@
   --color-yellow-text: hsl(var(--yellow-500));
   --color-yellow-text-active: hsl(var(--yellow-700));
   --color-yellow-text-hover: hsl(var(--yellow-600));
+
+  /* ===== Chart Palette (12 色色盲友好分类色板) ===== */
+
+  /*
+   * 图表分类色板（Okabe-Ito 8 主色 + Tol 4 补充，亮/暗两套见
+   * packages/@core/base/design/src/design-tokens/{default,dark}.css 的 --chart-1..12）。
+   * 注册成 Tailwind 色值只是让 `text-chart-1`/`bg-chart-2` 这类写法可用；
+   * **ECharts 不要直接吃 `hsl(var(--chart-N))`**——canvas 不解析 CSS 变量，
+   * 必须经 `apps/web-antd/src/utils/chart-tokens.ts` 在渲染时读值转 rgb。
+   * 顺序/亮度依据写在 default.css 的注释里；chart-tokens.test.ts 锁定顺序与相邻亮度差。
+   */
+
+  --color-chart-1: hsl(var(--chart-1));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-5: hsl(var(--chart-5));
+  --color-chart-6: hsl(var(--chart-6));
+  --color-chart-7: hsl(var(--chart-7));
+  --color-chart-8: hsl(var(--chart-8));
+  --color-chart-9: hsl(var(--chart-9));
+  --color-chart-10: hsl(var(--chart-10));
+  --color-chart-11: hsl(var(--chart-11));
+  --color-chart-12: hsl(var(--chart-12));
 }
 
 /* Keyframes */

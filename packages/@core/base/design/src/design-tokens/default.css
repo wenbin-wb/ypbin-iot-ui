@@ -64,6 +64,67 @@
   --warning: 42 84% 61%;
   --warning-foreground: 0 0% 98%;
 
+  /*
+   * ===== 图表分类色板（12 色 · 色盲友好）=====
+   *
+   * 2026-10-20 审查「图表 12 色」follow-up：原先图表用「4 语义族（primary/success/
+   * warning/destructive）× 3 明度」凑 12 色 —— 同族只差明度，在红绿色盲
+   * （deuteranopia / protanopia）与灰度打印下相邻序列不可辨。分类序列要的是**色相优先**，
+   * 所以另立一套与 UI 语义色解耦的「图表分类色板」。
+   *
+   * 色值来源（8 主色 + 4 补充）：
+   *   - Okabe & Ito (2008) "Color Universal Design" 8 色色盲友好色板；
+   *   - Paul Tol 色板（muted/bright）4 个补充色（indigo / teal / wine / sand）。
+   * 保留来源色板的 H/S，只按目标底色微调 L：
+   *   - 亮色档：对白底（--card = 0 0% 100%）实测最低 **2.50:1**。
+   *     WCAG 1.4.11 对图形对象建议 3:1；12 个分类色无法全部满足（浅黄/浅青必然偏低），
+   *     取 2.5:1 为可读下限，偏差与后续方案已在 chart-tokens 测试与汇报中登记。
+   *   - 暗色档：对暗底（--background ≈ hsl(222.34 10.43% 12.27%)）实测最低 **3.10:1**。
+   *
+   * 序号语义：`--chart-1..12` 在两档之间**一一对应**（同序号 = 同色相族，仅明度适配），
+   * 切主题不会改变「第 N 条序列」的类别含义。
+   * 顺序按「相邻类别相对亮度差最大化」排定（贪心 + 2-opt）：相邻色在灰度/色盲下
+   * 仍有明度线索（亮色档相邻 |ΔL| 最小 0.113、暗色档最小 0.141）。
+   * ⚠️ 不要随意重排 / 单独改某一档：`chart-tokens.test.ts` 锁定 12 色顺序、
+   * 相邻亮度差与两档对应关系。
+   */
+
+  /* Okabe-Ito bluish green（青绿） */
+  --chart-1: 163.7 100% 31%;
+
+  /* Okabe-Ito sky blue（天蓝） */
+  --chart-2: 201.6 77% 59%;
+
+  /* Okabe-Ito vermillion（朱红） */
+  --chart-3: 26.5 100% 41.8%;
+
+  /* Tol sand（沙黄） */
+  --chart-4: 50 60% 45.7%;
+
+  /* Okabe-Ito blue（蓝） */
+  --chart-5: 201.6 100% 34.9%;
+
+  /* Okabe-Ito reddish purple（紫红） */
+  --chart-6: 326.7 44.9% 63.7%;
+
+  /* Okabe-Ito black（黑；暗色档提亮为中性灰） */
+  --chart-7: 0 0% 0%;
+
+  /* Tol teal（蓝绿） */
+  --chart-8: 170 42.9% 46.7%;
+
+  /* Tol indigo（靛蓝） */
+  --chart-9: 250 60% 33.3%;
+
+  /* Okabe-Ito yellow（黄） */
+  --chart-10: 55.9 85.3% 37.5%;
+
+  /* Tol wine（酒红） */
+  --chart-11: 330 60% 33.3%;
+
+  /* Okabe-Ito orange（橙） */
+  --chart-12: 41.5 100% 42.6%;
+
   /* Secondary colors for <Button /> */
 
   --secondary: 240 5% 96%;
