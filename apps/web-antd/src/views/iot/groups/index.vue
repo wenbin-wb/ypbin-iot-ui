@@ -146,6 +146,8 @@ function onDelete(row: GroupRow) {
 </script>
 <template>
   <Page auto-content-height>
+    <!-- 页面主标题：视觉上隐藏，供读屏/文档大纲使用（全站 0 个 h1 是审查 P3-5 指出的可访问性缺陷） -->
+    <h1 class="sr-only">{{ $t('page.iot.group.title') }}</h1>
     <FormDrawer @reload="reloadList" />
     <MembersDrawer />
     <!-- 失败态必须挂在表格之外：真实 vxe 只在表体无行时渲染 `#empty` 槽，

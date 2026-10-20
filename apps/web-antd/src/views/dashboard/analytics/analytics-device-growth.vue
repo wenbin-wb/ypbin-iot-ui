@@ -9,6 +9,7 @@ import { Inbox } from '@vben/icons';
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 
 import { $t } from '#/locales';
+import { chartColor } from '#/utils/chart-tokens';
 
 defineOptions({ name: 'AnalyticsDeviceGrowth' });
 
@@ -19,8 +20,6 @@ const props = defineProps<{
 
 const chartRef = ref<EchartsUIType>();
 const { renderEcharts } = useEcharts(chartRef);
-
-const BAR_COLOR = '#0066f5';
 
 /** 空数据时不渲染画布，改为友好空态：空数组会让图表区看起来像坏掉的白块。 */
 const hasData = computed(() => props.points.length > 0);
@@ -64,8 +63,8 @@ function renderChart(points: IotDashboardApi.DeviceGrowthPoint[]) {
           borderRadius: [4, 4, 0, 0],
           color: {
             colorStops: [
-              { color: 'rgba(0,102,245,0.45)', offset: 0 },
-              { color: BAR_COLOR, offset: 1 },
+              { color: chartColor('primary', 0.45), offset: 0 },
+              { color: chartColor('primary'), offset: 1 },
             ],
             type: 'linear',
             x: 0,

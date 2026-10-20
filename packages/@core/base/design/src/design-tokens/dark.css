@@ -41,6 +41,11 @@
   --destructive: 359.21 68.47% 56.47%;
   --destructive-foreground: 0 0% 98%;
 
+  /* 文本专用语义色（暗底取高亮档；与 default.css 的同名 token 成对维护） */
+  --destructive-text: 0 91% 71%;
+  --success-text: 142 69% 58%;
+  --warning-text: 43 96% 56%;
+
   /* Used for success actions such as <message> */
 
   --info: 180, 1.54%, 12.75%;

@@ -96,11 +96,15 @@ onMounted(load);
         :width="220"
         class="rounded border border-solid border-border"
       >
+        <!--
+          颜色走 CSS 变量而不是写死 hex（原来的红/蓝在暗色下不跟随主题）：
+          SVG 的 `stroke` **展示属性**不接受 var()，所以用 style 绑定 CSS 属性（CSS 属性可以）。
+        -->
         <line
           v-if="sparkline.thresholdY !== null"
           :y1="sparkline.thresholdY"
           :y2="sparkline.thresholdY"
-          stroke="#ff4d4f"
+          :style="{ stroke: 'hsl(var(--destructive))' }"
           stroke-dasharray="4 3"
           stroke-width="1"
           x1="0"
@@ -109,7 +113,7 @@ onMounted(load);
         <path
           :d="sparkline.path"
           fill="none"
-          stroke="#1677ff"
+          :style="{ stroke: 'hsl(var(--primary))' }"
           stroke-width="1.5"
         />
       </svg>

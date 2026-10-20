@@ -132,40 +132,56 @@ function formatCompact(n: number) {
   return String(n);
 }
 
+/**
+ * 模块卡片的图标底色（**只是分类标识，不承载状态语义**）。
+ *
+ * 用语义 token 而非 hex 的两个理由：① 切主题色/暗色时色块自动跟随；② 不再散落硬编码色值。
+ * 6 个取值按「主色三档 + 成功/警告/危险」分布，保证相邻卡片颜色不同。
+ * 这里是 DOM 内联样式，CSS 变量可直接用 —— 图表 canvas 不行，见 `shared/chart-tokens.ts`。
+ */
+const CARD_TINTS = [
+  'hsl(var(--primary))',
+  'hsl(var(--primary-600))',
+  'hsl(var(--success))',
+  'hsl(var(--warning))',
+  'hsl(var(--destructive))',
+  'hsl(var(--primary-400))',
+] as const;
+
 // ---- 快捷导航（IoT 模块，路径与后端菜单一致）----
 const quickNavItems: WorkbenchQuickNavItem[] = [
   {
-    color: '#0066f5',
+    color: CARD_TINTS[0],
     icon: 'carbon:iot-platform',
     title: $t('page.iot.device.title'),
     url: '/iot/devices',
   },
   {
-    color: '#7c7cf0',
+    color: CARD_TINTS[1],
     icon: 'carbon:product',
     title: $t('page.iot.product.title'),
     url: '/iot/products',
   },
   {
-    color: '#f2547b',
+    color: CARD_TINTS[2],
     icon: 'carbon:warning',
     title: $t('page.iot.alert.title'),
     url: '/iot/alerts',
   },
   {
-    color: '#0ec9a3',
+    color: CARD_TINTS[3],
     icon: 'carbon:group',
     title: $t('page.iot.group.title'),
     url: '/iot/groups',
   },
   {
-    color: '#f0b429',
+    color: CARD_TINTS[4],
     icon: 'carbon:flow',
     title: $t('page.iot.onboarding.title'),
     url: '/iot/onboarding',
   },
   {
-    color: '#5a6cf0',
+    color: CARD_TINTS[5],
     icon: 'carbon:tool-box',
     title: $t('page.iot.maintenance.shortTitle'),
     url: '/iot/maintenance',
@@ -173,14 +189,8 @@ const quickNavItems: WorkbenchQuickNavItem[] = [
 ];
 
 // ---- 平台能力卡片（IoT 功能入口）----
-const PROJECT_COLORS = [
-  '#0066f5',
-  '#7c7cf0',
-  '#0ec9a3',
-  '#f0b429',
-  '#f2547b',
-  '#5a6cf0',
-];
+/** 与快捷导航同一套色（同一模块在两个区域颜色一致，用户不用记两套）。 */
+const PROJECT_COLORS = CARD_TINTS;
 
 const projectItems = computed<WorkbenchProjectItem[]>(() => [
   {

@@ -1,5 +1,10 @@
+import type { ListSlotState as SharedListSlotState } from '../shared/list-state';
+
+import { resolveListSlotState } from '../shared/list-state';
+
 /**
- * 告警列表页的两个**纯判据**（无任何 import ⇒ 用例可以在本机直接跑，不被 api/request 依赖链拖累）。
+ * 告警列表页的两个**纯判据**（只 import 零依赖的 `../shared/list-state` ⇒ 用例仍可在本机直接跑，
+ * 不被 api/request 依赖链拖累）。
  *
  * 它们承载两条本仓已收口过的纪律：
  * 1. **失败绝不画成空态**（`listSlotState`）——「加载失败」与「确实没有数据」在 vxe 的 `#empty` 槽里
@@ -11,21 +16,21 @@
  * （独立复核 2026-10-03 实测：删掉模板里的 `v-if="!listError"` 后，可运行用例无一转红）。
  */
 
-/** 列表槽位状态：失败优先于空。 */
-export type ListSlotState = 'content' | 'empty' | 'error';
+/** 列表槽位状态：失败优先于空（判据收口到 `../shared/list-state` 的 `resolveListSlotState`）。 */
+export type ListSlotState = SharedListSlotState;
 
 /**
  * 决定列表 `#empty` 槽渲染什么。
+ *
+ * 判据已收口到 `../shared/list-state`：本函数只保留原导出名与位置参数签名，行为零漂移；
+ * `error` 优先于 `empty`、有行则 `content` 的顺序由 `shared/list-state.test.ts` 守门。
  *
  * @param error    非空表示本次加载失败（原样展示后端 message）
  * @param rowCount 当前已取回的行数
  * @returns `error` 优先于 `empty`；有行则为 `content`
  */
 export function listSlotState(error: string, rowCount: number): ListSlotState {
-  if (error !== '') {
-    return 'error';
-  }
-  return rowCount > 0 ? 'content' : 'empty';
+  return resolveListSlotState(error, rowCount);
 }
 
 /**

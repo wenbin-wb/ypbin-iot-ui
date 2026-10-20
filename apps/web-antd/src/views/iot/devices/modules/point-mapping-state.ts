@@ -1,6 +1,10 @@
+import type { ListState } from '../../shared/list-state';
+
 import type { IotPointApi } from '#/api/iot';
 
 import { $t } from '#/locales';
+
+import { resolveListState } from '../../shared/list-state';
 
 /**
  * 点位映射表单的**纯逻辑**（枚举/校验/payload 构建/回显），零 vue 依赖可单测。
@@ -703,19 +707,13 @@ export function registerDecodeSegments(
   return segments;
 }
 
-/** 点位列表展示态（错误优先于空）。 */
-export type PointListState = 'empty' | 'error' | 'loading' | 'ready';
+/** 点位列表展示态（错误优先于空；判据收口到 shared/list-state）。 */
+export type PointListState = ListState;
 
 export function resolvePointListState(
   loading: boolean,
   errorMessage: string,
   itemCount: number,
 ): PointListState {
-  if (loading) {
-    return 'loading';
-  }
-  if (errorMessage) {
-    return 'error';
-  }
-  return itemCount > 0 ? 'ready' : 'empty';
+  return resolveListState({ errorMessage, itemCount, loading });
 }

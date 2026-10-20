@@ -196,7 +196,7 @@ onMounted(() => {
             @confirm="remove(tag)"
           >
             <button
-              class="ml-1 cursor-pointer border-0 bg-transparent p-0 text-xs text-red-500"
+              class="ml-1 cursor-pointer border-0 bg-transparent p-0 text-xs text-destructive-text"
               type="button"
             >
               {{ $t('page.iot.tag.delete') }}
@@ -232,7 +232,7 @@ onMounted(() => {
             :placeholder="$t('page.iot.tag.valuePlaceholder')"
           />
         </div>
-        <div v-if="!formOk" class="text-xs text-red-500">
+        <div v-if="!formOk" class="text-xs text-destructive-text">
           {{ resolveTagFormCheckMessage(checkTagForm(formKey, formValue)) }}
         </div>
       </div>

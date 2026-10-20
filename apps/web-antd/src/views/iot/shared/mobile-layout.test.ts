@@ -40,9 +40,16 @@ describe('小屏适配：工具栏可换行', () => {
   });
 
   it('告警中心：两个工具栏 Space 都开启 wrap；展开行窄屏单列', () => {
-    const code = source('../alerts/index.vue');
+    // 拆分批次 5-D：两个工具栏与展开行已抽成 alerts/modules/ 下的子组件，
+    // 断言改为「在告警页 + 3 个产物文件里」求并集——不变量（恰好两个 wrap 工具栏、
+    // 展开行窄屏单列）保持原样，只是事实源随模板一起搬了家。
+    const code = [
+      source('../alerts/index.vue'),
+      source('../alerts/modules/instance-toolbar.vue'),
+      source('../alerts/modules/rule-toolbar.vue'),
+    ].join('\n');
     expect(code.match(/<Space wrap>/g)).toHaveLength(2);
-    expect(code).toContain(
+    expect(source('../alerts/modules/instance-expand.vue')).toContain(
       'grid-cols-1 gap-4 p-2 text-sm sm:grid-cols-2 md:grid-cols-3',
     );
   });
@@ -79,10 +86,18 @@ describe('小屏适配：抽屉 / 弹层不超出视口', () => {
 
   it('设备详情抽屉：92vw、基本信息单列断点、卡片网格 min-w-0、表格横向滚动', () => {
     const code = source('../devices/modules/detail.vue');
+    // 批次 5 概览拆卡后，响应式 class 分散到卡片文件；断言改为「宿主 + 卡片」求并集，
+    // 语义保持不变量：基本信息断点仍在、三组两列网格仍是 3 组、表格仍有横向滚动容器。
+    const basicCard = source('../devices/modules/overview-basic-card.vue');
+    const latestCard = source('../devices/modules/overview-latest-card.vue');
+    const shadowCard = source('../devices/modules/overview-shadow-card.vue');
     expect(code).toContain('w-[92vw]');
-    expect(code).toContain('sm: 1, md: 2, xl: 3');
+    expect(basicCard).toContain('sm: 1, md: 2, xl: 3');
+    // 3 组并排网格：detail（标签+凭据）、最新值卡（最新值+可用率）、影子卡（reported+desired）
     expect(
-      code.match(/grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2/g),
+      [code, latestCard, shadowCard]
+        .join('\n')
+        .match(/grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2/g),
     ).toHaveLength(3);
     expect(code).toContain('overflow-x-auto');
   });

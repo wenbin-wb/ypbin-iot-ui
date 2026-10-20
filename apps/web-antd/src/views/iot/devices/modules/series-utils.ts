@@ -30,15 +30,6 @@ export const IOT_SERIES_AUTO_REFRESH_MS = 30_000;
  */
 export const IOT_SERIES_TABLE_MAX_ROWS = 500;
 
-/** 曲线配色（与主色系一致，第一条沿用既有的 `#0066f5`）。 */
-export const IOT_SERIES_COLORS = [
-  '#0066f5',
-  '#00b42a',
-  '#ff7d00',
-  '#f53f3f',
-  '#722ed1',
-] as const;
-
 /**
  * 点位标识白名单：与后端 `PropertyIdRules.PATTERN` 逐字一致
  * （`[A-Za-z0-9_.:-]{1,128}`）。前端先拦一道，免得把注定报错的请求发出去。
@@ -480,7 +471,6 @@ export function chartUnits(results: SeriesQueryResult[]): string[] {
 
 /** 一条曲线的绘图模型（与 echarts 解耦，便于单测）。 */
 export interface ChartSeriesModel {
-  color: string;
   data: (null | number)[];
   name: string;
   propertyId: string;
@@ -503,8 +493,7 @@ export function buildChartModel(
   results: SeriesQueryResult[],
 ): ChartSeriesModel[] {
   const units = chartUnits(results);
-  return chartableResults(results).map((item, index) => ({
-    color: IOT_SERIES_COLORS[index % IOT_SERIES_COLORS.length] ?? '#0066f5',
+  return chartableResults(results).map((item) => ({
     data: item.points.map((point) => toNumeric(point.value)),
     name: item.unit ? `${item.name}（${item.unit}）` : item.name,
     propertyId: item.propertyId,

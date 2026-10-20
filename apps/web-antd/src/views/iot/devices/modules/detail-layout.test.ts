@@ -18,6 +18,7 @@ import alertSource from './detail-alert.vue?raw';
 import debugSource from './detail-debug.vue?raw';
 import Detail from './detail.vue';
 import detailSource from './detail.vue?raw';
+import basicCardSource from './overview-basic-card.vue?raw';
 import seriesSource from './series.vue?raw';
 import traceSource from './trace.vue?raw';
 
@@ -273,8 +274,10 @@ describe('概览卡片分区', () => {
       '最近在线',
       '备注',
     ]);
-    // 响应式列数：sm 1 列 / md 2 列 / xl 3 列（源码契约，antd 渲染不出断点对象）
-    expect(detailSource).toContain(':column="{ sm: 1, md: 2, xl: 3 }"');
+    // 响应式列数：sm 1 列 / md 2 列 / xl 3 列（源码契约，antd 渲染不出断点对象）。
+    // 批次 5 概览拆分后，基本信息 Descriptions 的宿主从 detail.vue 变为 overview-basic-card.vue
+    // ⇒ 断言指向新宿主（语义与选择器文本**未变**，只是文件位置变了）。
+    expect(basicCardSource).toContain(':column="{ sm: 1, md: 2, xl: 3 }"');
   });
 
   it('信息密集区域：两卡并排 + 表格横向滚动 + 表格最小宽度', async () => {

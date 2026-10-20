@@ -39,6 +39,16 @@
   --destructive: 359.33 100% 65.1%;
   --destructive-foreground: 0 0% 98%;
 
+  /*
+   * 文本专用语义色（2026-10-20 审查整改批次 5）：
+   * `--destructive/--success/--warning` 是给**实心块**（按钮/标签底色）用的，
+   * 明度偏高——直接当正文色在白底上只有 1.74–3.27:1（WCAG AA 需 4.5:1）。
+   * 这组按亮/暗模式分别取值，专供 `text-*`/图标等前景使用。
+   */
+  --destructive-text: 0 72% 45%;
+  --success-text: 142 72% 29%;
+  --warning-text: 26 90% 37%;
+
   /* Used for success actions such as <message> */
 
   --info: 240, 5%, 96%;

@@ -811,13 +811,22 @@ onMounted(load);
                 {{ $t(option.labelKey) }}
               </Select.Option>
             </Select>
-            <div v-if="isFloatFormat" class="mt-1 text-xs text-gray-400">
+            <div
+              v-if="isFloatFormat"
+              class="mt-1 text-xs text-muted-foreground"
+            >
               {{ $t('page.iot.point.floatFixedTwoWords') }}
             </div>
-            <div v-if="isDoubleFormat" class="mt-1 text-xs text-gray-400">
+            <div
+              v-if="isDoubleFormat"
+              class="mt-1 text-xs text-muted-foreground"
+            >
               {{ $t('page.iot.point.doubleFixedFourWords') }}
             </div>
-            <div v-if="isStringFormat" class="mt-1 text-xs text-gray-400">
+            <div
+              v-if="isStringFormat"
+              class="mt-1 text-xs text-muted-foreground"
+            >
               {{ $t('page.iot.point.stringWordCountHint') }}
             </div>
           </div>
@@ -862,10 +871,13 @@ onMounted(load);
                 {{ $t(option.labelKey) }}
               </Select.Option>
             </Select>
-            <div class="mt-1 text-xs text-gray-400">
+            <div class="mt-1 text-xs text-muted-foreground">
               {{ $t(byteOrderHintKey) }}
             </div>
-            <div v-if="!byteOrderEnabled" class="mt-1 text-xs text-amber-600">
+            <div
+              v-if="!byteOrderEnabled"
+              class="mt-1 text-xs text-warning-text"
+            >
               {{ $t('page.iot.point.byteOrderOnlyFor32') }}
             </div>
           </div>
@@ -899,7 +911,7 @@ onMounted(load);
               />
             </div>
           </div>
-          <div class="text-xs text-gray-400">
+          <div class="text-xs text-muted-foreground">
             {{ $t('page.iot.point.bitsHint') }}
           </div>
         </template>
@@ -928,7 +940,9 @@ onMounted(load);
         </div>
         <Switch v-model:checked="form.enabled" />
       </div>
-      <div v-if="!formOk" class="text-xs text-red-500">{{ formError }}</div>
+      <div v-if="!formOk" class="text-xs text-destructive-text">
+        {{ formError }}
+      </div>
     </div>
   </Modal>
 </template>

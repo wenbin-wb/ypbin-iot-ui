@@ -1,4 +1,8 @@
+import type { ListState } from '../../shared/list-state';
+
 import type { IotDeviceTraceApi } from '#/api/iot';
+
+import { resolveListState } from '../../shared/list-state';
 
 /**
  * 消息跟踪页的**纯逻辑**（状态映射 + 空态/失败态判定 + 边界提示）。
@@ -15,31 +19,22 @@ import type { IotDeviceTraceApi } from '#/api/iot';
  */
 
 /** 时间线列表的加载态（三分：加载中、失败、空）。 */
-export type TraceListState = 'empty' | 'error' | 'loading' | 'ready';
+export type TraceListState = ListState;
 
 /**
  * 判定列表该显示哪种状态。
  *
- * 🔴 顺序有意：**失败优先于空**。先判 error 再判空，页面才不会在请求失败时
- * 显示「这台设备最近没有消息」——那是把失败画成了事实。
- *
- * @param loading 是否正在加载
- * @param errorMessage 加载失败原因（非空即失败）
- * @param itemCount 已拿到的条目数
- * @returns 列表状态
+ * 判据已收口到 `../../shared/list-state`（`resolveListState`）：本函数只保留原导出名与
+ * 位置参数签名，行为零漂移。顺序仍是「loading > error > empty/ready」——
+ * **失败优先于空**（请求失败时显示「这台设备最近没有消息」就是把失败画成了事实），
+ * 由公共用例守门。
  */
 export function resolveTraceListState(
   loading: boolean,
   errorMessage: string,
   itemCount: number,
 ): TraceListState {
-  if (loading) {
-    return 'loading';
-  }
-  if (errorMessage) {
-    return 'error';
-  }
-  return itemCount > 0 ? 'ready' : 'empty';
+  return resolveListState({ errorMessage, itemCount, loading });
 }
 
 /**

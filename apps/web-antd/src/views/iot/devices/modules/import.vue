@@ -522,11 +522,11 @@ defineExpose({ onOpen });
     />
 
     <!-- 第 1 步：下载模板 -->
-    <div class="rounded border border-solid border-gray-200 p-3">
+    <div class="rounded border border-solid border-border p-3">
       <div class="mb-2 text-sm font-medium">
         {{ $t('page.iot.device.import.stepTemplate') }}
       </div>
-      <div class="mb-2 text-xs text-gray-500">
+      <div class="mb-2 text-xs text-muted-foreground">
         {{
           $t('page.iot.device.import.templateHint', [
             DEVICE_IMPORT_FRONTEND_LIMITS.maxRows,
@@ -540,7 +540,7 @@ defineExpose({ onOpen });
     </div>
 
     <!-- 第 2 步：上传 -->
-    <div class="rounded border border-solid border-gray-200 p-3">
+    <div class="rounded border border-solid border-border p-3">
       <div class="mb-2 text-sm font-medium">
         {{ $t('page.iot.device.import.stepUpload') }}
       </div>
@@ -567,14 +567,14 @@ defineExpose({ onOpen });
           {{ $t('page.iot.device.import.selectFile') }}
         </Button>
       </Upload>
-      <div class="mt-2 text-xs text-gray-500">
+      <div class="mt-2 text-xs text-muted-foreground">
         {{ $t('page.iot.device.import.uploadHint') }}
       </div>
     </div>
 
     <!-- 第 3 步：看结果 + 拿走失败行 -->
     <div
-      class="flex min-h-0 flex-1 flex-col rounded border border-solid border-gray-200 p-3"
+      class="flex min-h-0 flex-1 flex-col rounded border border-solid border-border p-3"
     >
       <div class="mb-2 flex items-center justify-between">
         <span class="text-sm font-medium">
@@ -613,7 +613,7 @@ defineExpose({ onOpen });
             hasFailedRows(lastResult.failedRows) ? 'exception' : 'success'
           "
         />
-        <div class="text-xs text-gray-500">
+        <div class="text-xs text-muted-foreground">
           {{
             $t('page.iot.device.import.countSummary', [
               lastResult.totalRows ?? 0,
@@ -645,7 +645,7 @@ defineExpose({ onOpen });
       -->
       <div
         v-if="!listError && batchesTotal > 0"
-        class="mb-1 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500"
+        class="mb-1 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"
       >
         <span data-testid="import-batch-total">
           {{
@@ -776,11 +776,11 @@ defineExpose({ onOpen });
           </template>
           <template v-else-if="column.dataIndex === 'errorCode'">
             <span v-if="record.errorCode">{{ record.errorCode }}</span>
-            <span v-else class="text-gray-400">-</span>
+            <span v-else class="text-muted-foreground">-</span>
           </template>
           <template v-else-if="column.dataIndex === 'errorMessage'">
             <span v-if="record.errorMessage">{{ record.errorMessage }}</span>
-            <span v-else class="text-gray-400">-</span>
+            <span v-else class="text-muted-foreground">-</span>
           </template>
         </template>
         <template #emptyText>

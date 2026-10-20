@@ -1,3 +1,7 @@
+import type { ListState } from '../shared/list-state';
+
+import { resolveListState } from '../shared/list-state';
+
 /**
  * 开放 API Key 管理页的**纯逻辑**（表单校验/归一化/列表态/状态展示），零 vue 依赖可单测。
  *
@@ -22,8 +26,8 @@ export const OPEN_API_ALLOWED_SCOPES: readonly string[] = [
 /** 高危作用域：命令下发（默认不授予，需显式勾选）。 */
 export const OPEN_API_DANGEROUS_SCOPE = 'iot:debug:send';
 
-/** Key 列表展示态。 */
-export type OpenApiKeyListState = 'empty' | 'error' | 'loading' | 'ready';
+/** Key 列表展示态（判据收口到 shared/list-state）。 */
+export type OpenApiKeyListState = ListState;
 
 /** 表单校验结果。 */
 export type CheckResult = { message?: string; ok: boolean };
@@ -267,19 +271,13 @@ export function openApiKeyIpWhitelistKind(
   return value.trim() === '' ? 'unlimited' : 'configured';
 }
 
-/** 列表态判定（错误优先于空态，避免把加载失败画成"没有 Key"）。 */
+/** 列表态判定（错误优先于空态，避免把加载失败画成"没有 Key"；判据收口到 shared/list-state）。 */
 export function resolveOpenApiKeyListState(
   loading: boolean,
   errorMessage: string,
   count: number,
 ): OpenApiKeyListState {
-  if (loading) {
-    return 'loading';
-  }
-  if (errorMessage) {
-    return 'error';
-  }
-  return count > 0 ? 'ready' : 'empty';
+  return resolveListState({ errorMessage, itemCount: count, loading });
 }
 
 /** 启用态判定（后端 EntityStatus：1=启用，其余一律按停用展示，fail-closed）。 */

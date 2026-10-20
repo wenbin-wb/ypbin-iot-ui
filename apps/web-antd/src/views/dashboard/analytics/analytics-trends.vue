@@ -9,6 +9,7 @@ import { Inbox } from '@vben/icons';
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 
 import { $t } from '#/locales';
+import { chartColor } from '#/utils/chart-tokens';
 
 defineOptions({ name: 'AnalyticsMessageTrend' });
 
@@ -23,9 +24,6 @@ const { renderEcharts } = useEcharts(chartRef);
 /** 空数据时不渲染画布，改为友好空态：空数组会让图表区看起来像坏掉的白块。 */
 const hasData = computed(() => props.points.length > 0);
 
-const UPLINK_COLOR = '#0066f5';
-const DOWNLINK_COLOR = '#7c7cf0';
-
 /**
  * 必须在挂载后渲染：useEcharts 内部 isActiveRef 要 onMounted 才为 true，
  * setup 期（watch immediate）调用 renderEcharts 会被静默丢弃且不重试。
@@ -34,6 +32,9 @@ function renderChart(points: IotDashboardApi.MessageTrendPoint[]) {
   if (points.length === 0) {
     return;
   }
+  // 渲染时解析语义 token：上行=主色，下行=主色浅阶（保持原来的「同族两色」观感）
+  const uplinkColor = chartColor('primary');
+  const downlinkColor = chartColor('primary-400');
   renderEcharts({
     grid: {
       bottom: 0,
@@ -48,7 +49,7 @@ function renderChart(points: IotDashboardApi.MessageTrendPoint[]) {
       top: 0,
     },
     tooltip: {
-      axisPointer: { lineStyle: { color: UPLINK_COLOR, width: 1 } },
+      axisPointer: { lineStyle: { color: uplinkColor, width: 1 } },
       trigger: 'axis',
     },
     xAxis: {
@@ -74,14 +75,14 @@ function renderChart(points: IotDashboardApi.MessageTrendPoint[]) {
             y: 0,
             y2: 1,
             colorStops: [
-              { offset: 0, color: 'rgba(0,102,245,0.42)' },
-              { offset: 1, color: 'rgba(0,102,245,0.02)' },
+              { color: chartColor('primary', 0.42), offset: 0 },
+              { color: chartColor('primary', 0.02), offset: 1 },
             ],
           },
         },
         data: points.map((p) => p.uplink),
-        itemStyle: { color: UPLINK_COLOR },
-        lineStyle: { color: UPLINK_COLOR, width: 2.5 },
+        itemStyle: { color: uplinkColor },
+        lineStyle: { color: uplinkColor, width: 2.5 },
         name: $t('page.dashboard.uplink'),
         smooth: true,
         symbol: 'circle',
@@ -97,14 +98,14 @@ function renderChart(points: IotDashboardApi.MessageTrendPoint[]) {
             y: 0,
             y2: 1,
             colorStops: [
-              { offset: 0, color: 'rgba(124,124,240,0.38)' },
-              { offset: 1, color: 'rgba(124,124,240,0.02)' },
+              { color: chartColor('primary-400', 0.38), offset: 0 },
+              { color: chartColor('primary-400', 0.02), offset: 1 },
             ],
           },
         },
         data: points.map((p) => p.downlink),
-        itemStyle: { color: DOWNLINK_COLOR },
-        lineStyle: { color: DOWNLINK_COLOR, width: 2 },
+        itemStyle: { color: downlinkColor },
+        lineStyle: { color: downlinkColor, width: 2 },
         name: $t('page.dashboard.downlink'),
         smooth: true,
         symbol: 'circle',

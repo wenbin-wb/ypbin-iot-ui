@@ -22,6 +22,13 @@ import { extractErrorMessage } from '#/utils/error';
 import { formatDateTime } from '../../shared/display';
 import ListErrorAlert from '../../shared/list-error-alert.vue';
 import { buildTenantNameMap } from '../ledger-display';
+import {
+  TOPOLOGY_COLOR_BAD,
+  TOPOLOGY_COLOR_EDGE,
+  TOPOLOGY_COLOR_OK,
+  TOPOLOGY_COLOR_TENANT,
+  TOPOLOGY_COLOR_UNKNOWN,
+} from './access-topology-colors';
 
 /**
  * 接入拓扑（**内容组件**：不含 Page；宿主见同目录 index.vue 的第三个页签）。
@@ -43,10 +50,12 @@ const PLATFORM_NODE_ID = 'platform';
 const ACCESS_NODE_PREFIX = 'access:';
 const TENANT_NODE_PREFIX = 'tenant:';
 
-const COLOR_OK = '#00b42a';
-const COLOR_BAD = '#f2547b';
-const COLOR_UNKNOWN = '#8a94a6';
-const COLOR_TENANT = '#0066f5';
+// 图表色值从 `access-topology-colors.ts` 引入：ECharts 用 Canvas 渲染，无法解析
+// `hsl(var(--token))`，故只能在常量模块里保留具体色值（原因见该文件头注释）。
+const COLOR_OK = TOPOLOGY_COLOR_OK;
+const COLOR_BAD = TOPOLOGY_COLOR_BAD;
+const COLOR_UNKNOWN = TOPOLOGY_COLOR_UNKNOWN;
+const COLOR_TENANT = TOPOLOGY_COLOR_TENANT;
 
 interface MetricCard {
   key: string;
@@ -270,7 +279,7 @@ const graphOption = computed((): TopologyChartOption => {
         emphasis: { focus: 'adjacency', lineStyle: { width: 2 } },
         label: { fontSize: 11, show: true },
         layout: 'none',
-        lineStyle: { color: '#b6c2d9', curveness: 0.08, width: 1 },
+        lineStyle: { color: TOPOLOGY_COLOR_EDGE, curveness: 0.08, width: 1 },
         roam: true,
         scaleLimit: { max: 3, min: 0.5 },
         symbol: 'circle',
@@ -518,9 +527,9 @@ watch(
           class="mt-1 text-xl font-semibold tabular-nums"
           :class="{
             'text-muted-foreground': item.tone === 'muted',
-            // 语义 token：text-red-600（#dc2626）在暗色下仍是硬编码红、对比度不可控；
-            // text-destructive 跟随主题（亮/暗各一份），与全仓其余危险色口径一致。
-            'text-destructive': item.tone === 'danger',
+            // 语义 token：danger 色改用 text-destructive-text（跟随主题明/暗两档），
+            // 不再硬编码 Tailwind 红色调色板类——后者在暗色下对比度不可控。
+            'text-destructive-text': item.tone === 'danger',
           }"
         >
           {{ item.value }}

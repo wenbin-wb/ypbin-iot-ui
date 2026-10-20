@@ -1,6 +1,10 @@
+import type { ListState } from '../../shared/list-state';
+
 import type { IotDeviceTagApi } from '#/api/iot';
 
 import { $t } from '#/locales';
+
+import { resolveListState } from '../../shared/list-state';
 
 /**
  * 设备标签页的**纯逻辑**（表单校验 + 状态判定），零 vue/antdv 依赖，可直接单测。
@@ -95,25 +99,17 @@ export function normalizeTagForm(
 /**
  * 标签列表的展示态（加载中/失败/空/就绪，失败优先于空）。
  *
- * @param loading      是否加载中
- * @param errorMessage 加载失败原因（非空即失败）
- * @param itemCount    条目数
- * @returns 状态
+ * 判据已收口到 `../../shared/list-state`（`resolveListState`）：本函数只保留原导出名与
+ * 位置参数签名，行为零漂移；「失败优先于空」的顺序由 `shared/list-state.test.ts` 守门。
  */
-export type TagListState = 'empty' | 'error' | 'loading' | 'ready';
+export type TagListState = ListState;
 
 export function resolveTagListState(
   loading: boolean,
   errorMessage: string,
   itemCount: number,
 ): TagListState {
-  if (loading) {
-    return 'loading';
-  }
-  if (errorMessage) {
-    return 'error';
-  }
-  return itemCount > 0 ? 'ready' : 'empty';
+  return resolveListState({ errorMessage, itemCount, loading });
 }
 
 /**

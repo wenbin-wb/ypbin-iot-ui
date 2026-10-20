@@ -887,7 +887,7 @@ function displayTime(value?: DisplayValue): string {
 
 /** 本批高亮：最近一次下发产生的记录在列表里标出来，避免 N 条看着像孤立记录。 */
 function rowClassName(record: IotCommandApi.CommandInstanceResp): string {
-  // 高亮「同一批」的命令：用语义 token（primary/10）而不是 bg-blue-50——
+  // 高亮「同一批」的命令：用语义 token（primary/10）而不是 bg-primary/10——
   // 硬编码调色板在暗色主题下是近白底 + 浅色文字（对比度 1.09:1，内容不可读）。
   return batchRequestIds.value.has(record.requestId) ? 'bg-primary/10' : '';
 }
@@ -1010,7 +1010,7 @@ const batchSummary = computed(() => {
         <div class="mt-1 text-xs text-muted-foreground">
           {{ $t('page.iot.debug.valueHint') }}
         </div>
-        <div v-if="setRows.length > 1" class="mt-1 text-xs text-amber-600">
+        <div v-if="setRows.length > 1" class="mt-1 text-xs text-warning-text">
           {{ $t('page.iot.debug.fanoutHint', [String(MAX_FANOUT)]) }}
         </div>
         <!--
@@ -1050,7 +1050,10 @@ const batchSummary = computed(() => {
           show-icon
           type="info"
         />
-        <div v-if="getSelection.length > 1" class="mt-1 text-xs text-amber-600">
+        <div
+          v-if="getSelection.length > 1"
+          class="mt-1 text-xs text-warning-text"
+        >
           {{ $t('page.iot.debug.fanoutHint', [String(MAX_FANOUT)]) }}
         </div>
       </template>
@@ -1294,7 +1297,10 @@ const batchSummary = computed(() => {
               <Tag :color="statusColor(record.statusCode)">
                 {{ statusText(record.statusCode) }}
               </Tag>
-              <span v-if="record.errorCode" class="ml-1 text-xs text-red-600">
+              <span
+                v-if="record.errorCode"
+                class="ml-1 text-xs text-destructive-text"
+              >
                 {{ errorCodeText(record.errorCode) }}
               </span>
             </template>

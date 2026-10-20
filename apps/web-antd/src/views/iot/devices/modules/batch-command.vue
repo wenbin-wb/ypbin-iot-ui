@@ -712,7 +712,7 @@ defineExpose({ drawerApi });
             >
               <span class="w-40 text-sm">
                 {{ def.name }}
-                <span v-if="def.required" class="text-red-500">*</span>
+                <span v-if="def.required" class="text-destructive-text">*</span>
                 <span v-if="def.unit" class="text-xs text-muted-foreground">
                   （{{ def.unit }}）
                 </span>

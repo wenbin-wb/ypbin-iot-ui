@@ -268,7 +268,10 @@ onMounted(load);
               <span>{{ formatDateTime(record.occurredAt) }}</span>
             </Tooltip>
             <!-- 重发会就地覆写时间戳 ⇒ 必须提示，否则用户以为"10:03 那次"还是原来那次 -->
-            <span v-if="needsRetryHint(record)" class="text-xs text-orange-500">
+            <span
+              v-if="needsRetryHint(record)"
+              class="text-xs text-warning-text"
+            >
               {{
                 $t('page.iot.device.trace.retryHint', {
                   n: record.retryCount ?? 0,
@@ -318,14 +321,14 @@ onMounted(load);
               }}
             </span>
             <!-- 🔴 只认 persistedAt：为空显示占位符，绝不用其它时间列冒充落库时刻 -->
-            <span class="text-gray-500">
+            <span class="text-muted-foreground">
               {{
                 $t('page.iot.device.trace.persistedAt', {
                   time: formatDateTime(record.persistedAt),
                 })
               }}
             </span>
-            <span v-if="record.discardReason" class="text-red-500">
+            <span v-if="record.discardReason" class="text-destructive-text">
               {{
                 $t('page.iot.device.trace.discardReason', {
                   reason: record.discardReason,
@@ -333,7 +336,10 @@ onMounted(load);
               }}
             </span>
             <!-- 🔴 原样显示后端截断后的明细（含 ,...(+N) 后缀），前端不再加工 -->
-            <span v-if="record.discardDetail" class="break-all text-gray-500">
+            <span
+              v-if="record.discardDetail"
+              class="break-all text-muted-foreground"
+            >
               {{
                 $t('page.iot.device.trace.discardDetail', {
                   detail: formatDiscardDetail(record.discardDetail),
@@ -341,7 +347,7 @@ onMounted(load);
               }}
             </span>
           </div>
-          <span v-else class="text-xs text-gray-400">
+          <span v-else class="text-xs text-muted-foreground">
             {{ $t('page.iot.device.trace.batchNotApplicable') }}
           </span>
         </template>
@@ -356,7 +362,7 @@ onMounted(load);
       >
         <template #default="{ record }">
           <!-- 即使没有建议也必须显示原始错误码：它是用户排障的依据 -->
-          <span :class="needsAttention(record) ? 'text-red-500' : ''">
+          <span :class="needsAttention(record) ? 'text-destructive-text' : ''">
             {{ record.errorCode || '-' }}
           </span>
         </template>
@@ -370,7 +376,7 @@ onMounted(load);
                 {{ action }}
               </li>
             </ul>
-            <span class="text-xs text-gray-400">{{
+            <span class="text-xs text-muted-foreground">{{
               record.advice.ruleId
             }}</span>
           </div>
@@ -387,11 +393,11 @@ onMounted(load);
                 {{ $t(actionKey) }}
               </li>
             </ul>
-            <span class="text-xs text-gray-400">
+            <span class="text-xs text-muted-foreground">
               {{ record.derivedAdvice.ruleId }}
             </span>
           </div>
-          <span v-else class="text-xs text-gray-400">
+          <span v-else class="text-xs text-muted-foreground">
             <!-- 没有建议时也要显示，且要说明"原始错误码见左列"——不是静默空白 -->
             {{ $t('page.iot.device.trace.noAdvice') }}
           </span>

@@ -9,6 +9,7 @@ import { Inbox } from '@vben/icons';
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 
 import { $t } from '#/locales';
+import { chartColor } from '#/utils/chart-tokens';
 
 defineOptions({ name: 'AnalyticsProductTop' });
 
@@ -60,8 +61,8 @@ function renderChart(items: IotDashboardApi.NameValue[]) {
             y: 0,
             y2: 0,
             colorStops: [
-              { offset: 0, color: 'rgba(0,102,245,0.45)' },
-              { offset: 1, color: '#0066f5' },
+              { color: chartColor('primary', 0.45), offset: 0 },
+              { color: chartColor('primary'), offset: 1 },
             ],
           },
         },

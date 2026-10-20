@@ -297,6 +297,8 @@ async function copyText(text: string) {
 <template>
   <!-- 架构对齐：根节点用 Page auto-content-height（其余 8 个 IoT 列表页的范式） -->
   <Page v-if="canList" auto-content-height>
+    <!-- 页面主标题：视觉上隐藏，供读屏/文档大纲使用（全站 0 个 h1 是审查 P3-5 指出的可访问性缺陷） -->
+    <h1 class="sr-only">{{ $t('page.iot.openApiKey.title') }}</h1>
     <div class="mb-3 flex flex-wrap items-center gap-3">
       <div class="font-semibold">
         {{ $t('page.iot.openApiKey.title') }}

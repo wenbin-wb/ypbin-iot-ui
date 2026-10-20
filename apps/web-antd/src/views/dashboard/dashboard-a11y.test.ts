@@ -148,7 +148,7 @@ describe('图表可访问性：canvas 容器必须有 role="img" + aria-label', 
 });
 
 describe('设计令牌纪律：dashboard 内不得出现 Tailwind 调色板类', () => {
-  it('全目录 0 处 text-gray-* / bg-blue-50 / border-gray-* 等（暗色模式会失效）', () => {
+  it('全目录 0 处 Tailwind 调色板类（gray/blue/red…，暗色模式下会失效）', () => {
     const paletteClass =
       /\b(?:bg|text|border|ring|divide|from|to|via)-(?:gray|slate|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}\b/;
     const offenders: string[] = [];

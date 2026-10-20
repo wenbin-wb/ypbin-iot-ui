@@ -191,6 +191,8 @@ async function reloadOnFilter() {
 <template>
   <!-- 架构对齐：补上 auto-content-height（此前高度链与其它页不一致） -->
   <Page auto-content-height>
+    <!-- 页面主标题：视觉上隐藏，供读屏/文档大纲使用（全站 0 个 h1 是审查 P3-5 指出的可访问性缺陷） -->
+    <h1 class="sr-only">{{ $t('page.iot.platformAlert.title') }}</h1>
     <template v-if="canView">
       <div class="mb-3 flex flex-wrap items-center gap-3">
         <div class="font-semibold">

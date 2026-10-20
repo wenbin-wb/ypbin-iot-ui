@@ -98,7 +98,7 @@ async function copy() {
     </span>
     <Tooltip v-if="text" :title="$t('page.iot.display.copy')">
       <Button class="shrink-0" size="small" type="text" @click.stop="copy">
-        <Check v-if="copied" class="size-3.5 text-green-600" />
+        <Check v-if="copied" class="size-3.5 text-success-text" />
         <Copy v-else class="size-3.5" />
       </Button>
     </Tooltip>

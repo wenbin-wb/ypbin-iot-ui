@@ -13,8 +13,12 @@
  *    也不把 `running` 之外的状态渲染成进度条。
  */
 
+import type { ListState } from '../../shared/list-state';
+
 import { DEVICE_IMPORT_FRONTEND_LIMITS } from '#/api/iot';
 import { $t } from '#/locales';
+
+import { resolveListState } from '../../shared/list-state';
 
 /**
  * 批次状态码（与后端 `DeviceImportStatus` 对齐的**具名常量**）。
@@ -36,32 +40,21 @@ export const IMPORT_ROW_RESULT = {
 } as const;
 
 /** 批次列表 / 明细表格的加载态（三分：加载中、失败、空）。 */
-export type ImportListState = 'empty' | 'error' | 'loading' | 'ready';
+export type ImportListState = ListState;
 
 /**
  * 判定列表该显示哪种状态。
  *
- * 🔴 顺序是有意的：**失败优先于空**。先判 error 再判空，页面才不会在请求失败时
- * 显示「还没有数据，去创建吧」——那是本仓设备台账页已经踩过的假空态。
- *
- * @param loading 是否正在加载
- * @param errorMessage 加载失败原因（非空即失败）
- * @param itemCount 已拿到的条目数
- * @returns 列表状态
+ * 判据已收口到 `../../shared/list-state`（`resolveListState`）：本函数只保留原导出名与
+ * 位置参数签名，行为零漂移。顺序仍是「loading > error > empty/ready」——
+ * **失败优先于空**（请求失败时页面绝不能声称「还没有数据」），由公共用例守门。
  */
 export function resolveImportListState(
   loading: boolean,
   errorMessage: string,
   itemCount: number,
 ): ImportListState {
-  if (loading) {
-    return 'loading';
-  }
-  if (errorMessage) {
-    // 失败**优先于空**：请求失败时页面绝不能声称「没有数据」
-    return 'error';
-  }
-  return itemCount > 0 ? 'ready' : 'empty';
+  return resolveListState({ errorMessage, itemCount, loading });
 }
 
 /** 前端校验失败结论：只带 i18n key 与参数，文案由 {@link resolveImportFileCheckMessage} 解析。 */

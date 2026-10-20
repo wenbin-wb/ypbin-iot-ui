@@ -167,6 +167,8 @@ function openGuide() {
 </script>
 <template>
   <Page auto-content-height>
+    <!-- 页面主标题：视觉上隐藏，供读屏/文档大纲使用（全站 0 个 h1 是审查 P3-5 指出的可访问性缺陷） -->
+    <h1 class="sr-only">{{ $t('page.iot.product.title') }}</h1>
     <FormDrawer @reload="reloadList" />
     <DetailDrawer @reload="reloadList" />
     <GuideDrawer

@@ -1,8 +1,6 @@
 <script lang="ts" setup>
 import type { Dayjs } from 'dayjs';
 
-import type { EchartsUIType } from '@vben/plugins/echarts';
-
 import type {
   ModelHint,
   SeriesPointOption,
@@ -12,12 +10,10 @@ import type {
 } from './series-utils';
 
 import type { IotPointApi, IotThingModelApi } from '#/api/iot';
-import type { IotRealtimeLatestPayload } from '#/api/iot/realtime';
 
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 
 import { useVbenDrawer } from '@vben/common-ui';
-import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 
 // vben-ui-dev-exempt: R2 本抽屉是「查询条件 + 即时出图」，不是提交型表单（没有 submit/reset 语义），
 // 沿用本文件既有写法直接用 antd 组件；把 Select/RangePicker 塞进 useVbenForm schema 反而要另造一套
@@ -54,9 +50,8 @@ import { extractErrorMessage } from '#/utils/error';
 import { downloadByBlob } from '#/utils/file';
 
 import { displayOrFallback, qualityLabel } from '../../shared/display';
-import { useIotRealtime } from '../../shared/use-iot-realtime';
+import SeriesChart from './series-chart.vue';
 import {
-  appendLiveSeriesPoint,
   buildChartModel,
   buildCsv,
   buildCsvRows,
@@ -65,7 +60,6 @@ import {
   chartUnits,
   countOrphanPoints,
   flattenProperties,
-  formatAxisTs,
   formatRangeLabel,
   IOT_SERIES_AUTO_REFRESH_MS,
   IOT_SERIES_DEFAULT_RANGE_MODE,
@@ -80,6 +74,7 @@ import {
   saveSeriesPreferences,
   seriesCsvFileName,
 } from './series-utils';
+import { useSeriesLive } from './use-series-live';
 
 /**
  * 历史曲线抽屉（设备台账与设备详情**共用这一份**）。
@@ -137,7 +132,7 @@ const modelHint = ref<ModelHint>(null);
 
 const rangeMode = ref<SeriesRangeMode>(IOT_SERIES_DEFAULT_RANGE_MODE);
 const customRange = ref<[Dayjs, Dayjs]>();
-const autoRefresh = ref(false);
+// 注意：`autoRefresh` 现由 `useSeriesLive` 提供（与实时跟随互斥，见该组合式注释）
 /**
  * `InputNumber` 的 `value`/`update:value` 类型是 `string | number`（antdv 4.2.6 的 `ValueType`），
  * 故按组件实际类型声明；提交查询前统一 `Number()` 并校验整数范围。
@@ -165,14 +160,6 @@ const usedLimit = ref<number>(IOT_SERIES_DEFAULT_LIMIT);
 /** 自动刷新要重放的档位：快捷档位每次按「当前时刻」重算窗口（滑动窗口），自定义档位保持固定。 */
 const usedMode = ref<SeriesRangeMode>(IOT_SERIES_DEFAULT_RANGE_MODE);
 const usedCustom = ref<{ from?: number; to?: number }>({});
-
-const chartRef = ref<EchartsUIType>();
-const { renderEcharts } = useEcharts(chartRef);
-
-/** 图表配置类型取自 `renderEcharts` 的入参：echarts 不是本应用的直接依赖，不能直接 import 它的类型。 */
-type SeriesChartOption = Parameters<typeof renderEcharts>[0];
-
-let refreshTimer: ReturnType<typeof setInterval> | undefined;
 
 const [Drawer, drawerApi] = useVbenDrawer<SeriesDrawerData>({
   async onOpenChange(isOpen: boolean) {
@@ -430,7 +417,7 @@ async function runQuery(
 ): Promise<void> {
   loading.value = true;
   // 每次重查都会**替换** results：上一轮内存里跟随的点不复存在，计数必须归零（不能虚报已跟随）
-  resetLiveCounters();
+  live.resetLiveCounters();
   try {
     const settled = await Promise.allSettled(
       targets.map(
@@ -472,7 +459,6 @@ async function runQuery(
   usedPoints.value = [...targets];
   usedRange.value = range;
   usedLimit.value = limitValue;
-  await renderChart();
 }
 
 /** 查询入口：先把注定失败的请求拦下来（点位/设备缺失、limit 越界、起始晚于结束）。 */
@@ -577,48 +563,6 @@ function onAddManualPoint(): void {
   manualInput.value = '';
 }
 
-// ---------- 自动刷新 ----------
-
-function stopAutoRefresh(): void {
-  if (refreshTimer !== undefined) {
-    clearInterval(refreshTimer);
-    refreshTimer = undefined;
-  }
-}
-
-function restartAutoRefresh(): void {
-  stopAutoRefresh();
-  if (!autoRefresh.value) {
-    return;
-  }
-  refreshTimer = setInterval(() => {
-    if (loading.value || usedPoints.value.length === 0) {
-      return;
-    }
-    // 重放「上次查询」的条件（而不是当前编辑中的条件）：用户改到一半不该被周期请求打断；
-    // 快捷档位按当前时刻重算窗口（滑动），自定义档位保持固定区间
-    const range = resolveSeriesRange(
-      usedMode.value,
-      usedCustom.value,
-      Date.now(),
-    );
-    void runQuery([...usedPoints.value], range, usedLimit.value);
-  }, IOT_SERIES_AUTO_REFRESH_MS);
-}
-
-watch(autoRefresh, (enabled) => {
-  if (enabled) {
-    restartAutoRefresh();
-  } else {
-    stopAutoRefresh();
-  }
-});
-
-onBeforeUnmount(() => {
-  stopAutoRefresh();
-  stopLiveFollow();
-});
-
 // ---------- 图表与明细 ----------
 
 const chartModel = computed(() => buildChartModel(results.value));
@@ -671,209 +615,38 @@ const usedRangeLabel = computed(() =>
   formatRangeLabel(usedRange.value.from, usedRange.value.to),
 );
 
-/** 每个单位一条 Y 轴（不同量纲共轴会把两条曲线都压扁），左右交替摆放。 */
-function buildYAxes(unitList: string[]) {
-  return unitList.map((unit, index) => ({
-    axisTick: { show: false },
-    name: unit,
-    offset: Math.floor(index / 2) * 56,
-    position: (index % 2 === 0 ? 'left' : 'right') as 'left' | 'right',
-    // 传感器量程通常远离 0：强制从 0 起会把曲线压成一条直线，故按数据范围缩放
-    scale: true,
-    splitNumber: 4,
-    type: 'value' as const,
-  }));
-}
-
-/** 历史曲线配置：时间轴 + 十字线 + 图例；单位进 Y 轴名与图例（量纲不再只能靠猜）。 */
-async function renderChart(): Promise<void> {
-  if (!hasChart.value) {
-    return;
-  }
-  const model = chartModel.value;
-  const unitList = units.value;
-  await nextTick();
-  const option: SeriesChartOption = {
-    grid: {
-      bottom: 8,
-      containLabel: true,
-      left: 8,
-      right: unitList.length > 1 ? 56 : 16,
-      top: model.length > 1 ? 40 : 24,
-    },
-    legend: { show: model.length > 1, top: 0, type: 'scroll' },
-    series: model.map((item) => ({
-      connectNulls: false,
-      // 时间轴 + [时刻, 值]：多个点位的采样时刻不同，用等距类别轴会把它们按索引对齐（假的时间关系）
-      data: item.timestamps.map((ts, index): [number, null | number] => [
-        ts,
-        item.data[index] ?? null,
-      ]),
-      itemStyle: { color: item.color },
-      lineStyle: { color: item.color, width: 2 },
-      name: item.name,
-      showSymbol: item.showSymbol,
-      smooth: false,
-      type: 'line',
-      yAxisIndex: item.yAxisIndex,
-    })),
-    tooltip: { axisPointer: { type: 'cross' }, trigger: 'axis' },
-    // ⚠️ 必须断言：echarts 6 的 `EChartsOption` 把 `xAxis.type` 收窄成了 `'category'`
-    // （类型合成的已知缺陷，运行时完全支持 `'time'`）。用等距类别轴代替时间轴会把多个点位的
-    // 采样点按**索引**对齐 —— 那是假的峰谷对齐关系，宁可断言也不能这么画。
-    xAxis: {
-      axisLabel: {
-        formatter: (value: number | string) => formatAxisTs(value),
-        hideOverlap: true,
-      },
-      axisTick: { show: false },
-      boundaryGap: false,
-      splitLine: { show: false },
-      type: 'time',
-    } as unknown as SeriesChartOption['xAxis'],
-    yAxis: buildYAxes(unitList),
-  };
-  await renderEcharts(option);
-}
-
-// ---------- 实时跟随 ----------
+// ---------- 实时跟随 + 自动刷新（组合式） ----------
 
 /**
- * 「实时跟随」：订阅 SSE `latest`，把匹配当前设备/点位的新点**追加进内存 results**。
- *
- * 三条纪律：
- * 1. 只在已出图时可用（没曲线时打开只会订阅一个永远匹配不到的流）；
- * 2. 事件必须设备与点位都匹配才追加；不匹配的静默忽略（不是本曲线的数据）；
- * 3. 关闭开关 / 关抽屉 / 换设备 / 组件卸载都退订；重查时清空计数（内存点已被新结果替换）。
- *
- * 质量口径：非 good 的点**照常追加**（与历史曲线一致：数值照画、质量码在明细表可见），
- * 同时计数并给出可见提示，绝不把它洗成 good；时间戳重复/非法或该点位查询失败的点忽略并计数。
+ * 实时跟随与自动刷新互斥、生命周期一致（关抽屉/卸载都要停），因此由 `useSeriesLive` 统一管理：
+ * 这里只注入「设备 id / 曲线是否可见 / 结果容器 / 上次查询条件 / 重放函数」这些宿主能力。
  */
-const liveFollow = ref(false);
-const liveFollowedCount = ref(0);
-const liveDroppedCount = ref(0);
-const liveNonGoodCount = ref(0);
+const live = useSeriesLive({
+  getDeviceId: () => deviceId.value,
+  hasChart,
+  isLoading: () => loading.value,
+  results,
+  runQuery: (targets, range, limitValue) =>
+    runQuery(targets, range, limitValue),
+  usedCustom,
+  usedLimit,
+  usedMode,
+  usedPoints,
+});
 
 const {
-  error: realtimeError,
-  onEvent,
-  state: realtimeState,
-} = useIotRealtime();
-
-/** 当前订阅的退订函数（未订阅时为 undefined）。 */
-let liveUnsubscribe: (() => void) | undefined;
-
-/** 实时状态 Tag：未开启 = 已关闭；开启后按 SSE 连接状态显示。 */
-const liveState = computed<{ color: string; text: string }>(() => {
-  if (!liveFollow.value) {
-    return { color: 'default', text: $t('page.iot.series.liveOff') };
-  }
-  switch (realtimeState.value) {
-    case 'connecting': {
-      return {
-        color: 'processing',
-        text: $t('page.iot.series.liveConnecting'),
-      };
-    }
-    case 'live': {
-      return { color: 'success', text: $t('page.iot.series.liveActive') };
-    }
-    case 'reconnecting': {
-      return {
-        color: 'warning',
-        text: $t('page.iot.series.liveReconnecting'),
-      };
-    }
-    default: {
-      return { color: 'default', text: $t('page.iot.series.liveOff') };
-    }
-  }
-});
-
-function resetLiveCounters(): void {
-  liveFollowedCount.value = 0;
-  liveDroppedCount.value = 0;
-  liveNonGoodCount.value = 0;
-}
-
-function startLiveFollow(): void {
-  if (liveUnsubscribe !== undefined) {
-    return;
-  }
-  liveUnsubscribe = onEvent('latest', onLatestEvent);
-}
-
-function stopLiveFollow(): void {
-  liveUnsubscribe?.();
-  liveUnsubscribe = undefined;
-}
-
-/** 关闭跟随并清空计数（关抽屉 / 换设备 / 卸载时调用）。 */
-function resetLiveFollow(): void {
-  stopLiveFollow();
-  liveFollow.value = false;
-  resetLiveCounters();
-}
-
-/** `latest` 事件：设备 + 点位双匹配才追加；质量/时间戳规则见 {@link appendLiveSeriesPoint}。 */
-function onLatestEvent(payload: IotRealtimeLatestPayload): void {
-  if (!liveFollow.value || !hasChart.value) {
-    return;
-  }
-  const eventDeviceId =
-    payload.deviceId === null || payload.deviceId === undefined
-      ? ''
-      : String(payload.deviceId).trim();
-  // 其它设备的事件不属于本曲线：静默忽略（不计数，计数只统计「本设备但追加失败」的）
-  if (eventDeviceId === '' || eventDeviceId !== deviceId.value) {
-    return;
-  }
-  const propertyId = String(payload.propertyId ?? '').trim();
-  if (propertyId === '') {
-    return;
-  }
-  const outcome = appendLiveSeriesPoint(
-    results.value,
-    {
-      propertyId,
-      quality: payload.quality ?? null,
-      ts: payload.ts ?? null,
-      value: payload.value ?? null,
-    },
-    IOT_SERIES_LIVE_MAX_POINTS,
-  );
-  if (!outcome.matched) {
-    // 事件点位不在本次查询内：与本曲线无关，静默忽略
-    return;
-  }
-  if (!outcome.appended) {
-    liveDroppedCount.value += 1;
-    return;
-  }
-  results.value = outcome.results;
-  liveFollowedCount.value += 1;
-  if (!outcome.good) {
-    liveNonGoodCount.value += 1;
-  }
-  void renderChart();
-}
-
-watch(liveFollow, (enabled) => {
-  if (!enabled) {
-    stopLiveFollow();
-    return;
-  }
-  // 实时跟随已在内存追加，关掉周期全量重查：避免 30s 一次 IoTDB 查询把刚跟随的点整批覆盖
-  autoRefresh.value = false;
-  startLiveFollow();
-});
-
-// 曲线消失（重查为空 / 失败 / 点位全被清掉）就自动关闭跟随，避免「开着却永远追加不进」
-watch(hasChart, (value) => {
-  if (!value && liveFollow.value) {
-    liveFollow.value = false;
-  }
-});
+  autoRefresh,
+  liveDroppedCount,
+  liveFollow,
+  liveFollowedCount,
+  liveNonGoodCount,
+  liveState,
+  realtimeError,
+  realtimeState,
+  resetLiveFollow,
+  restartAutoRefresh,
+  stopAutoRefresh,
+} = live;
 
 // ---------- CSV 导出 ----------
 
@@ -1213,7 +986,8 @@ function onExport(): void {
 
           <Empty v-if="noData" :description="$t('page.iot.series.empty')" />
           <template v-else-if="detail.total > 0">
-            <EchartsUI v-if="hasChart" ref="chartRef" height="320px" />
+            <!-- 图表子组件：model/units 一变就重绘，宿主不再手工调 renderChart() -->
+            <SeriesChart :model="chartModel" :units="units" />
             <Alert
               v-if="valueHint"
               :message="valueHint"
@@ -1224,7 +998,7 @@ function onExport(): void {
             <div class="mt-3 max-h-[320px] overflow-auto">
               <table class="w-full min-w-[560px] text-sm">
                 <thead>
-                  <tr class="text-left text-gray-500">
+                  <tr class="text-left text-muted-foreground">
                     <th v-if="multiSeries" class="py-1">
                       {{ $t('page.iot.series.pointColumn') }}
                     </th>

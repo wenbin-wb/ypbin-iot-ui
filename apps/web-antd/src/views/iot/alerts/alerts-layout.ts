@@ -107,3 +107,80 @@ export function detectRunawayGrowth(
   }
   return tail.every((heightPx) => heightPx > thresholdPx);
 }
+
+/**
+ * 表格高度看门狗（「自增长」兜底，见本文件头部机制说明）。
+ *
+ * 从 `index.vue` 移到这里的理由：它是**纯 DOM 采样 + 判据**，与页面状态无关，放在布局契约
+ * 模块里才能与 `detectRunawayGrowth` / `RUNAWAY_HEIGHT` 同文件对照阅读，也让页面只保留
+ * 「何时启动」这一行。
+ *
+ * 若 vxe 的 ResizeObserver 自反馈在某个浏览器/未来改动下复燃，连续 N 次「异常高 + 严格递增」
+ * 采样后把表格回退到固定上限（具名常量可配），而不是让页面无限长高；正常（确定高度链）情况下
+ * 只做廉价高度采样，稳定即收工。
+ *
+ * @param api    vxe grid api（只用到 `grid.$el` 与 `setGridOptions`）
+ * @param label  日志里标识是哪张表（排障时一眼可见）
+ * @returns 停止看门狗的清理函数（组件卸载时调用）
+ */
+export function watchGridForRunawayHeight(
+  api: {
+    grid: { $el?: HTMLElement };
+    setGridOptions: (options: { maxHeight?: number }) => void;
+  },
+  label: string,
+): () => void {
+  const samples: number[] = [];
+  let stopped = false;
+  let stableStreak = 0;
+  const stop = () => {
+    stopped = true;
+    window.clearInterval(timer);
+  };
+  const timer = window.setInterval(() => {
+    const el = api.grid?.$el;
+    if (!el) {
+      return;
+    }
+    const heightPx = el.offsetHeight;
+    const thresholdPx = window.innerHeight + RUNAWAY_HEIGHT.excessPx;
+    samples.push(heightPx);
+    if (samples.length > RUNAWAY_HEIGHT.requiredConsecutive + 2) {
+      samples.shift();
+    }
+    if (
+      detectRunawayGrowth(samples, {
+        thresholdPx,
+        requiredConsecutive: RUNAWAY_HEIGHT.requiredConsecutive,
+      })
+    ) {
+      stop();
+      const capPx = Math.max(
+        0,
+        window.innerHeight - RUNAWAY_HEIGHT.excessPx * 2,
+      );
+      api.setGridOptions({ maxHeight: capPx });
+      console.warn(
+        `[iot/alerts] ${label} 表格高度出现持续自增长，已回退到固定上限 ${capPx}px（请把复现步骤反馈给开发）`,
+      );
+      return;
+    }
+    const prev = samples[samples.length - 2];
+    if (
+      prev !== undefined &&
+      Math.abs(heightPx - prev) <= RUNAWAY_HEIGHT.stableDeltaPx
+    ) {
+      stableStreak += 1;
+      if (stableStreak >= 4) {
+        stop();
+      }
+    } else {
+      stableStreak = 0;
+    }
+  }, RUNAWAY_HEIGHT.intervalMs);
+  return () => {
+    if (!stopped) {
+      stop();
+    }
+  };
+}
