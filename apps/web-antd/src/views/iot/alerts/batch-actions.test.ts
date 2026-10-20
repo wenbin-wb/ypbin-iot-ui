@@ -118,19 +118,25 @@ vi.mock('../shared/use-iot-realtime', async () => {
   };
 });
 
-vi.mock('@vben/common-ui', () => ({
-  Page: defineComponent({
-    name: 'PageStub',
-    setup:
-      (_props, { slots }) =>
-      () =>
-        h('div', { class: 'page-stub' }, slots.default?.()),
-  }),
-  useVbenDrawer: () => [
-    defineComponent({ name: 'DrawerStub', setup: () => () => null }),
-    { close: vi.fn(), open: vi.fn(), setData: vi.fn() },
-  ],
-}));
+vi.mock('@vben/common-ui', async (importOriginal) => {
+  // 不能整体替换 @vben/common-ui：`#/adapter/form` 从这里再导出 `z`，
+  // 整体 mock 会让查询表单的 zod 校验规则在用例里变成 undefined（页面 setup 直接抛错）。
+  const actual = (await importOriginal()) as Record<string, any>;
+  return {
+    ...actual,
+    Page: defineComponent({
+      name: 'PageStub',
+      setup:
+        (_props, { slots }) =>
+        () =>
+          h('div', { class: 'page-stub' }, slots.default?.()),
+    }),
+    useVbenDrawer: () => [
+      defineComponent({ name: 'DrawerStub', setup: () => () => null }),
+      { close: vi.fn(), open: vi.fn(), setData: vi.fn() },
+    ],
+  };
+});
 
 /**
  * 生产口径的 Grid 桩：**只**经 `options.gridEvents.checkboxChange` 触发勾选。

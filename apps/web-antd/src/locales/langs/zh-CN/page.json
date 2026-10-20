@@ -303,7 +303,11 @@
       "exportName": "告警列表",
       "exportFailed": "告警列表导出失败",
       "activeTotal": "共 {0} 条（当前第 {1} 页）",
-      "loadMore": "加载更多"
+      "loadMore": "加载更多",
+      "timeRange": "首次越界时间",
+      "timeRangePlaceholder": "开始时间 ~ 结束时间",
+      "timeRangeInvalid": "时间范围起点不能晚于终点",
+      "timeRangeHint": "留空表示不限时间"
     },
     "display": {
       "unknown": "未知",

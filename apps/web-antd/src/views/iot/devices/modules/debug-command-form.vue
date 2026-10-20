@@ -18,6 +18,8 @@ import {
 
 import { $t } from '#/locales';
 
+import { NOT_APPLICABLE_TEXT } from '../../shared/display';
+
 /**
  * 「在线调试」的下发区（动作 + 参数 + 下发按钮 + 校验/后端失败提示）。
  *
@@ -97,7 +99,11 @@ const emit = defineEmits<{
   serviceIdentifierChange: [value: string | undefined];
   timeoutChange: [value: null | number | string | undefined];
   updateKind: [value: IotCommandApi.CommandKindCode];
-  updateRow: [row: SetRow, field: 'identifier' | 'value', value: string | undefined];
+  updateRow: [
+    row: SetRow,
+    field: 'identifier' | 'value',
+    value: string | undefined,
+  ];
   writeDesiredChange: [value: boolean];
 }>();
 
@@ -222,7 +228,9 @@ function onRowValueChange(row: SetRow, value: unknown) {
         <Checkbox
           :checked="writeDesired"
           data-testid="debug-write-desired"
-          @update:checked="(value) => emit('writeDesiredChange', Boolean(value))"
+          @update:checked="
+            (value) => emit('writeDesiredChange', Boolean(value))
+          "
         >
           {{ $t('page.iot.device.batchCommand.writeDesired') }}
         </Checkbox>
@@ -253,7 +261,10 @@ function onRowValueChange(row: SetRow, value: unknown) {
         show-icon
         type="info"
       />
-      <div v-if="getSelection.length > 1" class="mt-1 text-xs text-warning-text">
+      <div
+        v-if="getSelection.length > 1"
+        class="mt-1 text-xs text-warning-text"
+      >
         {{ $t('page.iot.debug.fanoutHint', [String(maxFanout)]) }}
       </div>
     </template>
@@ -267,7 +278,9 @@ function onRowValueChange(row: SetRow, value: unknown) {
         option-filter-prop="label"
         show-search
         style="width: 100%"
-        @update:value="(value) => emit('serviceIdentifierChange', value as string)"
+        @update:value="
+          (value) => emit('serviceIdentifierChange', value as string)
+        "
       />
       <div v-if="commandOptions.length === 0" class="mt-1 text-xs">
         {{ $t('page.iot.debug.noCommand') }}
@@ -319,7 +332,9 @@ function onRowValueChange(row: SetRow, value: unknown) {
       <template #description>
         <div>
           {{ $t('page.iot.debug.rawEnvelope') }}:
-          <span class="font-mono">{{ sendError.code || '-' }}</span>
+          <span class="font-mono">{{
+            sendError.code || NOT_APPLICABLE_TEXT
+          }}</span>
         </div>
         <pre
           class="mt-1 max-h-[240px] overflow-auto text-xs break-all whitespace-pre-wrap"

@@ -20,7 +20,11 @@ import { getDeviceTrace } from '#/api/iot';
 import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
 
-import { formatDateTime, formatRelativeTime } from '../../shared/display';
+import {
+  formatDateTime,
+  formatRelativeTime,
+  NOT_APPLICABLE_TEXT,
+} from '../../shared/display';
 import {
   directionLabelKey,
   formatDiscardDetail,
@@ -315,8 +319,8 @@ onMounted(load);
             <span>
               {{
                 $t('page.iot.device.trace.batchCounts', {
-                  received: record.receivedCount ?? '-',
-                  persisted: record.persistedRows ?? '-',
+                  received: record.receivedCount ?? NOT_APPLICABLE_TEXT,
+                  persisted: record.persistedRows ?? NOT_APPLICABLE_TEXT,
                 })
               }}
             </span>
@@ -363,7 +367,7 @@ onMounted(load);
         <template #default="{ record }">
           <!-- 即使没有建议也必须显示原始错误码：它是用户排障的依据 -->
           <span :class="needsAttention(record) ? 'text-destructive-text' : ''">
-            {{ record.errorCode || '-' }}
+            {{ record.errorCode || NOT_APPLICABLE_TEXT }}
           </span>
         </template>
       </Table.Column>
