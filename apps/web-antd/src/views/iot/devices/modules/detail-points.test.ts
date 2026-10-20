@@ -144,9 +144,14 @@ beforeEach(() => {
 
 let mounted: undefined | { app: { unmount: () => void } };
 
-afterEach(() => {
+afterEach(async () => {
   mounted?.app.unmount();
   mounted = undefined;
+  // antd Modal 的离场/入场动画由 rc-motion 用 setTimeout 驱动（默认 ~200ms）。
+  // 若测试结束时动画仍在飞，回调会在 happy-dom 环境销毁后访问 `window`，
+  // 抛 `ReferenceError: window is not defined` ⇒ Vitest 记为 unhandled error（用例全绿但 CI 红）。
+  // 等动画定时器跑完再清理 DOM，把悬空回调消化在本文件内（与 openApiKeys/index.test.ts 同一修法）。
+  await new Promise((resolve) => setTimeout(resolve, 300));
   document.body.innerHTML = '';
 });
 
