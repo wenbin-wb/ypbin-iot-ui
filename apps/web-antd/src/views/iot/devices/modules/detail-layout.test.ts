@@ -14,8 +14,8 @@ import {
 
 import PanelErrorBoundary from '../../shared/panel-error-boundary.vue';
 import availabilitySource from './availability.vue?raw';
+import debugHistorySource from './debug-history-table.vue?raw';
 import alertSource from './detail-alert.vue?raw';
-import debugSource from './detail-debug.vue?raw';
 import Detail from './detail.vue';
 import detailSource from './detail.vue?raw';
 import basicCardSource from './overview-basic-card.vue?raw';
@@ -431,6 +431,7 @@ describe('其它信息密集页签：表格横向滚动保留', () => {
     expect(
       alertSource.match(/:scroll="\{ x: \d+ \}"/g)?.length ?? 0,
     ).toBeGreaterThanOrEqual(2);
-    expect(debugSource).toContain(':scroll="{ x: 920 }"');
+    // 拆分批次 5-H：历史表格搬到 debug-history-table.vue，断言（与内容）原样保留，只换事实源文件
+    expect(debugHistorySource).toContain(':scroll="{ x: 920 }"');
   });
 });

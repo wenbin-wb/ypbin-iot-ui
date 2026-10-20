@@ -3,6 +3,8 @@ import { join, relative, resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { stripHtmlComments } from '#/utils/source-scan';
+
 /**
  * 仪表盘（`views/dashboard`）的**静态可访问性/视觉纪律回归**。
  *
@@ -19,7 +21,7 @@ function source(relativePath: string): string {
 
 /** 去掉 HTML 注释后再断言结构与类名：注释里会提到标签名，不能算进计数。 */
 function markup(relativePath: string): string {
-  return source(relativePath).replaceAll(/<!--[\s\S]*?-->/g, '');
+  return stripHtmlComments(source(relativePath));
 }
 
 /** 递归收集 dashboard 下的所有 .vue / .css / .ts（跳过测试与快照）。 */

@@ -33,6 +33,8 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import { blankHtmlComments } from '#/utils/source-scan';
+
 /** 门禁测试自身位置：`apps/web-antd/src/views/iot/shared/`。 */
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** `apps/web-antd/src/views`。 */
@@ -78,8 +80,7 @@ const HEX_ALLOWLIST: ReadonlyArray<{
  */
 function stripComments(source: string): string {
   const blank = (match: string) => match.replaceAll(/[^\n]/g, ' ');
-  return source
-    .replaceAll(/<!--[\s\S]*?-->/g, blank)
+  return blankHtmlComments(source)
     .replaceAll(/\/\*[\s\S]*?\*\//g, blank)
     .replaceAll(/^\s*\/\/.*$/gm, blank);
 }

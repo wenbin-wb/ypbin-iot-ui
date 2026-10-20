@@ -4,10 +4,9 @@ import type { IotProductApi, IotThingModelApi } from '#/api/iot';
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { useVbenDrawer, useVbenModal } from '@vben/common-ui';
+import { useVbenDrawer } from '@vben/common-ui';
 
 import {
-  Alert,
   Button,
   Descriptions,
   DescriptionsItem,
@@ -20,14 +19,8 @@ import {
 } from 'ant-design-vue';
 
 import {
-  deleteCommand,
-  deleteEvent,
-  deleteProperty,
-  deleteService,
-  exportTsl,
   getProductDetail,
   getProductVersions,
-  importTsl,
   listCommands,
   listEvents,
   listProperties,
@@ -37,32 +30,33 @@ import {
 } from '#/api/iot';
 import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
-import { downloadByBlob } from '#/utils/file';
 
 import {
-  accessModeLabel,
   dataFormatLabel,
-  dataTypeLabel,
   formatDateTime,
   modelStatusColor,
   modelStatusLabel,
   protocolLabel,
-  serviceOptionLabel,
 } from '../../shared/display';
 import PanelErrorBoundary from '../../shared/panel-error-boundary.vue';
 import DeviceList from './device-list.vue';
-import ThingModelForm from './thingmodel-form.vue';
+import ProductModelTab from './product-model-tab.vue';
+import ProductTslTab from './product-tsl-tab.vue';
 
 /**
- * 产品详情：5 页签 + 物模型编辑器。
+ * 产品详情：5 页签 + 物模型编辑器（宿主）。
  *
  * 页签分工：
- * - **概览**：产品基础信息 + 导入/导出 TSL + 新建草稿/发布 + 添加设备；
- * - **物模型**：服务列表 + 选中服务的属性/命令/事件三张表（增删改，走已就绪的物模型接口）；
- * - **TSL**：导出查看 / 粘贴导入（全量替换草稿；错误逐项展示，禁静默失败）；
+ * - **概览**：产品基础信息 + 导入/导出 TSL + 新建草稿/发布 + 添加设备（本文件）；
+ * - **物模型**：`product-model-tab.vue`（服务/属性/命令/事件四张表 + 增删改入口）；
+ * - **TSL**：`product-tsl-tab.vue`（导出查看 / 粘贴导入，错误逐项展示）；
  * - **设备**：内嵌按产品分页的设备清单（`device-list.vue`，服务端 `productId` 过滤），
  *   并保留「添加设备」入口（带 `productId` 跳设备台账并预选/预筛）；
- * - **版本**：`GET /products/{id}/versions`。
+ * - **版本**：`GET /products/{id}/versions`（本文件）。
+ *
+ * 为什么数据加载仍留在宿主：物模型/版本/设备三块数据源的生命周期绑定「打开抽屉 → 加载 →
+ * 发布/建草稿/导入 TSL 后重载」，由宿主持有可以保证拆分前后**请求时序与失败隔离不变**
+ * （物模型失败不清空版本页签）；页签子组件只消费 props + emit 动作，属于纯模板搬迁。
  *
  * ⚠️ **不做的**：点位模板（产品级模板表尚不存在）——页签里如实写「待接入」，
  * 不画一个点不动的空表。
@@ -82,6 +76,9 @@ const productId = ref('');
 /** 内嵌设备清单实例（`defineExpose({ reload })`），按产品重查用。 */
 const deviceListRef = ref<InstanceType<typeof DeviceList> | null>(null);
 
+/** TSL 页签实例：概览页的「导出 TSL」按钮复用它的导出逻辑（避免两份实现漂移）。 */
+const tslTabRef = ref<InstanceType<typeof ProductTslTab> | null>(null);
+
 const product = ref<IotProductApi.ProductResp>();
 
 const services = ref<IotThingModelApi.ServiceResp[]>([]);
@@ -98,23 +95,9 @@ const versions = ref<IotProductApi.ProductVersionResp[]>([]);
 
 const modelError = ref('');
 
-const tslText = ref('');
-
-const tslError = ref('');
-
-const tslErrors = ref<string[]>([]);
-
 const loading = ref(false);
 
 const activeTab = ref('overview');
-
-const [ThingModelModal, thingModelModalApi] = useVbenModal({
-  connectedComponent: ThingModelForm,
-});
-
-const selectedService = computed(() =>
-  services.value.find((service) => service.id === selectedServiceId.value),
-);
 
 /**
  * 物模型的**读**与**写**在草稿态上不对称（2026-09-27 后端修正）：
@@ -123,27 +106,6 @@ const selectedService = computed(() =>
  *   并给出「新建草稿」入口，而不是让用户点下去吃 409。
  */
 const isDraft = computed(() => product.value?.modelStatus === 'draft');
-
-function openEditor(
-  kind: 'command' | 'event' | 'property' | 'service',
-  // 行对象按 unknown 透传：编辑器内部只取 `id`，不在父组件里复制一份 DTO 类型
-  row?: unknown,
-) {
-  // 纵深防御：调用方按钮已按草稿态隐藏（`v-if="isDraft"`），这里再拦一道，
-  // 避免将来新增入口时漏掉而让用户点到必然 409 的按钮（后端写接口要求草稿态）。
-  if (!isDraft.value) {
-    message.warning($t('page.iot.product.readonlyEditBlocked'));
-    return;
-  }
-  thingModelModalApi
-    .setData({
-      kind,
-      productId: productId.value,
-      row: row ?? null,
-      serviceId: selectedServiceId.value,
-    })
-    .open();
-}
 
 /** 重新加载服务与当前选中服务下的三类元素（一次只查一个服务，不扇出全产品）。 */
 async function loadModel() {
@@ -190,7 +152,7 @@ async function loadVersions() {
   versions.value = (await getProductVersions(productId.value)) ?? [];
 }
 
-/** 重新加载物模型与版本；产品状态可能已变（发布/建草稿），一并通知列表页刷新。 */
+/** 重新加载物模型与版本；产品状态可能已变（发布/建草稿/导入 TSL），一并通知列表页刷新。 */
 async function reloadAll() {
   emit('reload');
   loading.value = true;
@@ -243,71 +205,6 @@ async function onNewDraft() {
   await reloadAll();
 }
 
-/** 导出 TSL：既落到页面文本框（可核对），也直接下载成文件。 */
-async function onExportTsl() {
-  tslError.value = '';
-  tslErrors.value = [];
-  const doc = await exportTsl(productId.value);
-  tslText.value = JSON.stringify(doc, null, 2);
-  downloadByBlob(
-    new Blob([tslText.value], { type: 'application/json;charset=utf-8' }),
-    `tsl-${product.value?.productCode ?? productId.value}.json`,
-  );
-}
-
-/**
- * 导入 TSL：本地先解析（JSON 语法错误要在本地报，不该把注定失败的请求发出去），
- * 再交给后端做结构与校验（失败逐项返回 `errors`，整体不落库）。
- */
-async function onImportTsl() {
-  tslError.value = '';
-  tslErrors.value = [];
-  if (tslText.value.trim() === '') {
-    tslError.value = $t('page.iot.product.tslEmpty');
-    return;
-  }
-  let doc: IotThingModelApi.TslDocument;
-  try {
-    doc = JSON.parse(tslText.value) as IotThingModelApi.TslDocument;
-  } catch (error) {
-    tslError.value = `${$t('page.iot.product.tslInvalidJson')}：${extractErrorMessage(error, '')}`;
-    return;
-  }
-  const result = await importTsl(productId.value, doc);
-  tslErrors.value = result?.errors ?? [];
-  if (tslErrors.value.length === 0) {
-    message.success(
-      `${$t('common.success')}（${$t('page.iot.product.tslSuccessCount', [String(result?.successCount ?? 0)])}）`,
-    );
-    await reloadAll();
-  }
-}
-
-// 删除后的刷新：失败提示由全局请求拦截器统一给出，这里只兜底避免未处理拒绝
-function ignoreRejection() {}
-
-function onDeleteService(row: IotThingModelApi.ServiceResp) {
-  deleteService(productId.value, row.id).then(reloadAll).catch(ignoreRejection);
-}
-
-function onDeleteProperty(row: IotThingModelApi.PropertyResp) {
-  deleteProperty(productId.value, selectedServiceId.value, row.id)
-    .then(loadServiceElements)
-    .catch(ignoreRejection);
-}
-
-function onDeleteCommand(row: IotThingModelApi.CommandResp) {
-  deleteCommand(productId.value, selectedServiceId.value, row.id)
-    .then(loadServiceElements)
-    .catch(ignoreRejection);
-}
-
-function onDeleteEvent(row: IotThingModelApi.EventResp) {
-  deleteEvent(productId.value, selectedServiceId.value, row.id)
-    .then(loadServiceElements)
-    .catch(ignoreRejection);
-}
-
 const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) {
@@ -322,11 +219,11 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
     events.value = [];
     versions.value = [];
     selectedServiceId.value = '';
-    tslText.value = '';
-    tslError.value = '';
-    tslErrors.value = [];
     modelError.value = '';
     activeTab.value = 'overview';
+    // TSL 文本/错误已搬进子组件；抽屉关闭不销毁组件（destroyOnClose=false），
+    // 必须显式重置，否则换一个产品打开会看到上一个产品的 TSL 文本。
+    tslTabRef.value?.reset();
     drawerApi.setState({
       title: `${$t('page.iot.product.detail')} - ${data?.productName ?? data?.productCode ?? productId.value}`,
     });
@@ -387,7 +284,7 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
             <div class="mt-4 flex flex-wrap gap-2">
               <Button
                 v-access:code="['iot:product:tsl-export']"
-                @click="onExportTsl"
+                @click="tslTabRef?.exportTsl()"
               >
                 {{ $t('page.iot.product.tslExport') }}
               </Button>
@@ -427,423 +324,39 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
             </div>
           </Tabs.TabPane>
 
-          <!-- ===== 物模型 ===== -->
+          <!-- ===== 物模型（子组件：服务/属性/命令/事件四张表） ===== -->
           <Tabs.TabPane key="model" :tab="$t('page.iot.product.tabThingModel')">
-            <Alert
-              v-if="modelError"
-              :message="modelError"
-              class="mb-3"
-              show-icon
-              type="error"
+            <ProductModelTab
+              :commands="commands"
+              :events="events"
+              :is-draft="isDraft"
+              :model-error="modelError"
+              :product="product"
+              :product-id="productId"
+              :properties="properties"
+              :selected-service-id="selectedServiceId"
+              :services="services"
+              @new-draft="onNewDraft"
+              @open-tsl="activeTab = 'tsl'"
+              @reload="reloadAll"
+              @reload-elements="loadServiceElements"
+              @select-service="onSelectService"
             />
-
-            <Alert
-              v-if="product && !isDraft"
-              :message="$t('page.iot.product.readonlyPublished')"
-              class="mb-3"
-              show-icon
-              type="info"
-            />
-            <div v-if="product && !isDraft" class="mb-3 flex flex-wrap gap-2">
-              <Popconfirm
-                :title="$t('page.iot.product.newDraftConfirm')"
-                @confirm="onNewDraft"
-              >
-                <Button v-access:code="['iot:product:update']" type="primary">
-                  {{ $t('page.iot.product.newDraft') }}
-                </Button>
-              </Popconfirm>
-              <Button @click="activeTab = 'tsl'">
-                {{ $t('page.iot.product.tabTsl') }}
-              </Button>
-            </div>
-
-            <div class="mb-2 flex items-center gap-2">
-              <span class="font-semibold">
-                {{ $t('page.iot.product.service') }}
-              </span>
-              <Button
-                v-access:code="['iot:product:update']"
-                v-if="isDraft"
-                size="small"
-                type="primary"
-                @click="openEditor('service', null)"
-              >
-                {{ $t('page.iot.product.addService') }}
-              </Button>
-            </div>
-            <Empty
-              v-if="services.length === 0"
-              :description="$t('page.iot.product.noService')"
-            />
-            <div v-else class="overflow-x-auto">
-              <table class="w-full min-w-[560px] text-sm whitespace-nowrap">
-                <thead>
-                  <tr class="text-left text-muted-foreground">
-                    <th class="py-1">{{ $t('page.iot.product.serviceId') }}</th>
-                    <th class="py-1">
-                      {{ $t('page.iot.product.serviceName') }}
-                    </th>
-                    <th class="py-1">
-                      {{ $t('page.iot.product.serviceOption') }}
-                    </th>
-                    <th class="py-1">
-                      {{ $t('page.iot.product.description') }}
-                    </th>
-                    <th class="py-1">{{ $t('common.action') }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="service in services"
-                    :key="service.id"
-                    class="border-t"
-                    :class="
-                      service.id === selectedServiceId
-                        ? 'bg-primary/10'
-                        : undefined
-                    "
-                  >
-                    <td class="py-1">
-                      <Button type="link" @click="onSelectService(service.id)">
-                        {{ service.serviceId }}
-                      </Button>
-                    </td>
-                    <td class="py-1">{{ service.serviceName }}</td>
-                    <td class="py-1">
-                      {{ serviceOptionLabel(service.serviceOption) }}
-                    </td>
-                    <td class="py-1">{{ service.description || '-' }}</td>
-                    <td class="py-1">
-                      <Button
-                        v-if="isDraft"
-                        v-access:code="['iot:product:update']"
-                        size="small"
-                        type="link"
-                        @click="openEditor('service', service)"
-                      >
-                        {{ $t('common.edit') }}
-                      </Button>
-                      <Popconfirm
-                        :title="
-                          $t('ui.actionMessage.deleteConfirm', [
-                            service.serviceId,
-                          ])
-                        "
-                        @confirm="onDeleteService(service)"
-                      >
-                        <Button
-                          v-access:code="['iot:product:update']"
-                          v-if="isDraft"
-                          danger
-                          size="small"
-                          type="link"
-                        >
-                          {{ $t('common.delete') }}
-                        </Button>
-                      </Popconfirm>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <template v-if="selectedService">
-              <div class="mt-4 mb-2 text-sm text-muted-foreground">
-                {{ $t('page.iot.product.currentService') }}：
-                {{ selectedService.serviceId }}（{{
-                  selectedService.serviceName
-                }}）
-              </div>
-
-              <!-- 属性 -->
-              <div class="mb-1 flex items-center gap-2">
-                <span class="font-semibold">
-                  {{ $t('page.iot.product.property') }}
-                </span>
-                <Button
-                  v-if="isDraft"
-                  v-access:code="['iot:product:update']"
-                  size="small"
-                  @click="openEditor('property', null)"
-                >
-                  {{ $t('page.iot.product.addProperty') }}
-                </Button>
-              </div>
-              <Empty
-                v-if="properties.length === 0"
-                :description="$t('page.iot.product.noProperty')"
-              />
-              <div v-else class="overflow-x-auto">
-                <table class="w-full min-w-[640px] text-sm whitespace-nowrap">
-                  <thead>
-                    <tr class="text-left text-muted-foreground">
-                      <th class="py-1">
-                        {{ $t('page.iot.point.identifier') }}
-                      </th>
-                      <th class="py-1">
-                        {{ $t('page.iot.product.propertyName') }}
-                      </th>
-                      <th class="py-1">{{ $t('page.iot.point.dataType') }}</th>
-                      <th class="py-1">
-                        {{ $t('page.iot.point.accessMode') }}
-                      </th>
-                      <th class="py-1">{{ $t('page.iot.point.unit') }}</th>
-                      <th class="py-1">
-                        {{ $t('page.iot.product.required') }}
-                      </th>
-                      <th class="py-1">{{ $t('common.action') }}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr
-                      v-for="row in properties"
-                      :key="row.id"
-                      class="border-t"
-                    >
-                      <td class="py-1">{{ row.identifier }}</td>
-                      <td class="py-1">{{ row.propertyName }}</td>
-                      <td class="py-1">{{ dataTypeLabel(row.dataType) }}</td>
-                      <td class="py-1">
-                        {{ accessModeLabel(row.accessMode) }}
-                      </td>
-                      <td class="py-1">{{ row.unit || '-' }}</td>
-                      <td class="py-1">
-                        {{ row.required ? $t('common.yes') : $t('common.no') }}
-                      </td>
-                      <td class="py-1">
-                        <Button
-                          v-access:code="['iot:product:update']"
-                          v-if="isDraft"
-                          size="small"
-                          type="link"
-                          @click="openEditor('property', row)"
-                        >
-                          {{ $t('common.edit') }}
-                        </Button>
-                        <Popconfirm
-                          :title="
-                            $t('ui.actionMessage.deleteConfirm', [
-                              row.identifier,
-                            ])
-                          "
-                          @confirm="onDeleteProperty(row)"
-                        >
-                          <Button
-                            v-access:code="['iot:product:update']"
-                            v-if="isDraft"
-                            danger
-                            size="small"
-                            type="link"
-                          >
-                            {{ $t('common.delete') }}
-                          </Button>
-                        </Popconfirm>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              <!-- 命令 -->
-              <div class="mt-4 mb-1 flex items-center gap-2">
-                <span class="font-semibold">
-                  {{ $t('page.iot.product.command') }}
-                </span>
-                <Button
-                  v-if="isDraft"
-                  v-access:code="['iot:product:update']"
-                  size="small"
-                  @click="openEditor('command', null)"
-                >
-                  {{ $t('page.iot.product.addCommand') }}
-                </Button>
-              </div>
-              <Empty
-                v-if="commands.length === 0"
-                :description="$t('page.iot.product.noCommand')"
-              />
-              <div v-else class="overflow-x-auto">
-                <table class="w-full min-w-[480px] text-sm whitespace-nowrap">
-                  <thead>
-                    <tr class="text-left text-muted-foreground">
-                      <th class="py-1">
-                        {{ $t('page.iot.point.identifier') }}
-                      </th>
-                      <th class="py-1">
-                        {{ $t('page.iot.product.commandName') }}
-                      </th>
-                      <th class="py-1">
-                        {{ $t('page.iot.product.timeoutMs') }}
-                      </th>
-                      <th class="py-1">{{ $t('common.action') }}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="row in commands" :key="row.id" class="border-t">
-                      <td class="py-1">{{ row.identifier }}</td>
-                      <td class="py-1">{{ row.commandName }}</td>
-                      <td class="py-1">{{ row.timeoutMs ?? '-' }}</td>
-                      <td class="py-1">
-                        <Button
-                          v-access:code="['iot:product:update']"
-                          v-if="isDraft"
-                          size="small"
-                          type="link"
-                          @click="openEditor('command', row)"
-                        >
-                          {{ $t('common.edit') }}
-                        </Button>
-                        <Popconfirm
-                          :title="
-                            $t('ui.actionMessage.deleteConfirm', [
-                              row.identifier,
-                            ])
-                          "
-                          @confirm="onDeleteCommand(row)"
-                        >
-                          <Button
-                            v-access:code="['iot:product:update']"
-                            v-if="isDraft"
-                            danger
-                            size="small"
-                            type="link"
-                          >
-                            {{ $t('common.delete') }}
-                          </Button>
-                        </Popconfirm>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              <!-- 事件 -->
-              <div class="mt-4 mb-1 flex items-center gap-2">
-                <span class="font-semibold">
-                  {{ $t('page.iot.product.event') }}
-                </span>
-                <Button
-                  v-if="isDraft"
-                  v-access:code="['iot:product:update']"
-                  size="small"
-                  @click="openEditor('event', null)"
-                >
-                  {{ $t('page.iot.product.addEvent') }}
-                </Button>
-              </div>
-              <Empty
-                v-if="events.length === 0"
-                :description="$t('page.iot.product.noEvent')"
-              />
-              <div v-else class="overflow-x-auto">
-                <table class="w-full min-w-[560px] text-sm whitespace-nowrap">
-                  <thead>
-                    <tr class="text-left text-muted-foreground">
-                      <th class="py-1">
-                        {{ $t('page.iot.point.identifier') }}
-                      </th>
-                      <th class="py-1">
-                        {{ $t('page.iot.product.eventName') }}
-                      </th>
-                      <th class="py-1">{{ $t('page.iot.point.dataType') }}</th>
-                      <th class="py-1">{{ $t('page.iot.point.unit') }}</th>
-                      <th class="py-1">{{ $t('common.action') }}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="row in events" :key="row.id" class="border-t">
-                      <td class="py-1">{{ row.identifier }}</td>
-                      <td class="py-1">{{ row.eventName }}</td>
-                      <td class="py-1">{{ dataTypeLabel(row.dataType) }}</td>
-                      <td class="py-1">{{ row.unit || '-' }}</td>
-                      <td class="py-1">
-                        <Button
-                          v-access:code="['iot:product:update']"
-                          v-if="isDraft"
-                          size="small"
-                          type="link"
-                          @click="openEditor('event', row)"
-                        >
-                          {{ $t('common.edit') }}
-                        </Button>
-                        <Popconfirm
-                          :title="
-                            $t('ui.actionMessage.deleteConfirm', [
-                              row.identifier,
-                            ])
-                          "
-                          @confirm="onDeleteEvent(row)"
-                        >
-                          <Button
-                            v-access:code="['iot:product:update']"
-                            v-if="isDraft"
-                            danger
-                            size="small"
-                            type="link"
-                          >
-                            {{ $t('common.delete') }}
-                          </Button>
-                        </Popconfirm>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </template>
           </Tabs.TabPane>
 
-          <!-- ===== TSL ===== -->
-          <Tabs.TabPane key="tsl" :tab="$t('page.iot.product.tabTsl')">
-            <Alert
-              :message="$t('page.iot.product.tslHint')"
-              class="mb-3"
-              show-icon
-              type="info"
+          <!-- ===== TSL（子组件；force-render：概览页的「导出 TSL」需在其未激活时可用） ===== -->
+          <Tabs.TabPane
+            key="tsl"
+            :tab="$t('page.iot.product.tabTsl')"
+            force-render
+          >
+            <ProductTslTab
+              ref="tslTabRef"
+              :is-draft="isDraft"
+              :product-code="product?.productCode"
+              :product-id="productId"
+              @reload="reloadAll"
             />
-            <div class="mb-2 flex gap-2">
-              <Button
-                v-access:code="['iot:product:tsl-export']"
-                @click="onExportTsl"
-              >
-                {{ $t('page.iot.product.tslExport') }}
-              </Button>
-              <Button
-                v-access:code="['iot:product:tsl-import']"
-                v-if="isDraft"
-                type="primary"
-                @click="onImportTsl"
-              >
-                {{ $t('page.iot.product.tslImport') }}
-              </Button>
-            </div>
-            <textarea
-              v-model="tslText"
-              class="h-[360px] w-full rounded border p-2 font-mono text-xs"
-              :placeholder="$t('page.iot.product.tslPlaceholder')"
-            ></textarea>
-            <Alert
-              v-if="tslError"
-              :message="tslError"
-              class="mt-2"
-              show-icon
-              type="error"
-            />
-            <Alert
-              v-if="tslErrors.length > 0"
-              class="mt-2"
-              show-icon
-              type="error"
-            >
-              <template #message>
-                <div>{{ $t('page.iot.product.tslImportFailed') }}</div>
-                <ul class="ml-4 list-disc">
-                  <li v-for="(item, index) in tslErrors" :key="index">
-                    {{ item }}
-                  </li>
-                </ul>
-              </template>
-            </Alert>
           </Tabs.TabPane>
 
           <!-- ===== 设备 ===== -->
@@ -906,7 +419,5 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
         </Tabs>
       </PanelErrorBoundary>
     </Spin>
-
-    <ThingModelModal @reload="reloadAll" />
   </Drawer>
 </template>

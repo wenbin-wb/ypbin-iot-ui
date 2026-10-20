@@ -1180,12 +1180,20 @@ describe('看板抽屉：后端共享持久化 / 本地草稿 / 排序', () => {
       bizFailure(50_000, '平台看板查询炸了'),
     );
     const container = await mountBoardDrawer();
-    expect(container.textContent).toContain('车间温度');
-    // 如实标注「本地草稿（未同步到平台）」，而不是只有内部状态
-    expect(container.textContent).toContain(
-      '当前为本地草稿（未同步到平台）：平台读取失败或尚未配置，本页展示并保存的都是本机草稿。',
+    // CI（较慢的 runner / 并行 worker）上 onOpenChange 里的 getBoard 失败回调可能比一次 flush
+    // 更晚落定：本地草稿先渲染、远端失败原因后到 ⇒ 用 waitFor 等「草稿提示」出现，
+    // 避免把「时序差一帧」误报成功能缺陷（2026-10-20 PR #118 CI 实测踩到）。
+    await vi.waitFor(
+      () => {
+        expect(container.textContent).toContain('车间温度');
+        // 如实标注「本地草稿（未同步到平台）」，而不是只有内部状态
+        expect(container.textContent).toContain(
+          '当前为本地草稿（未同步到平台）：平台读取失败或尚未配置，本页展示并保存的都是本机草稿。',
+        );
+        expect(container.textContent).toContain('平台看板查询炸了');
+      },
+      { timeout: 3000 },
     );
-    expect(container.textContent).toContain('平台看板查询炸了');
   });
 
   it('小屏（390px）：抽屉与表格卡都用「不横向溢出」的结构（无固定宽表、卡片化兜底）', async () => {
