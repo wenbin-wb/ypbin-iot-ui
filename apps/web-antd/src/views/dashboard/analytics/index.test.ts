@@ -19,12 +19,19 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push: pushMock }),
 }));
 
-vi.mock('@vben/preferences', () => ({
-  preferences: { app: { accessMode: 'frontend', locale: 'zh-CN' } },
-  // 页面用 isDark 选指标卡数值色（亮/暗两档，均 >=4.5:1），这里固定亮色主题
-  usePreferences: () => ({ isDark: { value: false } }),
-  updatePreferences: () => {},
-}));
+vi.mock('@vben/preferences', async () => {
+  const { reactive, ref } = await import('vue');
+  return {
+    preferences: reactive({
+      app: { accessMode: 'frontend', locale: 'zh-CN' },
+      // 图表主题重绘（use-chart-theme.ts）监听 `theme.colorPrimary`，mock 必须按真实契约给上
+      theme: { colorPrimary: 'hsl(212 100% 45%)', mode: 'light' },
+    }),
+    // 页面用 isDark 选指标卡数值色（亮/暗两档，均 >=4.5:1），这里固定亮色主题
+    usePreferences: () => ({ isDark: ref(false) }),
+    updatePreferences: () => {},
+  };
+});
 
 vi.mock('@vben/plugins/echarts', async () => {
   const { defineComponent, h } = await import('vue');

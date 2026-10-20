@@ -37,7 +37,8 @@ const { batchCommandState, drawerCalls, fileMock, gridApiMock, mockApi } =
       page: { api: null as any },
     },
     drawerCalls: [] as any[],
-    fileMock: { downloadByBlob: vi.fn() },
+    // 导出已收口到 shared/use-csv-export：先走 downloadBlobSafe（防伪文件），再由它调 downloadByBlob
+    fileMock: { downloadBlobSafe: vi.fn(), downloadByBlob: vi.fn() },
     gridApiMock: {
       grid: {
         clearCheckboxRow: vi.fn(),
@@ -58,7 +59,7 @@ const { batchCommandState, drawerCalls, fileMock, gridApiMock, mockApi } =
   }));
 
 vi.mock('#/utils/file', () => ({
-  downloadBlobSafe: vi.fn(),
+  downloadBlobSafe: (...args: unknown[]) => fileMock.downloadBlobSafe(...args),
   downloadByBlob: (...args: unknown[]) => fileMock.downloadByBlob(...args),
 }));
 
@@ -258,6 +259,8 @@ let mounted: undefined | { app: { unmount: () => void } };
 
 beforeEach(() => {
   for (const fn of Object.values(mockApi)) fn.mockReset();
+  fileMock.downloadBlobSafe.mockReset();
+  fileMock.downloadBlobSafe.mockResolvedValue(true);
   fileMock.downloadByBlob.mockReset();
   gridApiMock.query.mockReset();
   gridApiMock.grid.clearCheckboxRow.mockReset();
@@ -793,8 +796,12 @@ describe('batch-command.vue 三态结果展示', () => {
     exportButton?.click();
     await flush();
 
-    expect(fileMock.downloadByBlob).toHaveBeenCalledTimes(1);
-    const blob = fileMock.downloadByBlob.mock.calls[0]?.[0] as Blob;
+    // 收口后统一经 downloadBlobSafe（业务失败 JSON 不会下载）；文件名由组合式追加日期
+    expect(fileMock.downloadBlobSafe).toHaveBeenCalledTimes(1);
+    const blob = fileMock.downloadBlobSafe.mock.calls[0]?.[0] as Blob;
+    expect(String(fileMock.downloadBlobSafe.mock.calls[0]?.[1] ?? '')).toMatch(
+      /^batch-command-results_\d{8}\.csv$/,
+    );
     const text = await blob.text();
     expect(text).toContain($t('page.iot.device.batchCommand.stateDelivered'));
     expect(text).toContain($t('page.iot.device.batchCommand.stateRejected'));

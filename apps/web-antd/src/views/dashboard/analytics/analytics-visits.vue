@@ -10,6 +10,7 @@ import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 
 import { $t } from '#/locales';
 import { chartColor } from '#/utils/chart-tokens';
+import { useChartThemeRefresh } from '#/utils/use-chart-theme';
 
 defineOptions({ name: 'AnalyticsOnlineTrend' });
 
@@ -115,11 +116,20 @@ function renderChart(points: IotDashboardApi.OnlineTrendPoint[]) {
   });
 }
 
-onMounted(() => {
+/**
+ * 用**当前**数据渲染。数据变化与主题变化共用这一条路径：
+ * 主题切换后必须重建 option（颜色在渲染时从 CSS 变量解析），否则 canvas 会保留旧色。
+ */
+function renderCurrent(): void {
   renderChart(props.points);
-});
+}
 
-watch(() => props.points, renderChart, { deep: true, flush: 'post' });
+onMounted(renderCurrent);
+
+watch(() => props.points, renderCurrent, { deep: true, flush: 'post' });
+
+// 暗色/主题色变化后重绘（canvas 不会自己重算颜色）
+useChartThemeRefresh(renderCurrent);
 </script>
 
 <template>

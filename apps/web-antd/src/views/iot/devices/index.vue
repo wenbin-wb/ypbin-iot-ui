@@ -14,12 +14,15 @@ import {
 } from 'ant-design-vue';
 
 import { VbenTableAction } from '#/adapter/vxe-table';
+import { exportDevicesCsv } from '#/api/iot/device';
 import { $t } from '#/locales';
 import { toBackendNumber } from '#/utils/backend-number';
 
 import EmptyGuide from '../onboarding/modules/empty-guide.vue';
 import OnboardingGuide from '../onboarding/modules/guide.vue';
+import { EMPTY_TEXT } from '../shared/display';
 import ListErrorAlert from '../shared/list-error-alert.vue';
+import { useCsvExport } from '../shared/use-csv-export';
 import TenantLedger from '../tenant-ledger/modules/ledger.vue';
 import {
   DEVICE_DISABLED,
@@ -27,7 +30,6 @@ import {
 } from './composables/device-status-codes';
 import { useDeviceBatch } from './composables/use-device-batch';
 import { useDeviceDrawers } from './composables/use-device-drawers';
-import { useDeviceExport } from './composables/use-device-export';
 import { useDeviceList } from './composables/use-device-list';
 import { useDeviceStatus } from './composables/use-device-status';
 
@@ -38,7 +40,7 @@ import { useDeviceStatus } from './composables/use-device-status';
  * - `useDeviceList`：vxe Grid + 静默丢弃守卫 + 失败态/活动告警数 + 分页取值；
  * - `useDeviceBatch`：勾选 + 批量启停/删除 + 批量标签/命令（含结果播报与删除后页码回落）；
  * - `useDeviceStatus`：启停开关 + 实时状态/鉴权提示；
- * - `useDeviceExport`：导出当前筛选条件下的 CSV；
+ * - 导出（`shared/use-csv-export`）：导出当前筛选条件下的 CSV；
  * - `useDeviceDrawers`：9 个抽屉中的 7 个 + 行内跳转 + `?action=create` 的一次性消费。
  *
  * 装配顺序有讲究：批量组合式依赖列表组合式的表格能力（清勾选/取可见行/分页快照），
@@ -133,8 +135,11 @@ const {
   openLedger,
 } = useDeviceDrawers({ getGuard: () => list.guard });
 
-const { exportLoading, onExportCsv } = useDeviceExport({
-  readFormValues: list.readFormValues,
+const { exportLoading, onExportCsv } = useCsvExport({
+  // 导出参数与列表查询同源：直接复用列表组合式暴露的筛选值读取器，不另做映射
+  exportFn: () => exportDevicesCsv(list.readFormValues()),
+  fileName: () => $t('page.iot.device.exportName'),
+  errorText: $t('page.iot.device.exportFailed'),
 });
 </script>
 <template>
@@ -192,7 +197,9 @@ const { exportLoading, onExportCsv } = useDeviceExport({
     <!-- 实时连接中断：可见提示但不阻塞页面（列表仍可手动刷新） -->
     <ListErrorAlert
       v-if="realtimeDisconnected"
-      :error="$t('page.iot.realtime.disconnectedHint', [realtimeError || '-'])"
+      :error="
+        $t('page.iot.realtime.disconnectedHint', [realtimeError || EMPTY_TEXT])
+      "
       :title="$t('page.iot.realtime.disconnected')"
       type="warning"
     />
@@ -398,7 +405,7 @@ const { exportLoading, onExportCsv } = useDeviceExport({
         <Tag v-if="toBackendNumber(alertCounts[row.id] ?? 0) > 0" color="error">
           {{ toBackendNumber(alertCounts[row.id] ?? 0) }}
         </Tag>
-        <span v-else class="text-muted-foreground">-</span>
+        <span v-else class="text-muted-foreground">{{ EMPTY_TEXT }}</span>
       </template>
 
       <!--

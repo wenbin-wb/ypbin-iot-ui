@@ -26,9 +26,10 @@
  * ## 暗色模式（本轮边界）
  *
  * 变量随主题切换（`dark.css` 覆盖 `--chart-*`），因此**新渲染**的图表自动使用暗色档；
- * 但已经画在 canvas 上的图表不会自己重绘 —— 切主题后需要页面触发 chart 重渲染
- * （`getComputedStyle` 重新读值 + `usePreferences` watch）。**本轮未做**，登记下一批；
- * 在此期间切主题后图表保持旧色（数据与布局不受影响）。
+ * 已经画在 canvas 上的图表不会自己重绘 —— 切主题/换主题色后由 `utils/use-chart-theme.ts`
+ * 的 `useChartThemeRefresh()` 重新调用组件的渲染函数（`getComputedStyle` 重新读值，
+ * `watch` 监听 `isDark` 与 `theme.colorPrimary`，`flush: 'post'` 保证读到新变量）。
+ * 每个 ECharts 渲染点都必须接入该 composable，否则切主题后旧图保持旧色。
  *
  * ## 取不到变量时怎么办
  *

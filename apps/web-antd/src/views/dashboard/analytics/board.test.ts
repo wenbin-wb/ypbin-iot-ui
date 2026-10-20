@@ -1,6 +1,6 @@
 import type { BoardConfig, BoardWidget } from './board/board-utils';
 
-import type { IotSeriesApi } from '#/api/iot';
+import type { IotDeviceApi, IotSeriesApi } from '#/api/iot';
 
 import { createApp, h, nextTick } from 'vue';
 
@@ -58,6 +58,11 @@ import {
   toBoardPayloadWidget,
   updateBoardWidget,
 } from './board/board-utils';
+import {
+  appendMultiSeriesPoint,
+  mergeLatestValue,
+  useBoardSeries,
+} from './board/use-board-series';
 import BoardWidgetCard from './board/board-widget-card.vue';
 
 /**
@@ -212,10 +217,19 @@ vi.mock('#/api/iot/series', async (importOriginal) => {
   };
 });
 
-vi.mock('@vben/preferences', () => ({
-  preferences: { app: { accessMode: 'frontend', locale: 'zh-CN' } },
-  updatePreferences: () => {},
-}));
+vi.mock('@vben/preferences', async () => {
+  const { reactive, ref } = await import('vue');
+  return {
+    preferences: reactive({
+      app: { accessMode: 'frontend', locale: 'zh-CN' },
+      theme: { colorPrimary: 'hsl(212 100% 45%)', mode: 'light' },
+    }),
+    updatePreferences: () => {},
+    // 图表组件用 `usePreferences().isDark` 做主题重绘（use-chart-theme.ts）；
+    // 提供真实 ref 才能让「主题变化触发重绘」在组件级可测。
+    usePreferences: () => ({ isDark: ref(false) }),
+  };
+});
 
 beforeAll(async () => {
   const { setupI18n } = await import('#/locales');
@@ -810,6 +824,141 @@ describe('看板实时匹配与折线追加', () => {
     expect(resolveBoardWindowMs(widget({ windowMinutes: 0 as never }))).toBe(
       IOT_BOARD_DEFAULT_WINDOW_MINUTES * 60 * 1000,
     );
+  });
+
+  it('折线追加：**乱序**时间戳（小于最后一点）按 duplicate-ts 丢弃，且不改写入参', () => {
+    const points: IotSeriesApi.TimeSeriesPointResp[] = [
+      { quality: 'GOOD', ts: BASE_TS + 2000, value: '2' },
+    ];
+    // 设备时钟回拨/网络重排：新点比最后一点旧 ⇒ 必须丢弃而不是插到前面（不排序）
+    const outcome = appendBoardPoint(points, {
+      quality: 'GOOD',
+      ts: BASE_TS + 1000,
+      value: '1',
+    });
+    expect(outcome.appended).toBe(false);
+    expect(outcome.reason).toBe('duplicate-ts');
+    expect(outcome.points).toBe(points);
+    expect(points).toHaveLength(1);
+  });
+
+  it('最新值合并：同 propertyId 原位覆盖（不重复、顺序不变），新点位追加，不改写入参', () => {
+    const list: IotDeviceApi.LatestValueResp[] = [
+      { propertyId: 'temperature', value: '20' },
+      { propertyId: 'humidity', value: '40' },
+    ];
+    const merged = mergeLatestValue(list, {
+      propertyId: 'temperature',
+      value: '25',
+    });
+    expect(merged).toHaveLength(2);
+    expect(merged.map((row) => row.propertyId)).toEqual([
+      'temperature',
+      'humidity',
+    ]);
+    expect(merged.map((row) => row.value)).toEqual(['25', '40']);
+    // 不改写入参
+    expect(list.map((row) => row.value)).toEqual(['20', '40']);
+
+    const appended = mergeLatestValue(list, {
+      propertyId: 'pressure',
+      value: '100',
+    });
+    expect(appended.map((row) => row.propertyId)).toEqual([
+      'temperature',
+      'humidity',
+      'pressure',
+    ]);
+  });
+
+  it('多序列合并：只动命中点位的序列（未命中原样返回引用），乱序 ts 丢弃', () => {
+    const series = [
+      {
+        points: [{ quality: 'GOOD', ts: BASE_TS + 1000, value: '1' }],
+        propertyId: 'temperature',
+      },
+      { points: [], propertyId: 'humidity' },
+    ] as never[];
+
+    const next = appendMultiSeriesPoint(series, 'temperature', {
+      quality: 'GOOD',
+      ts: BASE_TS + 2000,
+      value: '2',
+    });
+    expect(next).not.toBe(series);
+    expect((next as never[])[1]).toBe((series as never[])[1]); // 未命中序列复用引用
+    const firstSeries = (next as { points: unknown[] }[])[0] as {
+      points: unknown[];
+    };
+    expect(firstSeries.points).toHaveLength(2);
+
+    // 点位对不上 ⇒ 原引用返回（调用方据此跳过重渲染）
+    const unmatched = appendMultiSeriesPoint(series, 'no-such-point', {
+      quality: 'GOOD',
+      ts: BASE_TS + 3000,
+      value: '3',
+    });
+    expect(unmatched).toBe(series);
+
+    // 乱序（比该序列最后一点旧）⇒ 同样原引用返回
+    const outOfOrder = appendMultiSeriesPoint(series, 'temperature', {
+      quality: 'GOOD',
+      ts: BASE_TS,
+      value: '0',
+    });
+    expect(outOfOrder).toBe(series);
+  });
+
+  it('多序列合并：超上限保留最近 N 点（与单序列同口径）', () => {
+    const series = [
+      {
+        points: Array.from({ length: 3 }, (_, index) => ({
+          quality: 'GOOD',
+          ts: BASE_TS + index * 1000,
+          value: String(index),
+        })),
+        propertyId: 'temperature',
+      },
+    ] as never[];
+    const next = appendMultiSeriesPoint(series, 'temperature', {
+      quality: 'GOOD',
+      ts: BASE_TS + 3000,
+      value: '3',
+    }) as { points: { value: string }[] }[];
+    // 上限是 200：这里只验证「追加成功且尾部是最新点」，裁剪由 board-utils 用例覆盖
+    expect(next[0]?.points).toHaveLength(4);
+    expect(next[0]?.points.at(-1)?.value).toBe('3');
+  });
+
+  it('多序列加载：单点失败不连坐（成功序列保留 + 顶部提示），全部失败才抛出', async () => {
+    const seriesApi = useBoardSeries({ patchRuntime: () => {} });
+
+    // 部分失败：temperature 成功、humidity 失败
+    mockApi.getDeviceSeries.mockImplementation(
+      async (_deviceId: string, params: { propertyId?: string }) => {
+        if (params?.propertyId === 'humidity') {
+          throw new Error('series down');
+        }
+        return [{ quality: 'GOOD', ts: BASE_TS, value: '20' }];
+      },
+    );
+    const points = await seriesApi.loadSeries(
+      '9300012',
+      ['temperature', 'humidity'],
+      60_000,
+    );
+    expect(points.get('temperature')).toHaveLength(1);
+    expect(points.has('humidity')).toBe(false);
+    // 不静默：提示里带后端 message
+    expect(seriesApi.seriesWarning.value).toContain('series down');
+
+    // 全部失败 ⇒ 抛出（由卡片运行期落到 error 展示）
+    mockApi.getDeviceSeries.mockImplementation(async () => {
+      throw new Error('all series down');
+    });
+    await expect(
+      seriesApi.loadSeries('9300012', ['a', 'b'], 60_000),
+    ).rejects.toThrow('all series down');
   });
 });
 

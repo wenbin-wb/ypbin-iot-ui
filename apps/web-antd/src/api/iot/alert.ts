@@ -269,11 +269,6 @@ export async function getDeviceAlertPage(
   );
 }
 
-/** 告警详情（含投递记录）。 */
-export async function getAlertDetail(id: string) {
-  return requestClient.get<IotAlertApi.InstanceResp>(`/iot/alerts/${id}`);
-}
-
 /** 租户级告警摘要。 */
 export async function getAlertSummary() {
   return requestClient.get<IotAlertApi.SummaryResp>('/iot/alerts/summary');
@@ -324,11 +319,6 @@ export async function getAlertRulePage(params: IotAlertApi.RuleQuery) {
     '/iot/alerts/rules',
     { params },
   );
-}
-
-/** 规则详情。 */
-export async function getAlertRule(id: string) {
-  return requestClient.get<IotAlertApi.RuleResp>(`/iot/alerts/rules/${id}`);
 }
 
 /** 新建规则。 */

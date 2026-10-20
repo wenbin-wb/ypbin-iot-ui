@@ -14,11 +14,12 @@ import { Alert, Button, Empty, Tabs, Tag } from 'ant-design-vue';
 
 import { useVbenVxeGrid, VbenTableAction } from '#/adapter/vxe-table';
 import { getAlertPage, getAlertRulePage, getDeviceOptions } from '#/api/iot';
+import { exportAlertsCsv } from '#/api/iot/alert';
 import { $t } from '#/locales';
 import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
 
-import { formatDateTime } from '../shared/display';
+import { EMPTY_TEXT, formatDateTime } from '../shared/display';
 import {
   ALERT_INSTANCE_FILTER_DEFAULTS,
   ALERT_INSTANCE_FILTER_PAGE,
@@ -56,7 +57,7 @@ import InstanceToolbar from './modules/instance-toolbar.vue';
 import NotifyRiskTag from './modules/notify-risk-tag.vue';
 import RuleForm from './modules/rule-form.vue';
 import RuleToolbar from './modules/rule-toolbar.vue';
-import { useAlertExport } from './use-alert-export';
+import { useCsvExport } from '../shared/use-csv-export';
 import { useAlertInstanceActions } from './use-alert-instance-actions';
 import { useAlertRealtime } from './use-alert-realtime';
 import { useAlertRuleActions } from './use-alert-rule-actions';
@@ -314,14 +315,27 @@ const batchSilenceDisabledReason = computed(() =>
 );
 
 /**
- * 导出当前筛选条件下的告警实例 CSV（防重 + 伪文件识别 + 失败原样提示，见 `use-alert-export`）。
+ * 导出当前筛选条件下的告警实例 CSV（防重 + 伪文件识别 + 失败原样提示，
+ * 统一走 `shared/use-csv-export`）。
  *
- * 表单值与 URL 设备过滤都以 getter 注入：导出参数必须与列表查询同源（页面持有这两处事实）。
+ * 导出参数必须与列表查询同源：表单值取自 vxe 表单实例，设备过滤复用与列表 query
+ * 相同的 `resolveDeviceFilter` 合并规则 —— 否则「从设备台账带 ?deviceId= 进来」时
+ * 导出结果会比屏幕上看到的多。
  */
-const { exportLoading, onExportCsv } = useAlertExport({
-  getFormValues: () =>
-    (instanceGridApi.formApi?.form?.values ?? {}) as IotAlertApi.InstanceQuery,
-  getPresetDeviceId: () => presetDeviceId.value,
+const { exportLoading, onExportCsv } = useCsvExport({
+  exportFn: () => {
+    const formValues = (instanceGridApi.formApi?.form?.values ??
+      {}) as IotAlertApi.InstanceQuery;
+    return exportAlertsCsv({
+      ...formValues,
+      deviceId: resolveDeviceFilter(
+        formValues.deviceId,
+        presetDeviceId.value || undefined,
+      ),
+    });
+  },
+  fileName: () => $t('page.iot.alert.exportName'),
+  errorText: $t('page.iot.alert.exportFailed'),
 });
 
 // ---------------------------------------------------------------- 告警规则
@@ -567,7 +581,7 @@ onUnmounted(() => {
               <span v-if="row.outage">{{
                 $t('page.iot.alert.kind.offline')
               }}</span>
-              <span v-else>{{ row.ruleName ?? '-' }}</span>
+              <span v-else>{{ row.ruleName ?? EMPTY_TEXT }}</span>
             </template>
 
             <!-- 展开行：触发值 / 阈值 / 时间线 / 投递记录 / 该点位近期曲线缩略（见子组件） -->
