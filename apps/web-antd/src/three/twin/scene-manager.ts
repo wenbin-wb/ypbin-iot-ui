@@ -146,6 +146,14 @@ export class TwinSceneManager {
 
   private animationFrameId = 0;
 
+  /**
+   * 当前场景的祖先链 pivot（嵌套 Group）。
+   *
+   * 存下来是为了 dispose 时整条移除：只摘模型根会把 pivot 留在场景图里，
+   * 下次进入场景又会叠一层，反复切换后场景图无限增长（形状上也表现为模型越走越远）。
+   */
+  private ancestryPivots: THREE_NS.Object3D[] = [];
+
   /** 上一次切换建立的内存基线（geometries 数量）。 */
   private baselineGeometries = 0;
 
@@ -429,6 +437,35 @@ export class TwinSceneManager {
   }
 
   /**
+   * 世界法线 → 当前场景局部法线（拾取结果的落库口径）。
+   *
+   * 法线必须用**逆转置矩阵**变换（不是直接乘）：非均匀缩放下直接乘会让法线方向失真。
+   * 且换算基准必须是 `currentWorldMatrix`（与渲染同源的场景图矩阵），不能用世界法线直传 ——
+   * 父场景有旋转时直传会把「世界朝向」当成「本场景朝向」存进库，灯具/贴面朝向就错了。
+   *
+   * @param normal 世界坐标法线
+   * @returns 本场景局部法线（已归一化）
+   */
+  worldNormalToLocal(normal: { x: number; y: number; z: number }): {
+    x: number;
+    y: number;
+    z: number;
+  } {
+    const THREE = this.THREE;
+    const matrix = this.currentWorldMatrix;
+    if (!THREE || !matrix) {
+      throw new Error('场景管理器未初始化：法线换算不可用');
+    }
+    const normalMatrix = new THREE.Matrix3().getNormalMatrix(
+      matrix.clone().invert().transpose(),
+    );
+    const vector = new THREE.Vector3(normal.x, normal.y, normal.z)
+      .applyMatrix3(normalMatrix)
+      .normalize();
+    return { x: vector.x, y: vector.y, z: vector.z };
+  }
+
+  /**
    * 世界坐标 → 当前场景局部坐标（拾取结果的落库口径）。
    *
    * @param world 世界坐标
@@ -537,22 +574,63 @@ export class TwinSceneManager {
     const root = loaded.scene;
     this.modelRoot = root;
 
-    // 锚点变换：position / rotation(度→弧度) / scale。
-    // 旋转用 three.js 默认欧拉序 'XYZ'（内旋），与后端 TwinSceneTransform 的
-    // `T × Rz × Ry × Rx × S` 口径逐字一致 —— 前端**不手写矩阵**，避免顺序搞反。
-    root.position.set(request.anchor.x, request.anchor.y, request.anchor.z);
-    root.rotation.set(
-      toRadians(request.anchor.rx),
-      toRadians(request.anchor.ry),
-      toRadians(request.anchor.rz),
-      'XYZ',
-    );
-    root.scale.setScalar(request.anchor.scale);
-    root.updateMatrix();
+    // 锚点变换：**把整条祖先链建成嵌套 Group**，而不是只设自身变换。
+    //
+    // ⚠️ 这里曾有一个会系统性偏移坐标的缺陷（独立复核实测发现）：
+    //    旧实现只把 `request.anchor`（自身）设到 root，父链从未进场景图；
+    //    但 `currentWorldMatrix` 却另外手写合成了一套**含父链**的矩阵（已删除），
+    //    `worldToLocal` 又用它的逆换算落库坐标 ⇒ 渲染位置与换算矩阵不是同一套。
+    //    后果：父 anchor x=10、子 anchor x=5 时，画布上看到的原点在世界 (5,0,0)，
+    //    但矩阵认为在 (15,0,0)；用户点到「看到的原点」，落库局部坐标是 (-10,0,0)（正确应为 0），
+    //    且多点几层误差线性放大。
+    //
+    // 修法：让**渲染与矩阵同源**——沿 ancestry 逐级建 Group（每级一个 anchor 变换），
+    // 模型挂在最深那级下面。这样 three 的 `matrixWorld` 自然等于
+    // `parentWorld × anchor`，`worldToLocal` 用它取逆即可，不需要前端自己合成一套。
+    // ancestry 是「根 → 叶」顺序（含自身）：
+    //   scene → pivot(根 anchor) → pivot(第2级 anchor) → … → modelRoot
+    // 于是 modelRoot.matrixWorld 自然等于 `parentWorld × anchor`（与后端口径一致），
+    // 不需要前端再手写一套矩阵合成。
+    let parent: THREE_NS.Object3D = this.scene;
+    const createdPivots: THREE_NS.Object3D[] = [];
+    for (const anchor of request.ancestry) {
+      const pivot = new THREE.Group();
+      pivot.name = '__twin_anchor__';
+      pivot.position.set(anchor.x, anchor.y, anchor.z);
+      pivot.rotation.set(
+        toRadians(anchor.rx),
+        toRadians(anchor.ry),
+        toRadians(anchor.rz),
+        'XYZ',
+      );
+      pivot.scale.setScalar(anchor.scale);
+      parent.add(pivot);
+      parent = pivot;
+      createdPivots.push(pivot);
+    }
 
-    this.currentWorldMatrix = this.composeWorldMatrix(request.ancestry);
+    // 模型根不再叠加 anchor：父链最后一环已包含自身 anchor。
+    // ancestry 为空时（防御：后端保证至少含自身）退回用 request.anchor 兜底。
+    if (createdPivots.length === 0) {
+      root.position.set(request.anchor.x, request.anchor.y, request.anchor.z);
+      root.rotation.set(
+        toRadians(request.anchor.rx),
+        toRadians(request.anchor.ry),
+        toRadians(request.anchor.rz),
+        'XYZ',
+      );
+      root.scale.setScalar(request.anchor.scale);
+    }
+    parent.add(root);
+    // 必须立刻刷新：matrixWorld 是「上次渲染时」算的，此处要马上用它换算坐标
+    root.updateWorldMatrix(true, true);
 
-    this.scene.add(root);
+    // 世界矩阵**直接取渲染图的实际结果**（与渲染同源，不再手写合成）
+    this.currentWorldMatrix = root.matrixWorld.clone();
+
+    // 记下 pivot 链：dispose 时整条一起移除（否则留下孤儿 Group 与残留显存）
+    this.ancestryPivots = createdPivots;
+
     this.anchorLayer?.attach(root, request.anchors);
     this.applyView(request.view);
   }
@@ -624,51 +702,18 @@ export class TwinSceneManager {
   /** 同步清理当前模型与其 GPU 资源。 */
   private clearCurrentModelSync(): void {
     this.anchorLayer?.detach();
-    if (this.modelRoot && this.scene) {
-      this.scene.remove(this.modelRoot);
+    if (this.modelRoot) {
+      // 先回收模型根的 GPU 资源，再从最深那级 pivot 上摘下来
       disposeSubtree(this.modelRoot);
+      this.modelRoot.removeFromParent();
       this.modelRoot = undefined;
     }
-  }
-
-  /**
-   * 合成世界矩阵（从根到自身的锚点链）。
-   *
-   * 数学口径（与后端 `TwinSceneTransform` 类注释逐字一致）：
-   * ```
-   * worldMatrix(scene) = worldMatrix(parent) × anchorMatrix(scene)
-   * anchorMatrix      = T × Rz × Ry × Rx × S
-   * ```
-   * 实现用 three 的 `Matrix4.compose(position, quaternion, scale)` +
-   * `Euler(..., 'XYZ')`，由 three 完成同序合成。
-   *
-   * @param ancestry 从根到自身的锚点链（含自身，按根→叶顺序）
-   * @returns 4x4 世界矩阵
-   */
-  private composeWorldMatrix(ancestry: AnchorTransform[]): THREE_NS.Matrix4 {
-    const THREE = this.THREE;
-    if (!THREE) {
-      throw new Error('场景管理器未初始化：无法合成世界矩阵');
+    // 逐级回卷移除 pivot（从最深开始）：只摘模型根会把 pivot 链留在场景图里，
+    // 反复切换后场景图无限增长，表现为「模型越切越远」。
+    for (let index = this.ancestryPivots.length - 1; index >= 0; index--) {
+      this.ancestryPivots[index]?.removeFromParent();
     }
-    const world = new THREE.Matrix4();
-    for (const anchor of ancestry) {
-      const local = new THREE.Matrix4();
-      const quaternion = new THREE.Quaternion().setFromEuler(
-        new THREE.Euler(
-          toRadians(anchor.rx),
-          toRadians(anchor.ry),
-          toRadians(anchor.rz),
-          'XYZ',
-        ),
-      );
-      local.compose(
-        new THREE.Vector3(anchor.x, anchor.y, anchor.z),
-        quaternion,
-        new THREE.Vector3(anchor.scale, anchor.scale, anchor.scale),
-      );
-      world.multiply(local);
-    }
-    return world;
+    this.ancestryPivots = [];
   }
 
   /** 淡入遮罩。 */

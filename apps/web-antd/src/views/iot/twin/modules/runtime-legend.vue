@@ -3,6 +3,14 @@ import { computed } from 'vue';
 
 import { $t } from '#/locales';
 
+import {
+  TWIN_COLOR_ALERT,
+  TWIN_COLOR_DISABLED,
+  TWIN_COLOR_OFFLINE,
+  TWIN_COLOR_ONLINE,
+  TWIN_COLOR_UNKNOWN,
+} from '../twin-colors';
+
 /**
  * 运行态图例（在线 / 离线 / 未知 / 停用 / 告警）。
  *
@@ -17,11 +25,11 @@ interface LegendItem {
 }
 
 const items = computed<LegendItem[]>(() => [
-  { color: '#22c55e', label: $t('page.iot.twin.legendOnline') },
-  { color: '#94a3b8', label: $t('page.iot.twin.legendOffline') },
-  { color: '#f59e0b', label: $t('page.iot.twin.legendUnknown') },
-  { color: '#475569', label: $t('page.iot.twin.legendDisabled') },
-  { blink: true, color: '#ef4444', label: $t('page.iot.twin.legendAlert') },
+  { color: TWIN_COLOR_ONLINE, label: $t('page.iot.twin.legendOnline') },
+  { color: TWIN_COLOR_OFFLINE, label: $t('page.iot.twin.legendOffline') },
+  { color: TWIN_COLOR_UNKNOWN, label: $t('page.iot.twin.legendUnknown') },
+  { color: TWIN_COLOR_DISABLED, label: $t('page.iot.twin.legendDisabled') },
+  { blink: true, color: TWIN_COLOR_ALERT, label: $t('page.iot.twin.legendAlert') },
 ]);
 </script>
 

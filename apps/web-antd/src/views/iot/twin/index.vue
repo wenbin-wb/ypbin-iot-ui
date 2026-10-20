@@ -228,6 +228,11 @@ function onAssetsLoaded(list: IotTwinApi.ModelAssetResp[]): void {
 
 <template>
   <Page auto-content-height>
+    <!--
+      页面主标题：视觉标题由页头/菜单承担，这里给读屏用的唯一 <h1>
+      （与设备台账/告警中心同口径；a11y-gates 门禁要求每个页面恰好 1 个）。
+    -->
+    <h1 class="sr-only">{{ $t('page.iot.twin.title') }}</h1>
     <ListErrorAlert
       v-if="sceneError"
       :message="sceneError"

@@ -144,7 +144,7 @@ onMounted(() => {
   >
     <template #notFoundContent>
       <Spin v-if="loading" size="small" />
-      <span v-else-if="error" class="text-xs text-red-500">{{ error }}</span>
+      <span v-else-if="error" class="text-xs text-destructive-text">{{ error }}</span>
       <span v-else class="text-xs">{{ $t('common.noData') }}</span>
     </template>
   </Select>

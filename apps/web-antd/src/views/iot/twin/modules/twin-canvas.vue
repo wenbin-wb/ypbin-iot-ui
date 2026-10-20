@@ -167,7 +167,9 @@ async function mountEngine(): Promise<void> {
           return;
         }
         const local = manager.worldToLocal(result.point);
-        emit('place', { local, normal: result.normal });
+        // 法线也必须换算到本场景局部系（直传世界法线会让父场景有旋转时的朝向存错）
+        const localNormal = manager.worldNormalToLocal(result.normal);
+        emit('place', { local, normal: localNormal });
       },
       useBvh: props.editorMode === 'place',
     });

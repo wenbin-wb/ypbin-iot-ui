@@ -3,6 +3,22 @@ import type * as THREE_NS from 'three';
 import type { AnchorLayer } from './scene-manager';
 import type { AnchorDescriptor, AnchorRuntimeState } from './types';
 
+import {
+  TWIN_COLOR_ALERT,
+  TWIN_COLOR_ALERT_DIM,
+  TWIN_COLOR_DISABLED,
+  TWIN_COLOR_ICON_BASE,
+  TWIN_COLOR_ICON_INNER,
+  TWIN_COLOR_LABEL_BG,
+  TWIN_COLOR_LABEL_BORDER,
+  TWIN_COLOR_LABEL_BORDER_ALERT,
+  TWIN_COLOR_LABEL_TEXT,
+  TWIN_COLOR_LABEL_TEXT_MUTED,
+  TWIN_COLOR_OFFLINE,
+  TWIN_COLOR_ONLINE,
+  TWIN_COLOR_UNKNOWN,
+} from '../../views/iot/twin/twin-colors';
+
 /**
  * 锚点渲染层：设备图标 + 数值标签 + 状态着色 + 告警闪烁。
  *
@@ -29,20 +45,23 @@ interface AnchorNode {
   sprite: THREE_NS.Sprite;
 }
 
-/** 在线色（与设备台账页面同色系，避免两处颜色语义不一致）。 */
-const COLOR_ONLINE = '#22c55e';
+/** 状态色统一来自调色板模块（3D 画布与图例共用，保证两处永不漂移）。 */
+const COLOR_ONLINE = TWIN_COLOR_ONLINE;
 
 /** 离线色。 */
-const COLOR_OFFLINE = '#94a3b8';
+const COLOR_OFFLINE = TWIN_COLOR_OFFLINE;
 
 /** 未知态色（平台还没拿到过该设备的连接事件，**不代表离线**）。 */
-const COLOR_UNKNOWN = '#f59e0b';
+const COLOR_UNKNOWN = TWIN_COLOR_UNKNOWN;
 
 /** 停用设备的颜色（灰化，比离线更深）。 */
-const COLOR_DISABLED = '#475569';
+const COLOR_DISABLED = TWIN_COLOR_DISABLED;
 
 /** 告警色。 */
-const COLOR_ALERT = '#ef4444';
+const COLOR_ALERT = TWIN_COLOR_ALERT;
+
+/** 告警闪烁的浅色相位。 */
+const COLOR_ALERT_DIM = TWIN_COLOR_ALERT_DIM;
 
 /** 告警闪烁的半周期（毫秒）。 */
 const ALERT_BLINK_HALF_PERIOD_MS = 600;
@@ -140,9 +159,9 @@ export function createAnchorLayer(
         'transform:translate(-50%,-140%)',
         'padding:2px 6px',
         'border-radius:4px',
-        'background:rgba(11,18,32,.82)',
-        'border:1px solid rgba(148,163,184,.35)',
-        'color:#e2e8f0',
+        `background:${TWIN_COLOR_LABEL_BG}`,
+        `border:1px solid ${TWIN_COLOR_LABEL_BORDER}`,
+        `color:${TWIN_COLOR_LABEL_TEXT}`,
         'font-size:12px',
         'line-height:16px',
         'white-space:nowrap',
@@ -205,11 +224,13 @@ export function createAnchorLayer(
       node.labelElement.textContent = `${name} ${text}`;
       // 无数据（hasValue=false）时标签用弱化色，明确告诉用户「这是没有数据，不是 0」
       node.labelElement.style.color =
-        state?.hasValue === false ? '#94a3b8' : '#e2e8f0';
+        state?.hasValue === false
+          ? TWIN_COLOR_LABEL_TEXT_MUTED
+          : TWIN_COLOR_LABEL_TEXT;
       node.labelElement.style.borderColor =
         (state?.alertCount ?? 0) > 0
-          ? 'rgba(239,68,68,.75)'
-          : 'rgba(148,163,184,.35)';
+          ? TWIN_COLOR_LABEL_BORDER_ALERT
+          : TWIN_COLOR_LABEL_BORDER;
     }
   }
 
@@ -224,7 +245,7 @@ export function createAnchorLayer(
       return COLOR_DISABLED;
     }
     if ((state?.alertCount ?? 0) > 0) {
-      return blinkOn ? COLOR_ALERT : '#fca5a5';
+      return blinkOn ? COLOR_ALERT : COLOR_ALERT_DIM;
     }
     if (state?.onlineStatus === 'online') {
       return COLOR_ONLINE;
@@ -299,7 +320,7 @@ function createIconTexture(THREE: typeof THREE_NS): THREE_NS.Texture {
   if (context) {
     context.clearRect(0, 0, ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE);
     // 圆底（白色，由 sprite 材质 color 染色）
-    context.fillStyle = '#ffffff';
+    context.fillStyle = TWIN_COLOR_ICON_BASE;
     context.beginPath();
     context.arc(
       ICON_TEXTURE_SIZE / 2,
@@ -310,7 +331,7 @@ function createIconTexture(THREE: typeof THREE_NS): THREE_NS.Texture {
     );
     context.fill();
     // 内圈深色，形成「环 + 心」的视觉，缩小后仍可辨认
-    context.fillStyle = 'rgba(11,18,32,0.85)';
+    context.fillStyle = TWIN_COLOR_ICON_INNER;
     context.beginPath();
     context.arc(
       ICON_TEXTURE_SIZE / 2,
