@@ -4,7 +4,6 @@ import type { IotSeriesApi } from '#/api/iot';
 
 import { createApp, h, nextTick } from 'vue';
 
-
 import {
   afterEach,
   beforeAll,
