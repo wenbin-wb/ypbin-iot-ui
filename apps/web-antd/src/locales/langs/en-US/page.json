@@ -841,7 +841,8 @@
       "liveFollowed": "Followed {0} points",
       "liveDropped": "Ignored {0} live points that could not be appended (duplicate or invalid timestamp, or the series query failed)",
       "liveNonGood": "{0} of them have non-good quality; the chart shows raw values and the detail table keeps the quality code",
-      "liveReconnectingDesc": "Live connection interrupted, reconnecting automatically. New points are not appended until it recovers."
+      "liveReconnectingDesc": "Live connection interrupted, reconnecting automatically. New points are not appended until it recovers.",
+      "exportFailed": "Failed to export history series"
     },
     "maintenance": {
       "title": "Maintenance windows",

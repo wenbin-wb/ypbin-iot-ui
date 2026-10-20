@@ -1,3 +1,5 @@
+import type { IotPageResult } from './page';
+
 import { requestClient } from '#/api/request';
 
 /**
@@ -38,18 +40,11 @@ export namespace IotEventApi {
   }
 
   /**
-   * 分页信封（后端 `PageResult`）。
-   *
-   * ⚠️ 计数与页码在后端都是 `long`，全局 Long→字符串序列化 ⇒ 真实返回是字符串
-   * （`{"total":"17","page":"1","pageSize":"10"}`）。消费方必须显式转数
-   * （`#/utils/backend-number` 的 `toBackendNumber`），不许 `as number`。口径同 `command.ts`。
+   * 分页信封（后端 `PageResult`）。**唯一定义**见 `./page` 的 {@link IotPageResult}；
+   * `total/page/pageSize` 在后端是 `long` ⇒ 真实返回为 `number | string`，
+   * 消费方必须用 `#/utils/backend-number` 的 `toBackendNumber` 显式转数（禁止 `as number`）。
    */
-  export interface PageResult<T> {
-    items: T[];
-    total: number | string;
-    page: number | string;
-    pageSize: number | string;
-  }
+  export type PageResult<T> = IotPageResult<T>;
 }
 
 /** 分页查询某设备的运行期事件（按发生时刻倒序，最新优先）。 */

@@ -33,6 +33,7 @@ import { extractErrorMessage } from '#/utils/error';
 
 import {
   dataFormatLabel,
+  EMPTY_TEXT,
   formatDateTime,
   modelStatusColor,
   modelStatusLabel,
@@ -251,10 +252,10 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
           >
             <Descriptions :column="2" bordered size="small">
               <DescriptionsItem :label="$t('page.iot.product.code')">
-                {{ product?.productCode ?? '-' }}
+                {{ product?.productCode ?? EMPTY_TEXT }}
               </DescriptionsItem>
               <DescriptionsItem :label="$t('page.iot.product.name')">
-                {{ product?.productName ?? '-' }}
+                {{ product?.productName ?? EMPTY_TEXT }}
               </DescriptionsItem>
               <DescriptionsItem :label="$t('page.iot.device.protocol')">
                 {{ protocolLabel(product?.protocol) }}
@@ -263,10 +264,10 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
                 {{ dataFormatLabel(product?.dataFormat) }}
               </DescriptionsItem>
               <DescriptionsItem :label="$t('page.iot.product.deviceType')">
-                {{ product?.deviceType ?? '-' }}
+                {{ product?.deviceType ?? EMPTY_TEXT }}
               </DescriptionsItem>
               <DescriptionsItem :label="$t('page.iot.product.manufacturer')">
-                {{ product?.manufacturerName ?? '-' }}
+                {{ product?.manufacturerName ?? EMPTY_TEXT }}
               </DescriptionsItem>
               <DescriptionsItem :label="$t('page.iot.product.modelStatus')">
                 <Tag :color="modelStatusColor(product?.modelStatus)">
@@ -274,10 +275,10 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
                 </Tag>
               </DescriptionsItem>
               <DescriptionsItem :label="$t('page.iot.product.currentVersion')">
-                {{ product?.currentVersion ?? '-' }}
+                {{ product?.currentVersion ?? EMPTY_TEXT }}
               </DescriptionsItem>
               <DescriptionsItem :label="$t('page.iot.device.remark')" :span="2">
-                {{ product?.remark || '-' }}
+                {{ product?.remark || EMPTY_TEXT }}
               </DescriptionsItem>
             </Descriptions>
 
@@ -410,7 +411,7 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
                       </Tag>
                     </td>
                     <td class="py-1">{{ formatDateTime(row.publishedAt) }}</td>
-                    <td class="py-1">{{ row.remark || '-' }}</td>
+                    <td class="py-1">{{ row.remark || EMPTY_TEXT }}</td>
                   </tr>
                 </tbody>
               </table>

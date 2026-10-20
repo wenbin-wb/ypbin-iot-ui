@@ -15,7 +15,7 @@ import { getAccessOverview } from '#/api/iot/accessOverview';
 import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
 
-import { formatDateTime } from '../../shared/display';
+import { formatDateTime, PENDING_TEXT } from '../../shared/display';
 
 interface Row {
   key: string;
@@ -95,31 +95,31 @@ async function load() {
       },
       {
         label: $t('page.iot.overview.reconcileDeferred'),
-        value: reported.value ? toText(m.reconcileDeferredCount) : '-',
+        value: reported.value ? toText(m.reconcileDeferredCount) : PENDING_TEXT,
       },
       {
         label: $t('page.iot.overview.tickMax'),
-        value: reported.value ? toText(m.tickDurationMaxMs) : '-',
+        value: reported.value ? toText(m.tickDurationMaxMs) : PENDING_TEXT,
       },
       {
         label: $t('page.iot.overview.specLoadMax'),
-        value: reported.value ? toText(m.specLoadDurationMaxMs) : '-',
+        value: reported.value ? toText(m.specLoadDurationMaxMs) : PENDING_TEXT,
       },
       {
         label: $t('page.iot.overview.selfFenced'),
-        value: reported.value ? toText(m.selfFencedCount) : '-',
+        value: reported.value ? toText(m.selfFencedCount) : PENDING_TEXT,
       },
       {
         label: $t('page.iot.overview.nodeFenced'),
-        value: reported.value ? toText(m.nodeFencedCount) : '-',
+        value: reported.value ? toText(m.nodeFencedCount) : PENDING_TEXT,
       },
       {
         label: $t('page.iot.overview.renewFailure'),
-        value: reported.value ? toText(m.renewFailureCount) : '-',
+        value: reported.value ? toText(m.renewFailureCount) : PENDING_TEXT,
       },
       {
         label: $t('page.iot.overview.egressPending'),
-        value: reported.value ? toText(m.egressPendingCount) : '-',
+        value: reported.value ? toText(m.egressPendingCount) : PENDING_TEXT,
       },
     ];
   } catch (error_) {

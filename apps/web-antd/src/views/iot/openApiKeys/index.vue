@@ -33,7 +33,11 @@ import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
 
 import CopyText from '../shared/copy-text.vue';
-import { formatDateTime, openApiScopeLabelKey } from '../shared/display';
+import {
+  EMPTY_TEXT,
+  formatDateTime,
+  openApiScopeLabelKey,
+} from '../shared/display';
 import {
   createRefreshGuard,
   QueryTimeoutError,
@@ -372,7 +376,9 @@ async function copyText(text: string) {
           {{ $t('page.iot.openApiKey.ipWhitelistUnlimited') }}
         </span>
         <!-- 后端 ListItemResp 暂不返回该字段 ⇒ 显示占位 '-'，不猜成「不限来源」 -->
-        <span v-else class="text-xs text-muted-foreground">-</span>
+        <span v-else class="text-xs text-muted-foreground">{{
+          EMPTY_TEXT
+        }}</span>
       </template>
 
       <template #usage="{ row }">
@@ -428,7 +434,9 @@ async function copyText(text: string) {
             {{ $t('page.iot.openApiKey.revoke') }}
           </Button>
         </Popconfirm>
-        <span v-else class="text-xs text-muted-foreground">-</span>
+        <span v-else class="text-xs text-muted-foreground">{{
+          EMPTY_TEXT
+        }}</span>
       </template>
     </Grid>
 

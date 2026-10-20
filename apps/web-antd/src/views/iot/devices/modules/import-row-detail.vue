@@ -5,13 +5,22 @@ import type { IotDeviceImportApi } from '#/api/iot';
 
 import { computed } from 'vue';
 
-import { Alert, Button, Empty, message, Space, Table, Tag } from 'ant-design-vue';
+import {
+  Alert,
+  Button,
+  Empty,
+  message,
+  Space,
+  Table,
+  Tag,
+} from 'ant-design-vue';
 
 import { downloadDeviceImportFailedCsv } from '#/api/iot';
 import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
 import { downloadBlobSafe } from '#/utils/file';
 
+import { EMPTY_TEXT } from '../../shared/display';
 import {
   DETAIL_ROWS_PAGE_SIZE,
   IMPORT_ROW_RESULT,
@@ -187,11 +196,11 @@ const rowColumns = [
       </template>
       <template v-else-if="column.dataIndex === 'errorCode'">
         <span v-if="record.errorCode">{{ record.errorCode }}</span>
-        <span v-else class="text-muted-foreground">-</span>
+        <span v-else class="text-muted-foreground">{{ EMPTY_TEXT }}</span>
       </template>
       <template v-else-if="column.dataIndex === 'errorMessage'">
         <span v-if="record.errorMessage">{{ record.errorMessage }}</span>
-        <span v-else class="text-muted-foreground">-</span>
+        <span v-else class="text-muted-foreground">{{ EMPTY_TEXT }}</span>
       </template>
     </template>
     <template #emptyText>

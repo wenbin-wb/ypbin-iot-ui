@@ -1,3 +1,5 @@
+import type { IotPageResult } from './page';
+
 import { requestClient } from '#/api/request';
 
 /**
@@ -31,13 +33,12 @@ export namespace IotPlatformAlertApi {
     severity?: string;
   }
 
-  /** 分页信封（与 IotAlertApi.PageResult 同构）。 */
-  export interface PageResult<T> {
-    items: T[];
-    total: number | string;
-    page: number | string;
-    pageSize: number | string;
-  }
+  /**
+   * 分页信封（后端 `PageResult`）。**唯一定义**见 `./page` 的 {@link IotPageResult}；
+   * `total/page/pageSize` 在后端是 `long` ⇒ 真实返回为 `number | string`，
+   * 消费方必须用 `#/utils/backend-number` 的 `toBackendNumber` 显式转数（禁止 `as number`）。
+   */
+  export type PageResult<T> = IotPageResult<T>;
 }
 
 /** 平台告警分页列表。 */

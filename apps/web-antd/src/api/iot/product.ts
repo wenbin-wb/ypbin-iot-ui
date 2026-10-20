@@ -1,3 +1,5 @@
+import type { IotPageResult } from './page';
+
 import { requestClient } from '#/api/request';
 
 /** IoT 产品与物模型 API。 */
@@ -49,27 +51,21 @@ export namespace IotProductApi {
   }
 
   /**
-   * 分页信封（后端 `PageResult`）。
-   *
-   * ⚠️ 计数与页码在后端都是 `long`，全局 Long→字符串序列化 ⇒ 真实返回是字符串
-   * （`{"total":"17","page":"1","pageSize":"10"}`）。消费方必须显式转数
-   * （`#/utils/backend-number` 的 `toBackendNumber`），不许 `as number`。口径同 `command.ts`。
+   * 分页信封（后端 `PageResult`）。**唯一定义**见 `./page` 的 {@link IotPageResult}；
+   * `total/page/pageSize` 在后端是 `long` ⇒ 真实返回为 `number | string`，
+   * 消费方必须用 `#/utils/backend-number` 的 `toBackendNumber` 显式转数（禁止 `as number`）。
    */
-  export interface PageResult<T> {
-    items: T[];
-    total: number | string;
-    page: number | string;
-    pageSize: number | string;
-  }
+  export type PageResult<T> = IotPageResult<T>;
 }
 
 /** 产品下拉一次取多少条（与 `getDeviceOptions` 同口径）。 */
 const PRODUCT_OPTION_PAGE_SIZE = 200;
 
 export async function getProductPage(params: IotProductApi.ProductQuery) {
-  return requestClient.get<
-    IotProductApi.PageResult<IotProductApi.ProductResp>
-  >('/iot/products', { params });
+  return requestClient.get<IotProductApi.PageResult<IotProductApi.ProductResp>>(
+    '/iot/products',
+    { params },
+  );
 }
 
 export async function getProductOptions() {

@@ -2,6 +2,7 @@ import { createApp, h, nextTick } from 'vue';
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { PENDING_TEXT } from '../../shared/display';
 import AccessOverview from './access-overview.vue';
 
 /**
@@ -135,9 +136,10 @@ describe('access-overview：上报状态与字段诚实性', () => {
 
     // 「距上次上报」不受门控（它就是判断依据本身）
     expect(metrics['距上次上报']).toBe('1200');
-    // 其余指标必须被门控成「-」，绝不能把它未上报的 0 当成真实值渲染出来
-    expect(metrics['对账被推迟']).toBe('-');
-    expect(metrics['节点失效停采']).toBe('-');
+    // 其余指标必须被门控成「尚未上报」占位（PENDING_TEXT），
+    // 绝不能把它未上报的 0 当成真实值渲染出来
+    expect(metrics['对账被推迟']).toBe(PENDING_TEXT);
+    expect(metrics['节点失效停采']).toBe(PENDING_TEXT);
     expect(container.innerHTML).not.toContain('777');
     expect(container.innerHTML).toContain('access 尚未上报指标');
     expect(container.innerHTML).not.toContain('正常');

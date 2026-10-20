@@ -13,7 +13,7 @@ import {
 
 import { $t } from '#/locales';
 
-import { formatDateTime, qualityLabel } from '../../shared/display';
+import { EMPTY_TEXT, formatDateTime, qualityLabel } from '../../shared/display';
 
 /**
  * 概览 · 最新值 + 可用率卡（两卡响应式并排）。
@@ -110,9 +110,9 @@ const ongoingOutageCount = computed(
               class="border-b border-border/60 last:border-b-0"
             >
               <td class="py-1.5 pr-3 break-all">
-                {{ item.propertyId || '-' }}
+                {{ item.propertyId || EMPTY_TEXT }}
               </td>
-              <td class="py-1.5 pr-3">{{ item.value || '-' }}</td>
+              <td class="py-1.5 pr-3">{{ item.value || EMPTY_TEXT }}</td>
               <td class="py-1.5 pr-3">
                 {{ qualityLabel(item.quality) }}
               </td>
@@ -148,7 +148,7 @@ const ongoingOutageCount = computed(
           {{ human(availability?.outageSeconds) }}
         </DescriptionsItem>
         <DescriptionsItem :label="$t('page.iot.availability.outageCount')">
-          {{ availability?.outageCount ?? '-' }}
+          {{ availability?.outageCount ?? EMPTY_TEXT }}
           <span
             v-if="ongoingOutageCount > 0"
             class="ml-2 text-destructive-text"

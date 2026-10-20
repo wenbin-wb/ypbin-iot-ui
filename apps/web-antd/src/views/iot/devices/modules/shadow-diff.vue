@@ -7,6 +7,7 @@ import { Empty, Tag } from 'ant-design-vue';
 
 import { $t } from '#/locales';
 
+import { EMPTY_TEXT } from '../../shared/display';
 import ShadowEdit from './shadow-edit.vue';
 import { shadowDiffRows } from './shadow-state';
 
@@ -135,10 +136,10 @@ const LEGEND: ShadowDiffStatus[] = [
           >
             <td class="py-1.5 pr-3 break-all">{{ row.key }}</td>
             <td class="py-1.5 pr-3 break-all whitespace-pre-wrap">
-              {{ row.reportedText || '-' }}
+              {{ row.reportedText || EMPTY_TEXT }}
             </td>
             <td class="py-1.5 pr-3 break-all whitespace-pre-wrap">
-              {{ row.desiredText || '-' }}
+              {{ row.desiredText || EMPTY_TEXT }}
             </td>
             <td class="py-1.5 whitespace-nowrap">
               <Tag :color="STATUS_COLOR[row.status]">
