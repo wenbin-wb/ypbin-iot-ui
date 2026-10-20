@@ -295,9 +295,13 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-async function flush() {
-  for (let index = 0; index < 8; index += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 0));
+async function flush(rounds = 1) {
+  // `rounds` 控制轮询次数：默认 1 轮（8 个宏任务）足够多数断言；需要等多次
+  // watch/nextTick 落定的用例传 2。
+  for (let round = 0; round < rounds; round += 1) {
+    for (let index = 0; index < 8; index += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
   }
   await nextTick();
 }
@@ -376,6 +380,33 @@ function submitButton(container: HTMLElement) {
   return container.querySelector('[data-testid="batch-command-submit"]') as
     | HTMLButtonElement
     | undefined;
+}
+
+/** 沿 Vue 内部组件链找指定名字的祖先组件（Popconfirm 浮层懒挂载，查 DOM 不可靠）。 */
+function findAncestorComponent(el: Element, name: string): any | null {
+  let node: any = (el as any).__vueParentComponent;
+  while (node) {
+    const typeName = node.type?.name ?? node.type?.__name ?? '';
+    if (typeName.includes(name)) {
+      return node;
+    }
+    node = node.parent;
+  }
+  return null;
+}
+
+function componentProp(node: any, name: string) {
+  return node?.props?.[name] ?? node?.vnode?.props?.[name];
+}
+
+/** 触发 Popconfirm 的 confirm 回调（等价用户点确认按钮）。 */
+function triggerConfirm(node: any) {
+  const handler = componentProp(node, 'onConfirm');
+  if (typeof handler === 'function') {
+    handler();
+    return;
+  }
+  node?.emit?.('confirm');
 }
 
 const TWO_DEVICES = [
@@ -611,6 +642,121 @@ describe('batch-command.vue 三态结果展示', () => {
     // identifierPlaceholder 存在说明下拉在；校验文案出现即「先拦一道」
     const text = container.textContent ?? '';
     expect(text).toContain($t('page.iot.device.batchCommand.noProperty'));
+  });
+
+  it('★ writeDesired：勾选「同时写影子期望值」⇒ 批量命令模板带 writeDesired=true', async () => {
+    mockApi.sendBatchDeviceCommands.mockResolvedValue({
+      accepted: '2',
+      delivered: '2',
+      rejected: '0',
+      results: [
+        {
+          accepted: true,
+          deviceId: '1001',
+          ok: true,
+          requestId: 'r1',
+          statusCode: 'sent',
+        },
+        {
+          accepted: true,
+          deviceId: '1002',
+          ok: true,
+          requestId: 'r2',
+          statusCode: 'sent',
+        },
+      ],
+      total: '2',
+    });
+    const { container } = await mountBatchCommand(TWO_DEVICES);
+    await pickIdentifier(container, '设定值');
+    // 属性设置下必须出现该复选框（此前是「勾了也不提交」的死控件）
+    // antd 的 Checkbox 把 attrs 透传到内部 <input>，data-testid 直接落在 input 上
+    const checkbox = container.querySelector(
+      '[data-testid="batch-command-write-desired"]',
+    ) as HTMLInputElement | null;
+    expect(
+      checkbox,
+      '属性设置下必须渲染「同时写影子期望值」复选框',
+    ).toBeTruthy();
+    // expect 已断言存在（缺失即失败），用可选链点击避免非空断言
+    checkbox?.click();
+    await flush(2);
+
+    submitButton(container)?.click();
+    await flush();
+
+    expect(mockApi.sendBatchDeviceCommands).toHaveBeenCalledTimes(1);
+    const payload = mockApi.sendBatchDeviceCommands.mock.calls[0]?.[0] as {
+      command: Record<string, unknown>;
+    };
+    expect(payload.command).toMatchObject({
+      identifier: 'setpoint',
+      kind: 'property_set',
+      writeDesired: true,
+    });
+  });
+
+  it('★ 单台重发后顶部汇总按逐台结果重算（不得与结果表矛盾）', async () => {
+    const OFFLINE_RESULT = {
+      accepted: true,
+      deviceId: '1002',
+      errorCode: 'NO_SUBSCRIBER',
+      message: '平台已受理但未送达（设备未连接）',
+      ok: false,
+      requestId: 'req-offline',
+      statusCode: 'failed',
+    };
+    mockApi.sendBatchDeviceCommands.mockResolvedValue({
+      accepted: '2',
+      delivered: '1',
+      rejected: '0',
+      results: [
+        {
+          accepted: true,
+          deviceId: '1001',
+          ok: true,
+          requestId: 'req-ok',
+          statusCode: 'sent',
+        },
+        OFFLINE_RESULT,
+      ],
+      total: '2',
+    });
+    mockApi.resendDeviceCommand.mockResolvedValue({
+      requestId: 'req-offline',
+      statusCode: 'sent',
+    });
+    const { container } = await mountBatchCommand(TWO_DEVICES);
+    await pickIdentifier(container, '设定值');
+    submitButton(container)?.click();
+    await flush();
+
+    // 重发前：顶部是「部分失败」口径
+    expect(container.textContent).toContain(
+      $t('page.iot.device.batchCommand.resultPartial', ['2', '1', '1', '0']),
+    );
+
+    const resendButton = [...container.querySelectorAll('button')].find(
+      (button) =>
+        (button.textContent ?? '').trim() === $t('page.iot.debug.resend'),
+    );
+    expect(resendButton, '未找到单台重发按钮').toBeTruthy();
+    const popconfirm = findAncestorComponent(
+      resendButton as Element,
+      'Popconfirm',
+    );
+    expect(popconfirm, '重发必须由 Popconfirm 包裹').toBeTruthy();
+    triggerConfirm(popconfirm);
+    await flush();
+
+    // 重发后该台已送达 ⇒ 汇总必须变成「全部 2 台已送达」，且不再显示部分失败口径
+    const text = container.textContent ?? '';
+    expect(text).toContain(
+      $t('page.iot.device.batchCommand.resultAllDelivered', ['2']),
+    );
+    expect(text).not.toContain(
+      $t('page.iot.device.batchCommand.resultPartial', ['2', '1', '1', '0']),
+    );
   });
 
   it('★ CSV 导出：用当前逐台结果生成，失败行不被美化', async () => {

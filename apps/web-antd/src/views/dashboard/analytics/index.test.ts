@@ -21,6 +21,8 @@ vi.mock('vue-router', () => ({
 
 vi.mock('@vben/preferences', () => ({
   preferences: { app: { accessMode: 'frontend', locale: 'zh-CN' } },
+  // 页面用 isDark 选指标卡数值色（亮/暗两档，均 >=4.5:1），这里固定亮色主题
+  usePreferences: () => ({ isDark: { value: false } }),
   updatePreferences: () => {},
 }));
 
@@ -114,9 +116,18 @@ vi.mock('../shared/use-iot-overview', async () => {
     severityDistribution: [],
   });
   return {
+    // 返回契约必须与真实 composable 对齐（含 failed / demoReason）：
+    // 页面据此渲染常驻失败态与「演示数据」提示，mock 少字段会让这两块永远测不到
     useIotOverview: () => ({
+      demoReason: '演示原因',
       failed: false,
       load: () => {},
+      // 页面渲染「演示数据」常驻提示（usingDemo=true 时 notice 非空）
+      notice: {
+        error: 'page.dashboard.overviewLoadFailedHint',
+        title: 'page.dashboard.demoModeTitle',
+        type: 'warning' as const,
+      },
       loading: false,
       overview,
       usingDemo: true,

@@ -14,6 +14,7 @@ import {
   Tag,
   Tooltip,
 } from 'ant-design-vue';
+import dayjs from 'dayjs';
 
 import { getDeviceTrace } from '#/api/iot';
 import { $t } from '#/locales';
@@ -121,20 +122,31 @@ const outcomeOptions = computed(() =>
 );
 
 /**
+ * 后端 `DeviceTraceQuery.from/to` 接受的**唯一**格式。
+ *
+ * 🔴 为什么不能用 `Date#toISOString()`：后端字段是 `LocalDateTime`，Spring 默认的
+ * `ISO_LOCAL_DATE_TIME` 不接受尾随 `Z` ⇒ 带 `Z` 的串稳定 400，整条「消息跟踪」能力
+ * 不可用（2026-10-20 审查 P0-3）。后端已补 `@DateTimeFormat(pattern="yyyy-MM-dd HH:mm:ss")`
+ * （与 availability/maintenance 同口径），前端必须按同一 pattern 传；两侧任一侧偏移都会 400。
+ */
+const TRACE_TIME_FORMAT = 'YYYY-MM-DD HH:mm:ss';
+
+/**
  * 拉取时间线。
  *
  * 时间窗由前端按"当前时刻往前 N 小时"算好再传——让**服务端**决定窗口会更一致，
  * 但轮询刷新时前端必须能表达"我关心的是最近 N 小时"，否则每次刷新窗口都会漂移。
+ * 时间窗按 {@link TRACE_TIME_FORMAT} 格式化（本机时区，与后端 LocalDateTime 同口径）。
  */
 async function load() {
   loading.value = true;
   errorMessage.value = '';
   try {
-    const now = new Date();
-    const from = new Date(now.getTime() - windowHours.value * 60 * 60 * 1000);
+    const now = dayjs();
+    const from = now.subtract(windowHours.value, 'hour');
     resp.value = await getDeviceTrace(props.deviceId, {
-      from: from.toISOString(),
-      to: now.toISOString(),
+      from: from.format(TRACE_TIME_FORMAT),
+      to: now.format(TRACE_TIME_FORMAT),
       ...(stageFilter.value ? { stage: stageFilter.value } : {}),
       ...(outcomeFilter.value ? { outcome: outcomeFilter.value } : {}),
     });

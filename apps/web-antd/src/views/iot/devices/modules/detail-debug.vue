@@ -10,6 +10,7 @@ import { useAccess } from '@vben/access';
 import {
   Alert,
   Button,
+  Checkbox,
   Descriptions,
   DescriptionsItem,
   Empty,
@@ -69,8 +70,9 @@ import {
  * （各自 `requestId`、各自可重发），并给出**同一批次**的汇总与高亮；上限见 {@link MAX_FANOUT}。
  * 「点位留空 = 读取全部可读属性」是后端既定语义，**原样支持**。
  *
- * `writeDesired`（下发同时写影子 desired）后端**显式拒绝** ⇒ 页面**不做**那个复选框
- * （避免做成假按钮），只放一行说明把用户指向既有的影子接口。
+ * `writeDesired`（下发同时写影子 desired）**后端已支持**（`CommandSendReq.writeDesired`：
+ * 仅 `property_set` 有效，命令投递成功后才写、设备离线不写），因此本页在属性设置下提供
+ * 复选框并纳入请求；不勾选就不发该字段（不写用户没要求的期望值）。
  */
 const props = defineProps<{
   deviceId: string;
@@ -106,6 +108,14 @@ const kind = ref<IotCommandApi.CommandKindCode>('property_set');
 
 /** 超时（毫秒）；留空 = 用后端全局默认。 */
 const timeoutMs = ref<number | undefined>(undefined);
+
+/**
+ * 是否同时写影子期望值（`CommandSendReq.writeDesired`）。
+ *
+ * 只对属性设置（property_set）有意义：读属性没有期望值、服务调用对应动作而非属性，
+ * 后端对其它 kind 会**显式拒绝** ⇒ 复选框只在 `${kind === 'property_set'}` 下渲染。
+ */
+const writeDesired = ref(false);
 
 interface SetRow {
   identifier?: string;
@@ -709,15 +719,19 @@ function buildTargets(): SendTarget[] | undefined {
       formError.value = $t('page.iot.debug.noTarget');
       return undefined;
     }
-    return rows.map((row) => ({
-      identifier: row.identifier,
-      req: {
+    return rows.map((row) => {
+      const req: IotCommandApi.CommandSendReq = {
         identifier: row.identifier,
         kind: kind.value,
         params: { value: parseValue(row.value) },
         timeoutMs: timeout,
-      },
-    }));
+      };
+      // 勾选才发：后端在命令投递成功（sent）后把该值合并进影子 desired
+      if (writeDesired.value) {
+        req.writeDesired = true;
+      }
+      return { identifier: row.identifier, req };
+    });
   }
   if (kind.value === 'property_get') {
     // 空选 = 全部可读属性（后端既定语义：properties 空数组 = 全部可读）
@@ -873,7 +887,9 @@ function displayTime(value?: DisplayValue): string {
 
 /** 本批高亮：最近一次下发产生的记录在列表里标出来，避免 N 条看着像孤立记录。 */
 function rowClassName(record: IotCommandApi.CommandInstanceResp): string {
-  return batchRequestIds.value.has(record.requestId) ? 'bg-blue-50' : '';
+  // 高亮「同一批」的命令：用语义 token（primary/10）而不是 bg-blue-50——
+  // 硬编码调色板在暗色主题下是近白底 + 浅色文字（对比度 1.09:1，内容不可读）。
+  return batchRequestIds.value.has(record.requestId) ? 'bg-primary/10' : '';
 }
 
 /** 本批结果汇总（成功/失败条数）。 */
@@ -950,6 +966,7 @@ const batchSummary = computed(() => {
             v-model:value="row.identifier"
             :options="setPropertyOptions"
             :placeholder="$t('page.iot.debug.propertyPlaceholder')"
+            :data-testid="`debug-set-identifier-${index}`"
             option-filter-prop="label"
             show-search
             style="width: 380px"
@@ -957,6 +974,7 @@ const batchSummary = computed(() => {
           <Input
             v-model:value="row.value"
             :placeholder="$t('page.iot.debug.valuePlaceholder')"
+            :data-testid="`debug-set-value-${index}`"
             style="width: 220px"
           />
           <Button
@@ -968,18 +986,47 @@ const batchSummary = computed(() => {
             {{ $t('page.iot.debug.removeRow') }}
           </Button>
         </div>
-        <Button
-          :disabled="setRows.length >= MAX_FANOUT"
-          size="small"
-          @click="addSetRow"
+        <!-- 达上限禁用并说明上限（否则用户只会看到「按钮点不动」） -->
+        <Tooltip
+          :title="
+            setRows.length >= MAX_FANOUT
+              ? $t('page.iot.debug.fanoutHint', [String(MAX_FANOUT)])
+              : ''
+          "
         >
-          {{ $t('page.iot.debug.addRow') }}
-        </Button>
+          <span
+            :tabindex="setRows.length >= MAX_FANOUT ? 0 : -1"
+            class="inline-block"
+          >
+            <Button
+              :disabled="setRows.length >= MAX_FANOUT"
+              size="small"
+              @click="addSetRow"
+            >
+              {{ $t('page.iot.debug.addRow') }}
+            </Button>
+          </span>
+        </Tooltip>
         <div class="mt-1 text-xs text-muted-foreground">
           {{ $t('page.iot.debug.valueHint') }}
         </div>
         <div v-if="setRows.length > 1" class="mt-1 text-xs text-amber-600">
           {{ $t('page.iot.debug.fanoutHint', [String(MAX_FANOUT)]) }}
+        </div>
+        <!--
+          writeDesired：仅属性设置提供。勾选后命令下发成功的同时把该值写入影子 desired，
+          便于用「期望 vs 上报」核对设置是否真的生效。不勾选则不带该字段。
+        -->
+        <div class="mt-2 flex flex-col gap-1">
+          <Checkbox
+            v-model:checked="writeDesired"
+            data-testid="debug-write-desired"
+          >
+            {{ $t('page.iot.device.batchCommand.writeDesired') }}
+          </Checkbox>
+          <span class="text-xs text-muted-foreground">
+            {{ $t('page.iot.debug.writeDesiredHint') }}
+          </span>
         </div>
       </template>
 
@@ -1038,6 +1085,7 @@ const batchSummary = computed(() => {
       <div class="mt-3 flex flex-wrap items-center gap-2">
         <Button
           v-if="canSendCommand"
+          data-testid="debug-send"
           :loading="sending"
           type="primary"
           @click="onSend"
@@ -1046,9 +1094,6 @@ const batchSummary = computed(() => {
             sending ? $t('page.iot.debug.sending') : $t('page.iot.debug.send')
           }}
         </Button>
-        <span class="text-xs text-muted-foreground">
-          {{ $t('page.iot.debug.writeDesiredHint') }}
-        </span>
       </div>
 
       <!-- 客户端校验（warning）：与「后端失败」分开，后者一定原样展示后端 message -->

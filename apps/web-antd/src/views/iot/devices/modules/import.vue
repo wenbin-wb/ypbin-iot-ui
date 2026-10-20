@@ -35,12 +35,16 @@ import { downloadBlobSafe } from '#/utils/file';
 
 import { formatDateTime } from '../../shared/display';
 import {
+  BATCH_PAGE_SIZE,
   batchStatusColor,
   batchStatusLabelKey,
   checkImportFile,
+  DETAIL_ROWS_PAGE_SIZE,
   formatFileSize,
   hasFailedRows,
   IMPORT_ROW_RESULT,
+  resolveBatchPageAfterEmpty,
+  resolveDetailPageAfterEmpty,
   resolveImportFileCheckMessage,
   resolveImportListState,
   rowResultLabelKey,
@@ -96,6 +100,31 @@ const rowsError = ref('');
 
 /** 明细结果筛选：空 = 全部，否则 success / failed。 */
 const rowFilter = ref<'' | 'failed' | 'success'>('');
+
+/**
+ * 批次列表当前页与总批次数（后端 `GET /devices/import` 的分页字段）。
+ *
+ * 之前这里硬编码只取第 1 页 20 条 ⇒ 第 21 个及更早的历史批次**永远不可达**
+ * （看不到、也下载不了失败行）。现在页码状态化，历史批次可翻页查看。
+ */
+const batchPage = ref(1);
+const batchesTotal = ref(0);
+
+/**
+ * 是否进入「查看全部批次」模式。
+ *
+ * 默认只拉最近 20 个批次（打开抽屉时的最常见诉求，且不额外请求总数以外的数据）；
+ * 只有用户明确要翻历史时才显示分页器，避免把「上传」流程打断成一屏表格。
+ */
+const showAllBatches = ref(false);
+
+/**
+ * 明细当前页码（**不再恒写死 1**）。
+ *
+ * 之前 `pagination.current` 写死 1：翻页后页码不跟随、请求仍发 `page=1`，
+ * 界面上的页码与数据对不上（用户以为翻页没生效）。现在页码是本地状态并随请求同步。
+ */
+const rowsPage = ref(1);
 
 /** 上传中标记（防重复提交：重复上传同一份文件会建出两个批次）。 */
 const uploading = ref(false);
@@ -181,6 +210,25 @@ const batchColumns = [
   },
 ];
 
+/**
+ * 批次列表的分页配置。
+ *
+ * 默认 `false`（只显示最近一页，保持「上传 → 看结果」的主流程清爽）；
+ * 用户点「查看全部批次」后才显示分页器，用后端已有的 `page/pageSize` 翻历史批次。
+ */
+const batchPagination = computed(() => {
+  if (!showAllBatches.value) {
+    return false as const;
+  }
+  return {
+    current: batchPage.value,
+    onChange: onBatchPageChange,
+    pageSize: BATCH_PAGE_SIZE,
+    showSizeChanger: false,
+    total: batchesTotal.value,
+  };
+});
+
 /** 明细表格列（错误码/错误信息两列是「照着改」的全部依据）。 */
 const rowColumns = [
   { title: $t('page.iot.device.import.rowNo'), dataIndex: 'rowNo', width: 80 },
@@ -206,19 +254,34 @@ const rowColumns = [
 ];
 
 /**
- * 拉取批次列表（最近在前）。
+ * 拉取批次列表（最近在前，分页）。
  *
  * 失败时**记下原因并清空列表**（不是留着旧数据）：留着旧数据会让用户以为
  * 「刷新后还是这些」，而实际上这次根本没查到。
+ *
+ * @param page 页码（1-based；默认当前页，避免刷新时把用户踢回第 1 页）
  */
-async function loadBatches() {
+async function loadBatches(page = batchPage.value) {
   listLoading.value = true;
   try {
-    const result = await getDeviceImportBatchPage(1, 20);
+    const result = await getDeviceImportBatchPage(page, BATCH_PAGE_SIZE);
     batches.value = sortBatchesByRecent(result.items ?? []);
+    batchesTotal.value = toBackendNumber(result.total ?? 0);
+    batchPage.value = page;
     listError.value = '';
+    // 越界页兜底（批次被清理/总数变少）：退到仍有数据的最后一页，别把空页画成「还没有导入过」
+    const corrected = resolveBatchPageAfterEmpty(
+      batches.value.length,
+      batchesTotal.value,
+      page,
+      BATCH_PAGE_SIZE,
+    );
+    if (corrected > 0 && corrected !== page) {
+      await loadBatches(corrected);
+    }
   } catch (error) {
     batches.value = [];
+    batchesTotal.value = 0;
     listError.value = extractErrorMessage(
       error,
       $t('page.iot.device.import.batchListLoadFailed'),
@@ -228,24 +291,46 @@ async function loadBatches() {
   }
 }
 
+/** 批次列表翻页（仅在「查看全部批次」模式下可用）。 */
+function onBatchPageChange(page: number) {
+  void loadBatches(page);
+}
+
+/** 进入「查看全部批次」模式（显示分页器，可翻到更早的历史批次）。 */
+function onShowAllBatches() {
+  showAllBatches.value = true;
+}
+
 /**
  * 拉取某批次的明细（当前页 + 当前筛选）。
  *
  * @param batchId 批次 ID
  * @param page    页码（从 1 开始）
+ * @param options.allowPageReset 是否允许「空页自动回第 1 页」（递归时置 false 防死循环）
  */
-async function loadRows(batchId: string, page = 1) {
+async function loadRows(
+  batchId: string,
+  page = 1,
+  options: { allowPageReset?: boolean } = {},
+) {
   rowsLoading.value = true;
   try {
     const detail = await getDeviceImportBatchDetail(batchId, {
       page,
-      pageSize: 20,
+      pageSize: DETAIL_ROWS_PAGE_SIZE,
       ...(rowFilter.value ? { rowResult: rowFilter.value } : {}),
     });
     selectedBatch.value = detail.batch;
     rows.value = detail.rows?.items ?? [];
     rowsTotal.value = toBackendNumber(detail.rows?.total ?? 0);
+    rowsPage.value = page;
     rowsError.value = '';
+    // 空页 ≠ 这一批没有明细：页码越界（数据变少/被删）时回第 1 页并明确告知
+    const corrected = resolveDetailPageAfterEmpty(rows.value.length, page);
+    if (options.allowPageReset !== false && corrected > 0) {
+      message.info($t('page.iot.device.import.detailPageReset'));
+      await loadRows(batchId, corrected, { allowPageReset: false });
+    }
   } catch (error) {
     rows.value = [];
     rowsTotal.value = 0;
@@ -308,7 +393,7 @@ async function onDownloadTemplate() {
 
 /** 打开抽屉时拉一次批次列表（看结果面板的初始数据）。 */
 function onOpen() {
-  void loadBatches();
+  void loadBatches(showAllBatches.value ? batchPage.value : 1);
 }
 
 /**
@@ -358,7 +443,9 @@ async function doUpload(file: File) {
     } else {
       lastHint.value = $t('page.iot.device.import.hintBatchRejected');
     }
-    await loadBatches();
+    // 刚上传的批次是最新的 ⇒ 回到第 1 页展示它（否则用户看不到自己刚传的那一条）
+    showAllBatches.value = false;
+    await loadBatches(1);
     selectedBatch.value = batch;
     rowFilter.value = '';
     await loadRows(batch.id, 1);
@@ -402,7 +489,8 @@ async function onDownloadFailed() {
 
 /** 刷新按钮：批次列表 + 当前批次明细一起刷（只刷一个会让两处数字对不上）。 */
 async function onRefresh() {
-  await loadBatches();
+  // 批次列表停在用户当前页（不把正在翻历史的人踢回第 1 页）；明细回到第 1 页
+  await loadBatches(showAllBatches.value ? batchPage.value : 1);
   if (selectedBatch.value) {
     await loadRows(selectedBatch.value.id, 1);
   }
@@ -550,22 +638,53 @@ defineExpose({ onOpen });
         type="error"
       />
 
+      <!--
+        批次列表分页：默认只拉最近一页（BATCH_PAGE_SIZE），数量更多时给「查看全部批次」入口。
+        🔴 之前硬编码 `getDeviceImportBatchPage(1, 20)` ⇒ 第 21 个及更早的历史批次
+        永远**不可达**（看不到也下载不了失败行），失败行重传闭环对历史批次是断的。
+      -->
+      <div
+        v-if="!listError && batchesTotal > 0"
+        class="mb-1 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500"
+      >
+        <span data-testid="import-batch-total">
+          {{
+            $t('page.iot.device.import.batchListTotal', [String(batchesTotal)])
+          }}
+        </span>
+        <Button
+          v-if="!showAllBatches && batchesTotal > BATCH_PAGE_SIZE"
+          data-testid="import-all-batches"
+          size="small"
+          type="link"
+          @click="onShowAllBatches"
+        >
+          {{ $t('page.iot.device.import.allBatches') }}
+        </Button>
+      </div>
+
+      <!--
+        🔴 行选择必须用 `custom-row`：ant-design-vue 4.2.6 的 Table **没有 `row-click` 事件**
+        （`@row-click` 只会退化成透传 attr，永远不会触发）⇒ 历史批次点不开、明细面板永远是空的。
+      -->
       <Table
         :columns="batchColumns"
         :data-source="batches"
         :loading="listState === 'loading'"
-        :pagination="false"
+        :pagination="batchPagination"
         :row-class-name="
           (record: IotDeviceImportApi.BatchResp) =>
             record.id === selectedBatch?.id
-              ? 'bg-blue-50 cursor-pointer'
+              ? 'cursor-pointer bg-primary/10'
               : 'cursor-pointer'
         "
         :scroll="{ y: 160 }"
         row-key="id"
         size="small"
-        @row-click="
-          (record: IotDeviceImportApi.BatchResp) => onSelectBatch(record)
+        :custom-row="
+          (record: IotDeviceImportApi.BatchResp) => ({
+            onClick: () => onSelectBatch(record),
+          })
         "
       >
         <template #bodyCell="{ column, record }">
@@ -633,8 +752,8 @@ defineExpose({ onOpen });
         :data-source="rows"
         :loading="rowsState === 'loading'"
         :pagination="{
-          current: 1,
-          pageSize: 20,
+          current: rowsPage,
+          pageSize: DETAIL_ROWS_PAGE_SIZE,
           total: rowsTotal,
           showSizeChanger: false,
           onChange: onRowsPageChange,

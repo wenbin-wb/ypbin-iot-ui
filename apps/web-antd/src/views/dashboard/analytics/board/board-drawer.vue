@@ -14,7 +14,15 @@ import { computed, onBeforeUnmount, ref } from 'vue';
 import { useVbenDrawer, useVbenModal } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
-import { Alert, Button, Empty, message, Modal, Tag } from 'ant-design-vue';
+import {
+  Alert,
+  Button,
+  Empty,
+  message,
+  Modal,
+  Tag,
+  Tooltip,
+} from 'ant-design-vue';
 
 import { getDashboardBoard, saveDashboardBoard } from '#/api/iot/board';
 import { getDeviceLatest, getDeviceOptions } from '#/api/iot/device';
@@ -582,13 +590,27 @@ defineExpose({ drawerApi });
           >
             {{ $t('page.iot.board.refresh') }}
           </Button>
-          <Button
-            :loading="saving"
-            :disabled="config.widgets.length === 0"
-            @click="pushBoard()"
+          <!--
+            空看板时「保存到平台」禁用：必须说明原因，否则用户会误以为是权限或网络问题。
+            禁用按钮不触发 mouseenter，故用外层 span 承接 Tooltip。
+          -->
+          <Tooltip
+            :title="
+              config.widgets.length === 0
+                ? $t('page.iot.board.empty')
+                : $t('page.iot.board.saveToPlatform')
+            "
           >
-            {{ $t('page.iot.board.saveToPlatform') }}
-          </Button>
+            <span class="inline-flex">
+              <Button
+                :loading="saving"
+                :disabled="config.widgets.length === 0"
+                @click="pushBoard()"
+              >
+                {{ $t('page.iot.board.saveToPlatform') }}
+              </Button>
+            </span>
+          </Tooltip>
           <Button type="primary" @click="openAdd">
             <Plus class="size-4" />
             {{ $t('page.iot.board.addWidget') }}

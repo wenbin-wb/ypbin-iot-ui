@@ -456,97 +456,106 @@ onMounted(load);
         v-if="mergedRows.length === 0"
         :description="$t('page.iot.product.noProperty')"
       />
-      <table v-else class="w-full text-sm">
-        <thead>
-          <tr class="text-left text-gray-500">
-            <th class="py-1">{{ $t('page.iot.point.property') }}</th>
-            <th class="py-1">{{ $t('page.iot.point.service') }}</th>
-            <th class="py-1">{{ $t('page.iot.point.dataType') }}</th>
-            <th class="py-1">{{ $t('page.iot.point.accessMode') }}</th>
-            <th class="py-1">{{ $t('page.iot.point.unit') }}</th>
-            <th class="py-1">{{ $t('page.iot.point.rawAddress') }}</th>
-            <th class="py-1">{{ $t('page.iot.point.addressType') }}</th>
-            <th class="py-1">{{ $t('page.iot.point.decode') }}</th>
-            <th class="py-1">{{ $t('page.iot.point.pollIntervalMs') }}</th>
-            <th class="py-1">{{ $t('page.iot.point.scaleFactor') }}</th>
-            <th class="py-1">{{ $t('page.iot.point.enabled') }}</th>
-            <th class="py-1">{{ $t('common.action') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in mergedRows" :key="row.propertyId" class="border-t">
-            <td class="py-1">{{ row.identifier }}</td>
-            <td class="py-1">{{ row.serviceId }}</td>
-            <td class="py-1">{{ dataTypeLabel(row.dataType) }}</td>
-            <td class="py-1">{{ accessModeLabel(row.accessMode) }}</td>
-            <td class="py-1">{{ row.unit || '-' }}</td>
-            <td class="py-1">
-              <template v-if="row.point">
-                {{ row.point.rawAddress }}
-              </template>
-              <Tag v-else color="orange">
-                {{ $t('page.iot.point.unmapped') }}
-              </Tag>
-            </td>
-            <td class="py-1">
-              {{ row.point ? addressTypeLabel(row.point.addressType) : '-' }}
-            </td>
-            <td class="py-1">
-              {{ row.point ? registerDecodeText(row.point) : '-' }}
-            </td>
-            <td class="py-1">{{ row.point?.pollIntervalMs ?? '-' }}</td>
-            <td class="py-1">{{ row.point?.scaleFactor ?? '-' }}</td>
-            <td class="py-1">
-              <Tag v-if="row.point" :color="tagColor(row.point.enabled)">
-                {{ row.point.enabled === false ? 'off' : 'on' }}
-              </Tag>
-              <span v-else>-</span>
-            </td>
-            <td class="py-1">
-              <template v-if="row.point">
-                <div class="flex gap-1">
-                  <Button
-                    v-if="canUpdate"
-                    size="small"
-                    type="link"
-                    @click="openEdit(row.point)"
-                  >
-                    {{ $t('page.iot.point.edit') }}
-                  </Button>
-                  <Popconfirm
-                    v-if="canDelete"
-                    :title="
-                      $t('page.iot.point.deleteConfirm', [row.point.rawAddress])
-                    "
-                    :ok-text="$t('page.iot.point.okText')"
-                    :cancel-text="$t('page.iot.point.cancel')"
-                    @confirm="remove(row.point)"
-                  >
-                    <Button size="small" type="link" danger>
-                      {{ $t('page.iot.point.delete') }}
+      <!-- 12 列：窄屏必须由表格自身横向滚动（min-w 保证列不被压扁） -->
+      <div v-else class="overflow-x-auto">
+        <table class="w-full min-w-[900px] text-sm">
+          <thead>
+            <tr class="text-left text-muted-foreground">
+              <th class="py-1">{{ $t('page.iot.point.property') }}</th>
+              <th class="py-1">{{ $t('page.iot.point.service') }}</th>
+              <th class="py-1">{{ $t('page.iot.point.dataType') }}</th>
+              <th class="py-1">{{ $t('page.iot.point.accessMode') }}</th>
+              <th class="py-1">{{ $t('page.iot.point.unit') }}</th>
+              <th class="py-1">{{ $t('page.iot.point.rawAddress') }}</th>
+              <th class="py-1">{{ $t('page.iot.point.addressType') }}</th>
+              <th class="py-1">{{ $t('page.iot.point.decode') }}</th>
+              <th class="py-1">{{ $t('page.iot.point.pollIntervalMs') }}</th>
+              <th class="py-1">{{ $t('page.iot.point.scaleFactor') }}</th>
+              <th class="py-1">{{ $t('page.iot.point.enabled') }}</th>
+              <th class="py-1">{{ $t('common.action') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="row in mergedRows"
+              :key="row.propertyId"
+              class="border-t"
+            >
+              <td class="py-1">{{ row.identifier }}</td>
+              <td class="py-1">{{ row.serviceId }}</td>
+              <td class="py-1">{{ dataTypeLabel(row.dataType) }}</td>
+              <td class="py-1">{{ accessModeLabel(row.accessMode) }}</td>
+              <td class="py-1">{{ row.unit || '-' }}</td>
+              <td class="py-1">
+                <template v-if="row.point">
+                  {{ row.point.rawAddress }}
+                </template>
+                <Tag v-else color="orange">
+                  {{ $t('page.iot.point.unmapped') }}
+                </Tag>
+              </td>
+              <td class="py-1">
+                {{ row.point ? addressTypeLabel(row.point.addressType) : '-' }}
+              </td>
+              <td class="py-1">
+                {{ row.point ? registerDecodeText(row.point) : '-' }}
+              </td>
+              <td class="py-1">{{ row.point?.pollIntervalMs ?? '-' }}</td>
+              <td class="py-1">{{ row.point?.scaleFactor ?? '-' }}</td>
+              <td class="py-1">
+                <Tag v-if="row.point" :color="tagColor(row.point.enabled)">
+                  {{ row.point.enabled === false ? 'off' : 'on' }}
+                </Tag>
+                <span v-else>-</span>
+              </td>
+              <td class="py-1">
+                <template v-if="row.point">
+                  <div class="flex gap-1">
+                    <Button
+                      v-if="canUpdate"
+                      size="small"
+                      type="link"
+                      @click="openEdit(row.point)"
+                    >
+                      {{ $t('page.iot.point.edit') }}
                     </Button>
-                  </Popconfirm>
-                </div>
-              </template>
-              <Button
-                v-else-if="canCreate"
-                size="small"
-                type="link"
-                @click="openCreate(row.propertyId)"
-              >
-                {{ $t('page.iot.point.addPointFor') }}
-              </Button>
-              <Button
-                size="small"
-                type="link"
-                @click="emit('openSeries', row.identifier)"
-              >
-                {{ $t('page.iot.series.title') }}
-              </Button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+                    <Popconfirm
+                      v-if="canDelete"
+                      :title="
+                        $t('page.iot.point.deleteConfirm', [
+                          row.point.rawAddress,
+                        ])
+                      "
+                      :ok-text="$t('page.iot.point.okText')"
+                      :cancel-text="$t('page.iot.point.cancel')"
+                      @confirm="remove(row.point)"
+                    >
+                      <Button size="small" type="link" danger>
+                        {{ $t('page.iot.point.delete') }}
+                      </Button>
+                    </Popconfirm>
+                  </div>
+                </template>
+                <Button
+                  v-else-if="canCreate"
+                  size="small"
+                  type="link"
+                  @click="openCreate(row.propertyId)"
+                >
+                  {{ $t('page.iot.point.addPointFor') }}
+                </Button>
+                <Button
+                  size="small"
+                  type="link"
+                  @click="emit('openSeries', row.identifier)"
+                >
+                  {{ $t('page.iot.series.title') }}
+                </Button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </template>
 
     <div class="mt-4 mb-2 font-semibold">
@@ -559,64 +568,68 @@ onMounted(load);
       v-if="points.length === 0"
       :description="$t('page.iot.point.empty')"
     />
-    <table v-else class="w-full text-sm">
-      <thead>
-        <tr class="text-left text-gray-500">
-          <th class="py-1">{{ $t('page.iot.point.propertyId') }}</th>
-          <th class="py-1">{{ $t('page.iot.point.refType') }}</th>
-          <th class="py-1">{{ $t('page.iot.point.rawAddress') }}</th>
-          <th class="py-1">{{ $t('page.iot.point.addressType') }}</th>
-          <th class="py-1">{{ $t('page.iot.point.decode') }}</th>
-          <th class="py-1">{{ $t('page.iot.point.pollIntervalMs') }}</th>
-          <th class="py-1">{{ $t('page.iot.point.rw') }}</th>
-          <th class="py-1">{{ $t('page.iot.point.enabled') }}</th>
-          <th class="py-1">{{ $t('common.action') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="point in points" :key="point.id" class="border-t">
-          <td class="py-1">{{ point.propertyId }}</td>
-          <td class="py-1">{{ pointRefTypeLabel(point.refType) }}</td>
-          <td class="py-1">{{ point.rawAddress }}</td>
-          <td class="py-1">{{ addressTypeLabel(point.addressType) }}</td>
-          <td class="py-1">{{ registerDecodeText(point) }}</td>
-          <td class="py-1">{{ point.pollIntervalMs ?? '-' }}</td>
-          <td class="py-1">{{ accessModeLabel(point.rw) }}</td>
-          <td class="py-1">
-            <Tag :color="tagColor(point.enabled)">
-              {{
-                point.enabled === false
-                  ? $t('common.disabled')
-                  : $t('common.enabled')
-              }}
-            </Tag>
-          </td>
-          <td class="py-1">
-            <div class="flex gap-1">
-              <Button
-                v-if="canUpdate"
-                size="small"
-                type="link"
-                @click="openEdit(point)"
-              >
-                {{ $t('page.iot.point.edit') }}
-              </Button>
-              <Popconfirm
-                v-if="canDelete"
-                :title="$t('page.iot.point.deleteConfirm', [point.rawAddress])"
-                :ok-text="$t('page.iot.point.okText')"
-                :cancel-text="$t('page.iot.point.cancel')"
-                @confirm="remove(point)"
-              >
-                <Button size="small" type="link" danger>
-                  {{ $t('page.iot.point.delete') }}
+    <div v-else class="overflow-x-auto">
+      <table class="w-full min-w-[720px] text-sm">
+        <thead>
+          <tr class="text-left text-muted-foreground">
+            <th class="py-1">{{ $t('page.iot.point.propertyId') }}</th>
+            <th class="py-1">{{ $t('page.iot.point.refType') }}</th>
+            <th class="py-1">{{ $t('page.iot.point.rawAddress') }}</th>
+            <th class="py-1">{{ $t('page.iot.point.addressType') }}</th>
+            <th class="py-1">{{ $t('page.iot.point.decode') }}</th>
+            <th class="py-1">{{ $t('page.iot.point.pollIntervalMs') }}</th>
+            <th class="py-1">{{ $t('page.iot.point.rw') }}</th>
+            <th class="py-1">{{ $t('page.iot.point.enabled') }}</th>
+            <th class="py-1">{{ $t('common.action') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="point in points" :key="point.id" class="border-t">
+            <td class="py-1">{{ point.propertyId }}</td>
+            <td class="py-1">{{ pointRefTypeLabel(point.refType) }}</td>
+            <td class="py-1">{{ point.rawAddress }}</td>
+            <td class="py-1">{{ addressTypeLabel(point.addressType) }}</td>
+            <td class="py-1">{{ registerDecodeText(point) }}</td>
+            <td class="py-1">{{ point.pollIntervalMs ?? '-' }}</td>
+            <td class="py-1">{{ accessModeLabel(point.rw) }}</td>
+            <td class="py-1">
+              <Tag :color="tagColor(point.enabled)">
+                {{
+                  point.enabled === false
+                    ? $t('common.disabled')
+                    : $t('common.enabled')
+                }}
+              </Tag>
+            </td>
+            <td class="py-1">
+              <div class="flex gap-1">
+                <Button
+                  v-if="canUpdate"
+                  size="small"
+                  type="link"
+                  @click="openEdit(point)"
+                >
+                  {{ $t('page.iot.point.edit') }}
                 </Button>
-              </Popconfirm>
-            </div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+                <Popconfirm
+                  v-if="canDelete"
+                  :title="
+                    $t('page.iot.point.deleteConfirm', [point.rawAddress])
+                  "
+                  :ok-text="$t('page.iot.point.okText')"
+                  :cancel-text="$t('page.iot.point.cancel')"
+                  @confirm="remove(point)"
+                >
+                  <Button size="small" type="link" danger>
+                    {{ $t('page.iot.point.delete') }}
+                  </Button>
+                </Popconfirm>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
     <template v-if="orphanPoints.length > 0">
       <div class="mt-4 mb-2 font-semibold">
@@ -627,28 +640,32 @@ onMounted(load);
         show-icon
         type="warning"
       />
-      <table class="mt-2 w-full text-sm">
-        <tbody>
-          <tr v-for="point in orphanPoints" :key="point.id" class="border-t">
-            <td class="py-1">{{ point.propertyId }}</td>
-            <td class="py-1">{{ pointRefTypeLabel(point.refType) }}</td>
-            <td class="py-1">{{ point.rawAddress }}</td>
-            <td class="py-1">
-              <Popconfirm
-                v-if="canDelete"
-                :title="$t('page.iot.point.deleteConfirm', [point.rawAddress])"
-                :ok-text="$t('page.iot.point.okText')"
-                :cancel-text="$t('page.iot.point.cancel')"
-                @confirm="remove(point)"
-              >
-                <Button size="small" type="link" danger>
-                  {{ $t('page.iot.point.delete') }}
-                </Button>
-              </Popconfirm>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="mt-2 overflow-x-auto">
+        <table class="w-full min-w-[480px] text-sm">
+          <tbody>
+            <tr v-for="point in orphanPoints" :key="point.id" class="border-t">
+              <td class="py-1">{{ point.propertyId }}</td>
+              <td class="py-1">{{ pointRefTypeLabel(point.refType) }}</td>
+              <td class="py-1">{{ point.rawAddress }}</td>
+              <td class="py-1">
+                <Popconfirm
+                  v-if="canDelete"
+                  :title="
+                    $t('page.iot.point.deleteConfirm', [point.rawAddress])
+                  "
+                  :ok-text="$t('page.iot.point.okText')"
+                  :cancel-text="$t('page.iot.point.cancel')"
+                  @confirm="remove(point)"
+                >
+                  <Button size="small" type="link" danger>
+                    {{ $t('page.iot.point.delete') }}
+                  </Button>
+                </Popconfirm>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </template>
   </Spin>
 

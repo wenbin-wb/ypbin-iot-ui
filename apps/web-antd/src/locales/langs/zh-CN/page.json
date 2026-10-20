@@ -157,7 +157,8 @@
         "noPoint": "设备级告警没有点位，不画曲线",
         "empty": "近期数据不足",
         "range": "最小 {0} / 最大 {1}",
-        "skipped": "已跳过 {0} 个不可用点"
+        "skipped": "已跳过 {0} 个不可用点",
+        "chartLabel": "指标趋势图"
       },
       "preset": {
         "aboveUpper": "点位超上限",
@@ -279,7 +280,9 @@
           "clause": "{0} {1} {2}",
           "expectAllMustHold": "多条件规则按「规则 × 设备」只产生一条活动告警；组内任一条件的读数越过恢复门槛（含回差）即收口为已恢复。",
           "clauseJoin": " 且 "
-        }
+        },
+        "batchDisableConfirm": "确认停用选中的 {0} 条规则？停用后这些规则将不再产生告警。",
+        "batchEnableConfirm": "确认启用选中的 {0} 条规则？"
       },
       "boolean": {
         "true": "开启",
@@ -445,7 +448,11 @@
           "fileTypeNoName": "只支持 CSV/TXT 文件（{0}），当前文件名不可用",
           "fileTooLarge": "文件 {0} 超过上限 {1}，请拆分成多个文件分批导入",
           "fileEmpty": "文件是空的（0 字节），请检查是否选错了文件"
-        }
+        },
+        "batchListTotal": "共 {0} 个批次",
+        "allBatches": "查看全部批次",
+        "progressHint": "导入处理中，结果会自动刷新",
+        "detailPageReset": "当前页已无数据，已回到第 1 页"
       },
       "trace": {
         "title": "消息跟踪",
@@ -606,7 +613,11 @@
         "resendOk": "已重发：{0}",
         "resendDone": "已重发，等待设备回执",
         "resendFailed": "重发失败"
-      }
+      },
+      "overviewRenderFailed": "设备概览渲染失败",
+      "batchPartialDone": "已处理 {0} 台，{1} 台未生效（可能已被他人删除或已是目标状态）",
+      "batchNoChange": "没有设备发生变更（可能已被他人删除或已是目标状态）",
+      "pageRollbackHint": "当前页已删空，已自动回到上一页"
     },
     "event": {
       "title": "运行期事件",
@@ -904,7 +915,8 @@
       "templateRelayService": "开关控制",
       "templateRelayPointPower": "线圈 0x0000（00001），1 = 合闸、0 = 分闸；属性读写权限为 RW 才可下发",
       "templateRelayPointVoltage": "保持寄存器 0x0010（40017），16 位无符号 ×0.1，单位 V",
-      "required": "必选"
+      "required": "必选",
+      "disabledNeedProduct": "请先在第 1 步用模板创建产品"
     },
     "ledger": {
       "title": "设备台账变更",
@@ -1171,7 +1183,9 @@
       "revokeFailed": "吊销失败",
       "revokeConfirm": "吊销后设备将无法用旧凭据接入，确定吊销吗？",
       "cancel": "取消",
-      "noPermission": "无查看权限（iot:credential:get）"
+      "noPermission": "无查看权限（iot:credential:get）",
+      "reissueConfirm": "重新签发后旧口令立即失效，现场设备会掉线并需重新配网。确定重新签发？",
+      "reissueNeedConfirm": "重置签发"
     },
     "debug": {
       "title": "在线调试",
@@ -1183,21 +1197,21 @@
       "kindServiceCall": "服务调用",
       "timeout": "超时(ms)",
       "timeoutPlaceholder": "留空用平台默认",
-      "timeoutHint": "留空使用平台默认超时(后端 ypbin.emqx.default-command-timeout-ms，默认 30000ms)；上限 3600000ms",
-      "propertyPlaceholder": "选择可写点位(accessMode 为 W 或 RW)",
+      "timeoutHint": "留空使用平台默认超时（后端 ypbin.emqx.default-command-timeout-ms，默认 30000ms）；上限 3600000ms",
+      "propertyPlaceholder": "选择可写点位（accessMode 为 W 或 RW）",
       "valuePlaceholder": "如 25.5 / true / \"text\"",
       "valueHint": "值按 JSON 解析：25.5 → 数字、true → 布尔、\"text\" → 字符串、{'{'}\"a\":1{'}'} → 对象；解析失败按字符串下发",
       "addRow": "添加点位",
       "removeRow": "删除",
       "getPropertiesPlaceholder": "不选 = 读取全部可读属性",
-      "getAllHint": "留空即读取该设备全部可读属性(后端契约：properties 为空数组 = 全部可读)",
+      "getAllHint": "留空即读取该设备全部可读属性（后端契约：properties 为空数组 = 全部可读）",
       "allReadable": "全部可读属性",
-      "fanoutHint": "后端一条指令只接受一个点位标识：这里的多点位会拆分为多条独立指令(各自 requestId，可分别重发)，单次最多 {0} 条",
+      "fanoutHint": "后端一条指令只接受一个点位标识：这里的多点位会拆分为多条独立指令（各自 requestId，可分别重发），单次最多 {0} 条",
       "fanoutTooMany": "一次最多下发 {0} 条指令，当前需要 {1} 条，请分批下发",
       "servicePlaceholder": "选择物模型命令",
-      "params": "params(JSON 对象)",
+      "params": "params（JSON 对象）",
       "paramsPlaceholder": "{'{'}\"arg\": 1{'}'}",
-      "paramsHint": "必须是 JSON 对象(不能是数组或标量)；单个指令入参按物模型定义填写",
+      "paramsHint": "必须是 JSON 对象（不能是数组或标量）；单个指令入参按物模型定义填写",
       "paramsInvalid": "params 必须是合法的 JSON 对象，例如 {'{'}\"arg\": 1{'}'}",
       "send": "下发",
       "sending": "下发中…",
@@ -1206,16 +1220,16 @@
       "noTarget": "请至少填写一个点位与值",
       "noProperty": "该产品物模型里没有可读/可写的属性",
       "noCommand": "该产品物模型里没有可调用的命令",
-      "writeDesiredHint": "本轮不支持「下发同时写影子 desired」(后端显式拒绝，不是静默忽略)；需要写期望值请用设备影子接口",
+      "writeDesiredHint": "勾选后，命令下发的同时把该值写入设备影子期望值（desired）；设备上线后会按期望值对齐。只对属性设置（property_set）生效。",
       "loadModelFailed": "产品物模型加载失败",
       "rawEnvelope": "后端原始响应",
       "batchTitle": "第 {0} 批下发结果",
       "batchSummary": "本批共 {0} 条：下发成功 {1} 条，失败 {2} 条",
       "batchTag": "本批",
-      "batchHint": "同一批的指令在下方列表里以「本批」标记并高亮；每条是独立指令(独立 requestId)，可分别重发",
+      "batchHint": "同一批的指令在下方列表里以「本批」标记并高亮；每条是独立指令（独立 requestId），可分别重发",
       "sendFailed": "下发失败",
       "historyTitle": "下发与回执记录",
-      "historyHint": "按创建时刻倒序；未收到回执的指令会自动轮询刷新(每 2 秒)",
+      "historyHint": "按创建时刻倒序；未收到回执的指令会自动轮询刷新（每 2 秒）",
       "historyEmpty": "暂无指令记录",
       "historyLoadFailed": "指令记录查询失败",
       "pollFailed": "轮询自动刷新失败，已停止自动刷新（列表为上一次成功结果，不代表当前状态）；点「刷新」可重试",
@@ -1229,7 +1243,7 @@
       "requestId": "requestId",
       "topic": "下行主题",
       "payload": "下行报文",
-      "replyPayload": "上行回执(原样)",
+      "replyPayload": "上行回执（原样）",
       "replyParsed": "回执字段",
       "replyCode": "设备 code",
       "replyMessage": "设备 message",
@@ -1253,14 +1267,14 @@
       "statusTimeout": "超时",
       "statusCancelled": "已取消",
       "unknownStatus": "未知状态",
-      "errorNoSubscriber": "设备未连接(无订阅者)",
+      "errorNoSubscriber": "设备未连接（无订阅者）",
       "errorDeviceOffline": "设备离线",
-      "errorEmqx": "EMQX 调用失败(可重发)",
+      "errorEmqx": "EMQX 调用失败（可重发）",
       "errorDeviceRejected": "设备回执失败",
-      "errorTimeout": "等待回执超时(可重发)",
+      "errorTimeout": "等待回执超时（可重发）",
       "unknownErrorCode": "未知原因码",
       "resend": "重发同一请求",
-      "resendConfirm": "将以同一 requestId 重新下发这一条指令(不会生成新的 requestId)：{0}",
+      "resendConfirm": "将以同一 requestId 重新下发这一条指令（不会生成新的 requestId）：{0}",
       "resendOk": "已按同一 requestId 重发：{0}",
       "resendFailed": "重发失败",
       "resendNotAllowed": "只有失败/超时的指令可以重发",
@@ -1356,7 +1370,11 @@
         "availabilityGet": "读取可用率与断档",
         "debugSend": "下发调试指令（高危）",
         "unknown": "未知作用域"
-      }
+      },
+      "ipWhitelist": "IP 白名单",
+      "ipWhitelistHelp": "逗号或换行分隔的 IP / CIDR（如 10.0.0.0/8、192.168.1.10）；留空 = 不限来源",
+      "ipWhitelistInvalid": "IP 白名单条目非法（需为 IP 或 CIDR）：{0}",
+      "ipWhitelistUnlimited": "不限来源"
     },
     "overview": {
       "overview": "接入节点与指标",
@@ -1384,7 +1402,7 @@
       "listLoadFailed": "加载接入概览失败",
       "lastRegistered": "节点注册时间",
       "leaseAlive": "租约存活",
-      "leaseRemaining": "租约剩余(秒)",
+      "leaseRemaining": "租约剩余（秒）",
       "leaseAliveYes": "续约中",
       "leaseExpired": "已过期",
       "noLease": "无租约"
@@ -1424,7 +1442,10 @@
       "disconnectedHint": "页面数据可能不是最新，正在自动重连（也可手动刷新）。最近错误：{0}",
       "live": "实时连接",
       "connecting": "实时连接中",
-      "reconnecting": "实时中断"
+      "reconnecting": "实时中断",
+      "authFailed": "实时连接鉴权失败（登录可能已过期）：请刷新页面或重新登录。",
+      "forbidden": "无实时数据权限，实时刷新已停止。",
+      "heartbeatTimeout": "实时连接心跳超时，正在重连。"
     },
     "topology": {
       "title": "接入拓扑",
@@ -1520,8 +1541,19 @@
       "tableQuality": "质量",
       "tableTime": "时间",
       "tableEmpty": "没有可展示的点位",
-      "seriesPartialFailed": "部分点位历史读取失败：{0}"
-    }
+      "seriesPartialFailed": "部分点位历史读取失败：{0}",
+      "disabledFirst": "已经是第一个组件，无法再上移",
+      "disabledLast": "已经是最后一个组件，无法再下移"
+    },
+    "common": {
+      "autoRefresh": "自动刷新",
+      "queryTimeout": "查询超时，请稍后重试。",
+      "refreshQueued": "正在刷新，请稍候…",
+      "disabledSelectFirst": "请先勾选目标",
+      "disabledPending": "请求处理中，请稍候",
+      "disabledNoPermission": "无此操作权限"
+    },
+    "dashboard": {}
   },
   "ai": {
     "title": "知识与 AI",
@@ -2058,7 +2090,10 @@
     "alertTrend": "告警趋势",
     "deviceGrowth": "设备增长",
     "ruleTopTitle": "告警最多的规则（近 30 天）",
-    "ruleTopEmpty": "近 30 天没有规则告警"
+    "ruleTopEmpty": "近 30 天没有规则告警",
+    "overviewLoadFailed": "运行总览加载失败",
+    "overviewLoadFailedHint": "无法获取真实运行数据：{0}",
+    "demoModeTitle": "当前展示的是演示数据（非真实指标）"
   },
   "admin": {
     "title": "基础管理"

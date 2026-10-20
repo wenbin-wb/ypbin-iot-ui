@@ -94,6 +94,35 @@ const isTable = computed(() => props.widget.type === 'table');
 const canMoveUp = computed(() => props.index > 0);
 const canMoveDown = computed(() => props.index < props.total - 1);
 
+/**
+ * 拖拽把手的键盘等价操作。
+ *
+ * 把手本身是 HTML5 `draggable` 的鼠标路径，键盘用户原先完全无法用它排序
+ * （`<span>` 不可聚焦）。这里补 `tabindex=0` + `role="button"` + `Alt+方向键`：
+ * 与卡片上的「上移/下移」按钮走**同一个 emit**，规则不分叉。
+ * 用 Alt 组合键而不是裸方向键：卡片里可能还有横向滚动/单选区，裸方向键会抢焦点导航。
+ */
+function onDragHandleKeydown(event: KeyboardEvent) {
+  if (!event.altKey) {
+    return;
+  }
+  if (event.key === 'ArrowUp' && canMoveUp.value) {
+    event.preventDefault();
+    emit('moveUp');
+  } else if (event.key === 'ArrowDown' && canMoveDown.value) {
+    event.preventDefault();
+    emit('moveDown');
+  }
+}
+
+/** 「上移/下移」禁用原因：首/末位置时告诉用户为什么点不动（不再是无声的灰按钮）。 */
+const moveUpDisabledReason = computed(() =>
+  canMoveUp.value ? '' : $t('page.iot.board.disabledFirst'),
+);
+const moveDownDisabledReason = computed(() =>
+  canMoveDown.value ? '' : $t('page.iot.board.disabledLast'),
+);
+
 /** 数值是否可画：文本点位/空值不画仪表盘（用空态表达，不伪造 0）。 */
 const numericValue = computed(() =>
   toBoardNumeric(props.runtime.latest?.value),
@@ -310,10 +339,19 @@ function onDrop(event: DragEvent): void {
     <div class="mb-2 flex items-start justify-between gap-2">
       <div class="flex min-w-0 items-start gap-1">
         <Tooltip :title="$t('page.iot.board.dragHandle')">
+          <!--
+            把手可聚焦 + Alt+上下键排序：键盘用户不必先猜「上移/下移」按钮在哪。
+            保留 <span>（而非换成 <button>）是为了不动外层 div 的 draggable 拖拽行为：
+            按钮在部分浏览器会吞掉 mousedown，拖拽起手会失效。
+          -->
           <span
-            class="mt-0.5 inline-flex shrink-0 cursor-grab items-center text-muted-foreground"
+            aria-roledescription="sortable"
+            class="mt-0.5 inline-flex shrink-0 cursor-grab items-center rounded text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-hidden"
             :aria-label="$t('page.iot.board.dragHandle')"
             data-board-drag-handle="true"
+            role="button"
+            tabindex="0"
+            @keydown="onDragHandleKeydown"
           >
             <GripVertical class="size-4" />
           </span>
@@ -331,26 +369,39 @@ function onDrop(event: DragEvent): void {
         </div>
       </div>
       <Space :size="0" class="shrink-0">
-        <Button
-          :aria-label="$t('page.iot.board.moveUp')"
-          :disabled="!canMoveUp"
-          size="small"
-          type="text"
-          :title="$t('page.iot.board.moveUp')"
-          @click="emit('moveUp')"
+        <!--
+          禁用态必须给原因：antd 的 disabled 按钮不触发 mouseenter，
+          所以用外层 span 承接 Tooltip 事件（这是本项目踩过一次的坑，见 devices/index.vue 注释）。
+          启用态提示动作名，禁用态提示「为什么不能点」，两种状态都有说明。
+        -->
+        <Tooltip :title="moveUpDisabledReason || $t('page.iot.board.moveUp')">
+          <span class="inline-flex">
+            <Button
+              :aria-label="$t('page.iot.board.moveUp')"
+              :disabled="!canMoveUp"
+              size="small"
+              type="text"
+              @click="emit('moveUp')"
+            >
+              <ArrowUp class="size-4" />
+            </Button>
+          </span>
+        </Tooltip>
+        <Tooltip
+          :title="moveDownDisabledReason || $t('page.iot.board.moveDown')"
         >
-          <ArrowUp class="size-4" />
-        </Button>
-        <Button
-          :aria-label="$t('page.iot.board.moveDown')"
-          :disabled="!canMoveDown"
-          size="small"
-          type="text"
-          :title="$t('page.iot.board.moveDown')"
-          @click="emit('moveDown')"
-        >
-          <ArrowDown class="size-4" />
-        </Button>
+          <span class="inline-flex">
+            <Button
+              :aria-label="$t('page.iot.board.moveDown')"
+              :disabled="!canMoveDown"
+              size="small"
+              type="text"
+              @click="emit('moveDown')"
+            >
+              <ArrowDown class="size-4" />
+            </Button>
+          </span>
+        </Tooltip>
         <Button
           size="small"
           type="text"
@@ -530,7 +581,14 @@ function onDrop(event: DragEvent): void {
           v-if="runtime.loaded && numericValue === null"
           :description="$t('page.iot.board.latestEmpty')"
         />
-        <EchartsUI v-else ref="chartRef" height="180px" />
+        <!-- 仪表盘：容器给 role/aria-label，读屏能播报「哪个组件的什么图」 -->
+        <EchartsUI
+          v-else
+          ref="chartRef"
+          :aria-label="`${widget.title} ${$t('page.iot.board.typeGauge')}`"
+          height="180px"
+          role="img"
+        />
       </template>
 
       <!-- 多序列对比折线 -->
@@ -539,7 +597,13 @@ function onDrop(event: DragEvent): void {
           v-if="runtime.seriesLoaded && !multiLineReady"
           :description="$t('page.iot.board.seriesEmpty')"
         />
-        <EchartsUI v-else ref="chartRef" height="200px" />
+        <EchartsUI
+          v-else
+          ref="chartRef"
+          :aria-label="`${widget.title} ${$t('page.iot.board.typeMultiLine')}`"
+          height="200px"
+          role="img"
+        />
       </template>
 
       <!-- 折线图 -->
@@ -548,7 +612,13 @@ function onDrop(event: DragEvent): void {
           v-if="runtime.seriesLoaded && linePoints.length === 0"
           :description="$t('page.iot.board.seriesEmpty')"
         />
-        <EchartsUI v-else ref="chartRef" height="180px" />
+        <EchartsUI
+          v-else
+          ref="chartRef"
+          :aria-label="`${widget.title} ${$t('page.iot.board.typeLine')}`"
+          height="180px"
+          role="img"
+        />
       </template>
     </Spin>
   </div>

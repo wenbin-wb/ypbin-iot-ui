@@ -4,7 +4,15 @@ import type { OnboardingTemplate } from './templates';
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { Alert, Button, Input, message, Steps, Tag } from 'ant-design-vue';
+import {
+  Alert,
+  Button,
+  Input,
+  message,
+  Steps,
+  Tag,
+  Tooltip,
+} from 'ant-design-vue';
 
 import {
   createProduct,
@@ -60,7 +68,7 @@ const createdProductCode = ref('');
 
 const busy = ref(false);
 
-const error = ref('');
+const errorMessage = ref('');
 
 const counts = ref({ devices: 0, products: 0 });
 
@@ -108,7 +116,7 @@ function selectTemplate(template: OnboardingTemplate) {
   selectedKey.value = template.key;
   productName.value = template.productName;
   productCode.value = nextProductCode(template.productCodePrefix);
-  error.value = '';
+  errorMessage.value = '';
 }
 
 /**
@@ -132,10 +140,13 @@ async function reloadCounts() {
       products: toBackendNumber(products?.total),
     };
     countsFailed.value = false;
-  } catch {
+  } catch (error) {
     // 计数只用于「是否弱化引导」这一个判断：取不到就按「没有数据」把引导显示全（失败开放），
     // 宁愿多显示引导也不能因为一次统计失败让新用户看不到入口。
     // 但**不静默**：置 countsFailed 让界面明说「这是按兜底口径展示的」，并留痕便于排查。
+    // ⚠️ `catch` 必须绑定真实异常：此前写成 `catch {` 却引用组件的 `errorMessage` ref，
+    // 拿到的是 ref 对象 ⇒ 日志打的是 `{value: ''}`、后端真实失败原因全部丢失。
+    // 外层展示状态命名为 `errorMessage`（不是 `error`），正是为了不与 catch 参数同名遮蔽。
     countsFailed.value = true;
     console.warn(
       '[iot] 接入向导的统计查询失败，按「暂无数据」展示完整引导',
@@ -156,11 +167,11 @@ async function applyTemplate() {
     return;
   }
   if (productCode.value.trim() === '' || productName.value.trim() === '') {
-    error.value = $t('page.iot.onboarding.codeRequired');
+    errorMessage.value = $t('page.iot.onboarding.codeRequired');
     return;
   }
   busy.value = true;
-  error.value = '';
+  errorMessage.value = '';
   try {
     const productId = String(
       await createProduct({
@@ -205,8 +216,10 @@ async function applyTemplate() {
     await reloadCounts();
     expanded.value = true;
     emit('done');
-  } catch {
-    error.value = extractErrorMessage(
+  } catch (error) {
+    // 同理：必须绑定真实异常再把后端 message 交给 extractErrorMessage，
+    // 否则展示的是 ref 对象字符串化后的 `[object Object]`（失败原因全丢）。
+    errorMessage.value = extractErrorMessage(
       error,
       $t('page.iot.onboarding.createFailed'),
     );
@@ -221,14 +234,15 @@ async function publishCreated() {
     return;
   }
   busy.value = true;
-  error.value = '';
+  errorMessage.value = '';
   try {
     const version = await publishProduct(createdProductId.value);
     message.success(
       `${$t('page.iot.onboarding.publishSuccess')} ${version ?? ''}`.trim(),
     );
-  } catch {
-    error.value = extractErrorMessage(
+  } catch (error) {
+    // 同上：绑定真实异常，保留后端拒绝原因（如版本冲突），不展示 ref 对象。
+    errorMessage.value = extractErrorMessage(
       error,
       $t('page.iot.onboarding.publishFailed'),
     );
@@ -389,17 +403,47 @@ onMounted(async () => {
           {{ $t('page.iot.onboarding.step2Desc') }}
         </p>
         <div class="flex flex-wrap gap-2">
-          <Button :disabled="createdProductId === ''" @click="goProducts">
-            {{ $t('page.iot.onboarding.openThingModel') }}
-          </Button>
-          <Button
-            v-access:code="['iot:product:publish']"
-            :disabled="createdProductId === ''"
-            :loading="busy"
-            @click="publishCreated"
+          <!-- antd 的 disabled 按钮不触发 mouseenter ⇒ 原因提示挂在外层 span，并给 tabindex
+               让键盘用户也能看到「为什么点不了」（无障碍要求：禁用态必须有原因）。 -->
+          <Tooltip
+            :title="
+              createdProductId === ''
+                ? $t('page.iot.onboarding.disabledNeedProduct')
+                : undefined
+            "
           >
-            {{ $t('page.iot.product.publish') }}
-          </Button>
+            <span
+              class="inline-block"
+              :tabindex="createdProductId === '' ? 0 : undefined"
+            >
+              <Button :disabled="createdProductId === ''" @click="goProducts">
+                {{ $t('page.iot.onboarding.openThingModel') }}
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip
+            :title="
+              createdProductId === ''
+                ? $t('page.iot.onboarding.disabledNeedProduct')
+                : undefined
+            "
+          >
+            <!-- 权限指令挂在外层 span：无发布权限时连「原因提示容器」一起摘掉，
+                 避免留下一个可聚焦但无控件的空 span -->
+            <span
+              v-access:code="['iot:product:publish']"
+              class="inline-block"
+              :tabindex="createdProductId === '' ? 0 : undefined"
+            >
+              <Button
+                :disabled="createdProductId === ''"
+                :loading="busy"
+                @click="publishCreated"
+              >
+                {{ $t('page.iot.product.publish') }}
+              </Button>
+            </span>
+          </Tooltip>
         </div>
         <div
           v-if="createdProductCode"
@@ -430,7 +474,12 @@ onMounted(async () => {
         </div>
       </div>
 
-      <Alert v-if="error" :message="error" show-icon type="error" />
+      <Alert
+        v-if="errorMessage"
+        :message="errorMessage"
+        show-icon
+        type="error"
+      />
 
       <div v-if="hasData" class="mt-2">
         <Button size="small" type="link" @click="expanded = false">

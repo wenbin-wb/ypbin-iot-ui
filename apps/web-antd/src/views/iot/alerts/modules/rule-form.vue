@@ -287,6 +287,16 @@ const backtestError = ref('');
 const backtestResult = ref<null | RulePreviewResult>(null);
 
 /**
+ * 试算请求序号（**防串台**）。
+ *
+ * 试算按点位串行拉多条历史序列，期间用户可能切换试算设备/改条件/换时间窗：
+ * 旧请求返回后若直接写 `backtestResult`，会把「旧设备/旧阈值」的结论画成新选择的结果。
+ * 每次发起试算/任何使结果失效的操作都自增序号，响应回来时序号不一致 ⇒ 丢弃（不写结果、
+ * 不动 loading，由新一轮自己收尾）。
+ */
+let backtestRequestSeq = 0;
+
+/**
  * 试算条件与保存请求**同源**：两者都只读 `conditionRows`，且都经
  * `toConditionRequests` 归一（与提交给后端的 points 逐字段相同）。
  */
@@ -346,14 +356,27 @@ const backtestMaxOffsetText = computed(() => {
 });
 
 /**
- * 切换试算设备：只清空上一次结果。
+ * 让「在途/已完成的试算结果」立即失效。
+ *
+ * 为什么不是只清空 `backtestResult`：在途请求返回时还会再写一次（旧设备/旧阈值串台），
+ * 必须同时自增序号让旧响应识别自己已过期，并复位 loading（否则旧请求的 finally 会把
+ * 新一轮的 loading 清掉，或反过来旧请求让按钮一直转）。
+ */
+function invalidateBacktest() {
+  backtestRequestSeq += 1;
+  backtestResult.value = null;
+  backtestError.value = '';
+  backtestLoading.value = false;
+}
+
+/**
+ * 切换试算设备：上一次结果与在途请求都立即失效。
  *
  * 条件行自带点位（每行一个 propertyId），试算不再需要「另选一个试算点位」——
  * 那个独立选择器正是旧实现把「试算点位」代入所有条件、从而伪造出 AND 语义的来源。
  */
 function onBacktestDeviceChange() {
-  backtestResult.value = null;
-  backtestError.value = '';
+  invalidateBacktest();
 }
 
 /**
@@ -374,15 +397,14 @@ watch(
     backtestWindow.value,
   ],
   () => {
-    backtestResult.value = null;
-    backtestError.value = '';
+    // 条件/时间窗变化 ⇒ 旧结果**与在途请求**都失效（串行拉数期间切换窗口同样会串台）
+    invalidateBacktest();
   },
 );
 
 /** 打开抽屉时把主表单已有设备同步成试算默认设备（点位由各条件行自带）。 */
 function syncBacktestFromForm() {
-  backtestResult.value = null;
-  backtestError.value = '';
+  invalidateBacktest();
   backtestDeviceId.value = form.value.deviceId || '';
 }
 
@@ -396,14 +418,20 @@ function syncBacktestFromForm() {
  * - 每个**不同**的点位只查一次历史（同点位复用，避免 N 行 N 次请求）；
  * - 断档/离线类（无条件行）：**不发历史请求**，直接给出「无法试算」的诚实结论；
  * - 某点位查询失败原样展示后端 message，**整组如实显示无法试算**（不拿部分序列硬算出一个假结论）；
- * - `backtestLoading` 期间按钮 loading 且点击短路 ⇒ 防重复请求。
+ * - `backtestLoading` 期间按钮 loading 且点击短路 ⇒ 防重复请求；
+ * - 请求期间切换设备/改条件 ⇒ 序号自增，旧响应回来时**直接丢弃**（P2-8：否则旧设备序列
+ *   会被当成新设备的试算结果，属于把不确定当确定，比「没有结果」更糟）。
  */
 async function runBacktest() {
   if (backtestLoading.value || !backtestReady.value) {
     return;
   }
+  const requestSeq = (backtestRequestSeq += 1);
   backtestError.value = '';
   backtestResult.value = null;
+  // 在发起时快照设备/窗口/条件：串行 await 期间这些 ref 可能已被用户改掉，
+  // 每个点位都用「当前值」会把不同设备/不同窗口的序列混进同一组判定。
+  const deviceId = backtestDeviceId.value;
   const to = Date.now();
   const from = to - RULE_PREVIEW_WINDOWS[backtestWindow.value];
   const conditions = backtestConditions.value ?? [];
@@ -431,10 +459,20 @@ async function runBacktest() {
     > = {};
     for (const propertyId of propertyIds) {
       // 逐点位串行：避免同一设备并发多串查询把时序库打满；结果按点位缓存
-      seriesByPropertyId[propertyId] = await getDeviceSeries(
-        backtestDeviceId.value,
-        { from, limit: BACKTEST_SERIES_LIMIT, propertyId, to },
-      );
+      const series = await getDeviceSeries(deviceId, {
+        from,
+        limit: BACKTEST_SERIES_LIMIT,
+        propertyId,
+        to,
+      });
+      // 每个 await 之后都检查一次：已失效就停止后续请求，不再打时序库
+      if (requestSeq !== backtestRequestSeq) {
+        return;
+      }
+      seriesByPropertyId[propertyId] = series;
+    }
+    if (requestSeq !== backtestRequestSeq) {
+      return;
     }
     backtestResult.value = evaluateRulePreviewGroup({
       conditions,
@@ -444,13 +482,20 @@ async function runBacktest() {
       to,
     });
   } catch (error) {
+    // 旧请求的失败同样不能覆盖新一轮的状态
+    if (requestSeq !== backtestRequestSeq) {
+      return;
+    }
     backtestResult.value = null;
     backtestError.value = extractErrorMessage(
       error,
       $t('page.iot.alert.rule.backtest.loadFailed'),
     );
   } finally {
-    backtestLoading.value = false;
+    // 只有「当前这一轮」才有权复位 loading；旧请求复位会把新一轮的 loading 提前关掉
+    if (requestSeq === backtestRequestSeq) {
+      backtestLoading.value = false;
+    }
   }
 }
 
@@ -875,15 +920,21 @@ onMounted(loadPresets);
           {{ $t('page.iot.alert.rule.pickPreset') }}
         </div>
         <Space wrap>
-          <Tag
+          <!--
+            预设模板是创建规则的主路径，必须是**可聚焦控件**（P1-7）：
+            原来的 `<Tag @click>` 键盘不可达（WCAG 2.1.1 失败）；Button 原生支持
+            Enter/Space，选中态用 `type="primary"` 表达（语义即单选）。
+          -->
+          <Button
             v-for="item in presets"
             :key="item.code"
-            :color="item.code === form.presetCode ? 'processing' : 'default'"
-            class="cursor-pointer px-3 py-1 text-sm"
+            :data-testid="`preset-${item.code}`"
+            :type="item.code === form.presetCode ? 'primary' : 'default'"
+            size="small"
             @click="applyPreset(item.code)"
           >
             {{ $t(item.i18nKey) }}
-          </Tag>
+          </Button>
         </Space>
         <div class="mt-2 text-xs text-muted-foreground">
           {{ $t('page.iot.alert.rule.presetHint') }}
@@ -1367,6 +1418,7 @@ onMounted(loadPresets);
             <Select
               v-model:value="backtestDeviceId"
               allow-clear
+              data-testid="backtest-device"
               show-search
               style="width: 100%"
               :placeholder="

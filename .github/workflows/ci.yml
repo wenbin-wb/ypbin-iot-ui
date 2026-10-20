@@ -106,8 +106,15 @@ jobs:
       # 序列化成字符串」这条口径的**唯一**转换点（分页 total/page/pageSize 都过它），
       # 它的边界用例必须进 CI——否则该 helper 可以悄悄写错而无人察觉。
       # 该目录下目前只有 backend-number.test.ts 一个用例文件。
+      #
+      # `views/dashboard` + `api/iot` 是 2026-10-20 审查整改追加的（原作用域漏了这两处）：
+      # - `views/dashboard` 审查时有 7 个用例文件（含 1415 行 `board.test.ts`，现已增至 9 个）曾「写了但从不跑」，
+      #   看板/总览是最贴业务首屏的页面，回归必须进 CI；
+      # - `api/iot` 覆盖实时事件流客户端（SSE 分帧/退避/鉴权）与请求契约测试，
+      #   这类「URL/参数序列化漂移」只有请求层用例能抓住（trace 时间格式事故即此盲区）。
+      # 本机已用 `TZ=UTC` 实跑本步**新增的两条路径**（12 文件 / 178 用例全绿，2026-10-20；CI runner 默认也是 UTC）。
       - name: IoT 前端组件级用例（真实 vue-i18n，覆盖「整块空白」这类渲染期事故）
-        run: pnpm exec vitest run --dom apps/web-antd/src/views/iot apps/web-antd/src/utils
+        run: pnpm exec vitest run --dom apps/web-antd/src/views/iot apps/web-antd/src/utils apps/web-antd/src/views/dashboard apps/web-antd/src/api/iot
 
       - name: 单元测试（埋点 SDK）
         # 该 SDK 有真实逻辑（批量、队列、URL 截断、令牌携带）且已有单测，

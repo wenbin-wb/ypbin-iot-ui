@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { RefreshGuard } from './refresh-guard';
+import type { RefreshGuard } from '../shared/refresh-guard';
 
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { IotAlertApi } from '#/api/iot';
@@ -16,9 +16,11 @@ import {
   Button,
   Empty,
   message,
+  Popconfirm,
   Space,
   Tabs,
   Tag,
+  Tooltip,
 } from 'ant-design-vue';
 import dayjs from 'dayjs';
 
@@ -34,6 +36,7 @@ import {
 } from '#/api/iot';
 import { exportAlertsCsv } from '#/api/iot/alert';
 import { createTrailingDebounce } from '#/api/iot/realtime';
+import { handleSessionExpired } from '#/api/request';
 import { $t } from '#/locales';
 import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
@@ -50,6 +53,11 @@ import {
   saveFilterIfChanged,
 } from '../shared/list-filter';
 import PanelErrorBoundary from '../shared/panel-error-boundary.vue';
+import {
+  createRefreshGuard,
+  QueryTimeoutError,
+  withQueryTimeout,
+} from '../shared/refresh-guard';
 import { useIotRealtime } from '../shared/use-iot-realtime';
 import { detectRunawayGrowth, RUNAWAY_HEIGHT } from './alerts-layout';
 import { channelLabel } from './channel';
@@ -78,11 +86,6 @@ import {
 import InstanceCurve from './modules/instance-curve.vue';
 import NotifyRiskTag from './modules/notify-risk-tag.vue';
 import RuleForm from './modules/rule-form.vue';
-import {
-  createRefreshGuard,
-  QueryTimeoutError,
-  withQueryTimeout,
-} from './refresh-guard';
 
 /**
  * 全局告警中心（用户口径 ⑥⑦：三处可达 + 空态引导 + 失败态原样展示后端 message）。
@@ -105,6 +108,7 @@ const canSaveRule = computed(() => hasAccessByCodes(['iot:alert:rule-save']));
 const REALTIME_ALERT_DEBOUNCE_MS = 500;
 
 const {
+  authError: realtimeAuthError,
   error: realtimeError,
   onEvent: onRealtimeEvent,
   state: realtimeState,
@@ -114,6 +118,30 @@ const {
 const realtimeDisconnected = computed(
   () => realtimeState.value === 'reconnecting',
 );
+
+/**
+ * 实时流鉴权失败：401 ⇒ `unauthorized`（会话可能过期，给「重新登录」入口）；
+ * 403 ⇒ `forbidden`（角色无实时端点权限，重新登录也没有用，只给说明）。
+ *
+ * 为什么常驻而不是 toast：鉴权失败意味着「页面数据不再实时」，是持续状态而不是一次性事件，
+ * 用户中途回到页面/切回标签页时仍必须看到。
+ */
+const realtimeUnavailable = computed(() => realtimeAuthError.value !== '');
+
+/**
+ * 重新登录：复用全局会话过期入口（清 token + 按登录过期模式弹窗/登出），
+ * 不在本页自己实现登出，避免与请求拦截器的会话语义分叉。
+ */
+async function onReLogin() {
+  try {
+    await handleSessionExpired();
+  } catch (error) {
+    // 登出本身也可能失败（例如网络/存储异常）：必须给用户可见反馈，不能静默
+    message.error(
+      extractErrorMessage(error, $t('ui.actionMessage.operationFailed')),
+    );
+  }
+}
 
 const [RuleDrawer, RuleDrawerApi] = useVbenDrawer({
   connectedComponent: RuleForm,
@@ -206,8 +234,38 @@ const selectedIds = ref<string[]>([]);
 /** 导出请求在途：按钮 loading + 防重复点击。 */
 const exportLoading = ref(false);
 
+/** 批量确认/批量静默在途（只用于工具栏批量按钮：行内单条处置不共用，避免互相干扰）。 */
+const batchAckPending = ref(false);
+
+const batchSilencePending = ref(false);
+
 /**
- * 实例表的「静默丢弃」守卫（见 refresh-guard.ts）。
+ * 批量按钮禁用原因：按优先级「请求在途 > 未勾选」。
+ *
+ * 为什么要提示原因：`:disabled` 本身不告诉用户「为什么点不动」，键盘/读屏用户更无从得知。
+ * 模板用 Tooltip 给鼠标/触屏提示，并把包裹层设为可聚焦（tabindex=0）+ 一段 `sr-only`
+ * 文案，让 Tab 到包裹层时键盘/读屏也能拿到同一原因。空串表示不禁用 ⇒ Tooltip 不显示。
+ */
+const batchAckDisabledReason = computed(() => {
+  if (batchAckPending.value) {
+    return $t('page.iot.common.disabledPending');
+  }
+  return selectedIds.value.length === 0
+    ? $t('page.iot.common.disabledSelectFirst')
+    : '';
+});
+
+const batchSilenceDisabledReason = computed(() => {
+  if (batchSilencePending.value) {
+    return $t('page.iot.common.disabledPending');
+  }
+  return selectedIds.value.length === 0
+    ? $t('page.iot.common.disabledSelectFirst')
+    : '';
+});
+
+/**
+ * 实例表的「静默丢弃」守卫（见 shared/refresh-guard.ts）。
  *
  * 生命周期：`useVbenVxeGrid` 返回的 api 先就位，再创建守卫；网格组件真正
  * 挂载/查询发生在 setup 之后，闭包拿到的引用必然已赋值。
@@ -300,6 +358,11 @@ const [InstanceGrid, instanceGridApi] = useVbenVxeGrid({
     },
   } as VxeTableGridOptions<IotAlertApi.InstanceResp>,
   gridEvents: {
+    // 🔴 勾选事件**必须**走 gridEvents：`useVbenVxeGrid` 返回的 Grid 包装组件没有
+    // `defineEmits`，模板上的 checkbox-change 模板监听会作为 fallthrough attr 落到根 div，
+    // 而 vxe 的 `checkbox-change` 只绑在内层 `<VxeGrid v-on="events">`（自定义事件不冒泡）
+    // ⇒ 模板监听永远收不到、`selectedIds` 恒空、批量按钮恒禁用（P0-1）。
+    checkboxChange: onCheckboxChange,
     // 真实事件信号：页签刷新按钮、分页翻页都由 vxe 自己发起 commitProxy，
     // 页面要能知道「这次意图可能被丢弃」只能靠这些事件登记。
     // （vben 表单的提交/重置走适配层 `api.reload`，不会触发 vxe 的 form-* 事件；
@@ -413,11 +476,37 @@ async function onSilence(ids: string[], minutes = 60) {
   }
 }
 
+/** 工具栏「批量确认」：防连点 + 在途期间按钮 loading/禁用（原因见 Tooltip）。 */
+async function onBatchAck() {
+  if (batchAckPending.value) {
+    return;
+  }
+  batchAckPending.value = true;
+  try {
+    await onAck(selectedIds.value);
+  } finally {
+    batchAckPending.value = false;
+  }
+}
+
+/** 工具栏「批量静默」：同样防连点；静默本身不弹二次确认（可撤销、且已有成功提示）。 */
+async function onBatchSilence() {
+  if (batchSilencePending.value) {
+    return;
+  }
+  batchSilencePending.value = true;
+  try {
+    await onSilence(selectedIds.value, 60);
+  } finally {
+    batchSilencePending.value = false;
+  }
+}
+
 // ---------------------------------------------------------------- 告警规则
 
 const ruleError = ref('');
 
-/** 规则表的「静默丢弃」守卫（与实例表同构，见 refresh-guard.ts）。 */
+/** 规则表的「静默丢弃」守卫（与实例表同构，见 shared/refresh-guard.ts）。 */
 let ruleGuard: RefreshGuard;
 
 const [RuleGrid, ruleGridApi] = useVbenVxeGrid({
@@ -461,6 +550,8 @@ const [RuleGrid, ruleGridApi] = useVbenVxeGrid({
     toolbarConfig: { custom: true, export: false, refresh: true, zoom: true },
   } as VxeTableGridOptions<IotAlertApi.RuleResp>,
   gridEvents: {
+    // 与实例表同理：模板上直接写的 checkbox-change 监听收不到，规则批量启停会恒禁用（P0-1 第二处）
+    checkboxChange: onRuleCheckboxChange,
     pageChange: () => ruleGuard.markIntent(),
     toolbarButtonClick: ({ code }: { code?: string }) => {
       if (code === 'reload' || code === 'query') {
@@ -502,6 +593,37 @@ async function onToggleRule(ids: string[], enabled: boolean) {
     return true;
   } catch {
     return false;
+  }
+}
+
+/** 批量启停在途（工具栏两个按钮共用：同一时刻只允许一批，防连点造成两批交集）。 */
+const ruleTogglePending = ref(false);
+
+/** 批量按钮禁用原因（与实例表同口径：在途 > 未勾选）。 */
+const ruleBatchDisabledReason = computed(() => {
+  if (ruleTogglePending.value) {
+    return $t('page.iot.common.disabledPending');
+  }
+  return selectedRuleIds.value.length === 0
+    ? $t('page.iot.common.disabledSelectFirst')
+    : '';
+});
+
+/**
+ * 批量启用/停用规则（**二次确认由模板的 Popconfirm 负责**，条数取当前已选数）。
+ *
+ * 为什么停用必须确认：批量停用 N 条规则 = 这 N 类故障同时失去告警（可逆但影响面大），
+ * 而按钮与「批量启用」并列、无危险色，误触代价高；设备批量停用早已有确认，这里对齐口径。
+ */
+async function onBatchToggleRule(enabled: boolean) {
+  if (ruleTogglePending.value) {
+    return;
+  }
+  ruleTogglePending.value = true;
+  try {
+    await onToggleRule(selectedRuleIds.value, enabled);
+  } finally {
+    ruleTogglePending.value = false;
   }
 }
 
@@ -618,6 +740,28 @@ onUnmounted(() => {
     `ALERTS_LAYOUT.requiredDeepRules` 与 `alerts-layout.test.ts` 看守这些标记。
   -->
   <Page auto-content-height>
+    <!--
+      实时流鉴权失败必须常驻可见（P1-1）：
+      `unauthorized`（401，会话可能过期）给「重新登录」入口；`forbidden`（403）只说明无权限
+      —— 两者都不由客户端自动登出，避免「登出 → 重订阅 → 再 401」的循环。
+    -->
+    <Alert
+      v-if="realtimeUnavailable"
+      class="mb-2"
+      show-icon
+      type="warning"
+      :message="
+        realtimeAuthError === 'forbidden'
+          ? $t('page.iot.realtime.forbidden')
+          : $t('page.iot.realtime.authFailed')
+      "
+    >
+      <template v-if="realtimeAuthError === 'unauthorized'" #action>
+        <Button size="small" type="primary" @click="onReLogin">
+          {{ $t('authentication.loginAgainTitle') }}
+        </Button>
+      </template>
+    </Alert>
     <PanelErrorBoundary title-key="page.iot.alert.renderFailed">
       <Tabs v-model:active-key="activeTab" :animated="false" class="h-full">
         <!-- ===== 告警列表 ===== -->
@@ -711,10 +855,11 @@ onUnmounted(() => {
             show-icon
             type="warning"
           />
-          <InstanceGrid
-            class="flex-1 min-h-0"
-            @checkbox-change="onCheckboxChange"
-          >
+          <!--
+            勾选事件必须走 `gridEvents.checkboxChange`（见 script 里的接线注释）：
+            模板上直接写的 checkbox-change 监听在本包装组件上收不到（P0-1）。
+          -->
+          <InstanceGrid class="flex-1 min-h-0">
             <template #toolbar-tools>
               <Space wrap>
                 <!-- 导出当前筛选结果（服务端全量，不是当前页）；权限沿用列表读权限 -->
@@ -727,20 +872,50 @@ onUnmounted(() => {
                   <template #icon><Download /></template>
                   {{ $t('page.iot.alert.exportCsv') }}
                 </Button>
-                <Button
-                  v-if="canAck"
-                  :disabled="selectedIds.length === 0"
-                  @click="onAck(selectedIds)"
-                >
-                  {{ $t('page.iot.alert.batchAck') }}
-                </Button>
-                <Button
-                  v-if="canAck"
-                  :disabled="selectedIds.length === 0"
-                  @click="onSilence(selectedIds, 60)"
-                >
-                  {{ $t('page.iot.alert.batchSilence') }}
-                </Button>
+                <!--
+                  `:disabled` 必须说明原因（P1-6）：Tooltip 给鼠标/触屏，包裹 span 的
+                  `tabindex=0` + `sr-only` 文案给键盘/读屏（禁用按钮本身不可聚焦）。
+                -->
+                <Tooltip :title="batchAckDisabledReason">
+                  <span
+                    class="inline-block"
+                    :tabindex="batchAckDisabledReason ? 0 : -1"
+                  >
+                    <Button
+                      v-if="canAck"
+                      data-testid="batch-ack"
+                      :disabled="selectedIds.length === 0 || batchAckPending"
+                      :loading="batchAckPending"
+                      @click="onBatchAck"
+                    >
+                      {{ $t('page.iot.alert.batchAck') }}
+                    </Button>
+                    <span v-if="batchAckDisabledReason" class="sr-only">
+                      {{ batchAckDisabledReason }}
+                    </span>
+                  </span>
+                </Tooltip>
+                <Tooltip :title="batchSilenceDisabledReason">
+                  <span
+                    class="inline-block"
+                    :tabindex="batchSilenceDisabledReason ? 0 : -1"
+                  >
+                    <Button
+                      v-if="canAck"
+                      data-testid="batch-silence"
+                      :disabled="
+                        selectedIds.length === 0 || batchSilencePending
+                      "
+                      :loading="batchSilencePending"
+                      @click="onBatchSilence"
+                    >
+                      {{ $t('page.iot.alert.batchSilence') }}
+                    </Button>
+                    <span v-if="batchSilenceDisabledReason" class="sr-only">
+                      {{ batchSilenceDisabledReason }}
+                    </span>
+                  </span>
+                </Tooltip>
               </Space>
             </template>
 
@@ -921,26 +1096,75 @@ onUnmounted(() => {
             show-icon
             type="error"
           />
-          <RuleGrid
-            class="flex-1 min-h-0"
-            @checkbox-change="onRuleCheckboxChange"
-          >
+          <RuleGrid class="flex-1 min-h-0">
             <template #toolbar-tools>
               <Space wrap>
-                <Button
-                  v-if="canSaveRule"
-                  :disabled="selectedRuleIds.length === 0"
-                  @click="onToggleRule(selectedRuleIds, true)"
-                >
-                  {{ $t('page.iot.alert.rule.batchEnable') }}
-                </Button>
-                <Button
-                  v-if="canSaveRule"
-                  :disabled="selectedRuleIds.length === 0"
-                  @click="onToggleRule(selectedRuleIds, false)"
-                >
-                  {{ $t('page.iot.alert.rule.batchDisable') }}
-                </Button>
+                <Tooltip :title="ruleBatchDisabledReason">
+                  <span
+                    class="inline-block"
+                    :tabindex="ruleBatchDisabledReason ? 0 : -1"
+                  >
+                    <!--
+                      启停都要二次确认（P1-9）：批量停用会让 N 类故障同时失去告警，
+                      条数取当前已选数，ok 文案复用全局 `common.confirm`。
+                    -->
+                    <Popconfirm
+                      v-if="canSaveRule"
+                      :cancel-text="$t('common.cancel')"
+                      :ok-text="$t('common.confirm')"
+                      :title="
+                        $t('page.iot.alert.rule.batchEnableConfirm', [
+                          selectedRuleIds.length,
+                        ])
+                      "
+                      @confirm="onBatchToggleRule(true)"
+                    >
+                      <Button
+                        data-testid="batch-rule-enable"
+                        :disabled="
+                          selectedRuleIds.length === 0 || ruleTogglePending
+                        "
+                        :loading="ruleTogglePending"
+                      >
+                        {{ $t('page.iot.alert.rule.batchEnable') }}
+                      </Button>
+                    </Popconfirm>
+                    <span v-if="ruleBatchDisabledReason" class="sr-only">
+                      {{ ruleBatchDisabledReason }}
+                    </span>
+                  </span>
+                </Tooltip>
+                <Tooltip :title="ruleBatchDisabledReason">
+                  <span
+                    class="inline-block"
+                    :tabindex="ruleBatchDisabledReason ? 0 : -1"
+                  >
+                    <Popconfirm
+                      v-if="canSaveRule"
+                      :cancel-text="$t('common.cancel')"
+                      :ok-text="$t('common.confirm')"
+                      :title="
+                        $t('page.iot.alert.rule.batchDisableConfirm', [
+                          selectedRuleIds.length,
+                        ])
+                      "
+                      @confirm="onBatchToggleRule(false)"
+                    >
+                      <Button
+                        data-testid="batch-rule-disable"
+                        :disabled="
+                          selectedRuleIds.length === 0 || ruleTogglePending
+                        "
+                        :loading="ruleTogglePending"
+                      >
+                        {{ $t('page.iot.alert.rule.batchDisable') }}
+                      </Button>
+                    </Popconfirm>
+                    <span v-if="ruleBatchDisabledReason" class="sr-only">
+                      {{ ruleBatchDisabledReason }}
+                    </span>
+                  </span>
+                </Tooltip>
                 <Button
                   v-if="canSaveRule"
                   type="primary"

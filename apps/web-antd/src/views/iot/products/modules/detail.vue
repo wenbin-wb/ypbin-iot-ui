@@ -476,69 +476,77 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
               v-if="services.length === 0"
               :description="$t('page.iot.product.noService')"
             />
-            <table v-else class="w-full text-sm">
-              <thead>
-                <tr class="text-left text-gray-500">
-                  <th class="py-1">{{ $t('page.iot.product.serviceId') }}</th>
-                  <th class="py-1">{{ $t('page.iot.product.serviceName') }}</th>
-                  <th class="py-1">
-                    {{ $t('page.iot.product.serviceOption') }}
-                  </th>
-                  <th class="py-1">{{ $t('page.iot.product.description') }}</th>
-                  <th class="py-1">{{ $t('common.action') }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="service in services"
-                  :key="service.id"
-                  class="border-t"
-                  :class="
-                    service.id === selectedServiceId ? 'bg-blue-50' : undefined
-                  "
-                >
-                  <td class="py-1">
-                    <Button type="link" @click="onSelectService(service.id)">
-                      {{ service.serviceId }}
-                    </Button>
-                  </td>
-                  <td class="py-1">{{ service.serviceName }}</td>
-                  <td class="py-1">
-                    {{ serviceOptionLabel(service.serviceOption) }}
-                  </td>
-                  <td class="py-1">{{ service.description || '-' }}</td>
-                  <td class="py-1">
-                    <Button
-                      v-if="isDraft"
-                      v-access:code="['iot:product:update']"
-                      size="small"
-                      type="link"
-                      @click="openEditor('service', service)"
-                    >
-                      {{ $t('common.edit') }}
-                    </Button>
-                    <Popconfirm
-                      :title="
-                        $t('ui.actionMessage.deleteConfirm', [
-                          service.serviceId,
-                        ])
-                      "
-                      @confirm="onDeleteService(service)"
-                    >
+            <div v-else class="overflow-x-auto">
+              <table class="w-full min-w-[560px] text-sm whitespace-nowrap">
+                <thead>
+                  <tr class="text-left text-muted-foreground">
+                    <th class="py-1">{{ $t('page.iot.product.serviceId') }}</th>
+                    <th class="py-1">
+                      {{ $t('page.iot.product.serviceName') }}
+                    </th>
+                    <th class="py-1">
+                      {{ $t('page.iot.product.serviceOption') }}
+                    </th>
+                    <th class="py-1">
+                      {{ $t('page.iot.product.description') }}
+                    </th>
+                    <th class="py-1">{{ $t('common.action') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="service in services"
+                    :key="service.id"
+                    class="border-t"
+                    :class="
+                      service.id === selectedServiceId
+                        ? 'bg-primary/10'
+                        : undefined
+                    "
+                  >
+                    <td class="py-1">
+                      <Button type="link" @click="onSelectService(service.id)">
+                        {{ service.serviceId }}
+                      </Button>
+                    </td>
+                    <td class="py-1">{{ service.serviceName }}</td>
+                    <td class="py-1">
+                      {{ serviceOptionLabel(service.serviceOption) }}
+                    </td>
+                    <td class="py-1">{{ service.description || '-' }}</td>
+                    <td class="py-1">
                       <Button
-                        v-access:code="['iot:product:update']"
                         v-if="isDraft"
-                        danger
+                        v-access:code="['iot:product:update']"
                         size="small"
                         type="link"
+                        @click="openEditor('service', service)"
                       >
-                        {{ $t('common.delete') }}
+                        {{ $t('common.edit') }}
                       </Button>
-                    </Popconfirm>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                      <Popconfirm
+                        :title="
+                          $t('ui.actionMessage.deleteConfirm', [
+                            service.serviceId,
+                          ])
+                        "
+                        @confirm="onDeleteService(service)"
+                      >
+                        <Button
+                          v-access:code="['iot:product:update']"
+                          v-if="isDraft"
+                          danger
+                          size="small"
+                          type="link"
+                        >
+                          {{ $t('common.delete') }}
+                        </Button>
+                      </Popconfirm>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
 
             <template v-if="selectedService">
               <div class="mt-4 mb-2 text-sm text-muted-foreground">
@@ -566,60 +574,76 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
                 v-if="properties.length === 0"
                 :description="$t('page.iot.product.noProperty')"
               />
-              <table v-else class="w-full text-sm">
-                <thead>
-                  <tr class="text-left text-gray-500">
-                    <th class="py-1">{{ $t('page.iot.point.identifier') }}</th>
-                    <th class="py-1">
-                      {{ $t('page.iot.product.propertyName') }}
-                    </th>
-                    <th class="py-1">{{ $t('page.iot.point.dataType') }}</th>
-                    <th class="py-1">{{ $t('page.iot.point.accessMode') }}</th>
-                    <th class="py-1">{{ $t('page.iot.point.unit') }}</th>
-                    <th class="py-1">{{ $t('page.iot.product.required') }}</th>
-                    <th class="py-1">{{ $t('common.action') }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="row in properties" :key="row.id" class="border-t">
-                    <td class="py-1">{{ row.identifier }}</td>
-                    <td class="py-1">{{ row.propertyName }}</td>
-                    <td class="py-1">{{ dataTypeLabel(row.dataType) }}</td>
-                    <td class="py-1">{{ accessModeLabel(row.accessMode) }}</td>
-                    <td class="py-1">{{ row.unit || '-' }}</td>
-                    <td class="py-1">
-                      {{ row.required ? $t('common.yes') : $t('common.no') }}
-                    </td>
-                    <td class="py-1">
-                      <Button
-                        v-access:code="['iot:product:update']"
-                        v-if="isDraft"
-                        size="small"
-                        type="link"
-                        @click="openEditor('property', row)"
-                      >
-                        {{ $t('common.edit') }}
-                      </Button>
-                      <Popconfirm
-                        :title="
-                          $t('ui.actionMessage.deleteConfirm', [row.identifier])
-                        "
-                        @confirm="onDeleteProperty(row)"
-                      >
+              <div v-else class="overflow-x-auto">
+                <table class="w-full min-w-[640px] text-sm whitespace-nowrap">
+                  <thead>
+                    <tr class="text-left text-muted-foreground">
+                      <th class="py-1">
+                        {{ $t('page.iot.point.identifier') }}
+                      </th>
+                      <th class="py-1">
+                        {{ $t('page.iot.product.propertyName') }}
+                      </th>
+                      <th class="py-1">{{ $t('page.iot.point.dataType') }}</th>
+                      <th class="py-1">
+                        {{ $t('page.iot.point.accessMode') }}
+                      </th>
+                      <th class="py-1">{{ $t('page.iot.point.unit') }}</th>
+                      <th class="py-1">
+                        {{ $t('page.iot.product.required') }}
+                      </th>
+                      <th class="py-1">{{ $t('common.action') }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="row in properties"
+                      :key="row.id"
+                      class="border-t"
+                    >
+                      <td class="py-1">{{ row.identifier }}</td>
+                      <td class="py-1">{{ row.propertyName }}</td>
+                      <td class="py-1">{{ dataTypeLabel(row.dataType) }}</td>
+                      <td class="py-1">
+                        {{ accessModeLabel(row.accessMode) }}
+                      </td>
+                      <td class="py-1">{{ row.unit || '-' }}</td>
+                      <td class="py-1">
+                        {{ row.required ? $t('common.yes') : $t('common.no') }}
+                      </td>
+                      <td class="py-1">
                         <Button
                           v-access:code="['iot:product:update']"
                           v-if="isDraft"
-                          danger
                           size="small"
                           type="link"
+                          @click="openEditor('property', row)"
                         >
-                          {{ $t('common.delete') }}
+                          {{ $t('common.edit') }}
                         </Button>
-                      </Popconfirm>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                        <Popconfirm
+                          :title="
+                            $t('ui.actionMessage.deleteConfirm', [
+                              row.identifier,
+                            ])
+                          "
+                          @confirm="onDeleteProperty(row)"
+                        >
+                          <Button
+                            v-access:code="['iot:product:update']"
+                            v-if="isDraft"
+                            danger
+                            size="small"
+                            type="link"
+                          >
+                            {{ $t('common.delete') }}
+                          </Button>
+                        </Popconfirm>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
 
               <!-- 命令 -->
               <div class="mt-4 mb-1 flex items-center gap-2">
@@ -639,52 +663,60 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
                 v-if="commands.length === 0"
                 :description="$t('page.iot.product.noCommand')"
               />
-              <table v-else class="w-full text-sm">
-                <thead>
-                  <tr class="text-left text-gray-500">
-                    <th class="py-1">{{ $t('page.iot.point.identifier') }}</th>
-                    <th class="py-1">
-                      {{ $t('page.iot.product.commandName') }}
-                    </th>
-                    <th class="py-1">{{ $t('page.iot.product.timeoutMs') }}</th>
-                    <th class="py-1">{{ $t('common.action') }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="row in commands" :key="row.id" class="border-t">
-                    <td class="py-1">{{ row.identifier }}</td>
-                    <td class="py-1">{{ row.commandName }}</td>
-                    <td class="py-1">{{ row.timeoutMs ?? '-' }}</td>
-                    <td class="py-1">
-                      <Button
-                        v-access:code="['iot:product:update']"
-                        v-if="isDraft"
-                        size="small"
-                        type="link"
-                        @click="openEditor('command', row)"
-                      >
-                        {{ $t('common.edit') }}
-                      </Button>
-                      <Popconfirm
-                        :title="
-                          $t('ui.actionMessage.deleteConfirm', [row.identifier])
-                        "
-                        @confirm="onDeleteCommand(row)"
-                      >
+              <div v-else class="overflow-x-auto">
+                <table class="w-full min-w-[480px] text-sm whitespace-nowrap">
+                  <thead>
+                    <tr class="text-left text-muted-foreground">
+                      <th class="py-1">
+                        {{ $t('page.iot.point.identifier') }}
+                      </th>
+                      <th class="py-1">
+                        {{ $t('page.iot.product.commandName') }}
+                      </th>
+                      <th class="py-1">
+                        {{ $t('page.iot.product.timeoutMs') }}
+                      </th>
+                      <th class="py-1">{{ $t('common.action') }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="row in commands" :key="row.id" class="border-t">
+                      <td class="py-1">{{ row.identifier }}</td>
+                      <td class="py-1">{{ row.commandName }}</td>
+                      <td class="py-1">{{ row.timeoutMs ?? '-' }}</td>
+                      <td class="py-1">
                         <Button
                           v-access:code="['iot:product:update']"
                           v-if="isDraft"
-                          danger
                           size="small"
                           type="link"
+                          @click="openEditor('command', row)"
                         >
-                          {{ $t('common.delete') }}
+                          {{ $t('common.edit') }}
                         </Button>
-                      </Popconfirm>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                        <Popconfirm
+                          :title="
+                            $t('ui.actionMessage.deleteConfirm', [
+                              row.identifier,
+                            ])
+                          "
+                          @confirm="onDeleteCommand(row)"
+                        >
+                          <Button
+                            v-access:code="['iot:product:update']"
+                            v-if="isDraft"
+                            danger
+                            size="small"
+                            type="link"
+                          >
+                            {{ $t('common.delete') }}
+                          </Button>
+                        </Popconfirm>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
 
               <!-- 事件 -->
               <div class="mt-4 mb-1 flex items-center gap-2">
@@ -704,52 +736,60 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
                 v-if="events.length === 0"
                 :description="$t('page.iot.product.noEvent')"
               />
-              <table v-else class="w-full text-sm">
-                <thead>
-                  <tr class="text-left text-gray-500">
-                    <th class="py-1">{{ $t('page.iot.point.identifier') }}</th>
-                    <th class="py-1">{{ $t('page.iot.product.eventName') }}</th>
-                    <th class="py-1">{{ $t('page.iot.point.dataType') }}</th>
-                    <th class="py-1">{{ $t('page.iot.point.unit') }}</th>
-                    <th class="py-1">{{ $t('common.action') }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="row in events" :key="row.id" class="border-t">
-                    <td class="py-1">{{ row.identifier }}</td>
-                    <td class="py-1">{{ row.eventName }}</td>
-                    <td class="py-1">{{ dataTypeLabel(row.dataType) }}</td>
-                    <td class="py-1">{{ row.unit || '-' }}</td>
-                    <td class="py-1">
-                      <Button
-                        v-access:code="['iot:product:update']"
-                        v-if="isDraft"
-                        size="small"
-                        type="link"
-                        @click="openEditor('event', row)"
-                      >
-                        {{ $t('common.edit') }}
-                      </Button>
-                      <Popconfirm
-                        :title="
-                          $t('ui.actionMessage.deleteConfirm', [row.identifier])
-                        "
-                        @confirm="onDeleteEvent(row)"
-                      >
+              <div v-else class="overflow-x-auto">
+                <table class="w-full min-w-[560px] text-sm whitespace-nowrap">
+                  <thead>
+                    <tr class="text-left text-muted-foreground">
+                      <th class="py-1">
+                        {{ $t('page.iot.point.identifier') }}
+                      </th>
+                      <th class="py-1">
+                        {{ $t('page.iot.product.eventName') }}
+                      </th>
+                      <th class="py-1">{{ $t('page.iot.point.dataType') }}</th>
+                      <th class="py-1">{{ $t('page.iot.point.unit') }}</th>
+                      <th class="py-1">{{ $t('common.action') }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="row in events" :key="row.id" class="border-t">
+                      <td class="py-1">{{ row.identifier }}</td>
+                      <td class="py-1">{{ row.eventName }}</td>
+                      <td class="py-1">{{ dataTypeLabel(row.dataType) }}</td>
+                      <td class="py-1">{{ row.unit || '-' }}</td>
+                      <td class="py-1">
                         <Button
                           v-access:code="['iot:product:update']"
                           v-if="isDraft"
-                          danger
                           size="small"
                           type="link"
+                          @click="openEditor('event', row)"
                         >
-                          {{ $t('common.delete') }}
+                          {{ $t('common.edit') }}
                         </Button>
-                      </Popconfirm>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                        <Popconfirm
+                          :title="
+                            $t('ui.actionMessage.deleteConfirm', [
+                              row.identifier,
+                            ])
+                          "
+                          @confirm="onDeleteEvent(row)"
+                        >
+                          <Button
+                            v-access:code="['iot:product:update']"
+                            v-if="isDraft"
+                            danger
+                            size="small"
+                            type="link"
+                          >
+                            {{ $t('common.delete') }}
+                          </Button>
+                        </Popconfirm>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </template>
           </Tabs.TabPane>
 
@@ -834,28 +874,34 @@ const [Drawer, drawerApi] = useVbenDrawer<ProductDetailData>({
               v-if="versions.length === 0"
               :description="$t('common.noData')"
             />
-            <table v-else class="w-full text-sm">
-              <thead>
-                <tr class="text-left text-gray-500">
-                  <th class="py-1">{{ $t('page.iot.product.versionNo') }}</th>
-                  <th class="py-1">{{ $t('page.iot.product.modelStatus') }}</th>
-                  <th class="py-1">{{ $t('page.iot.product.publishedAt') }}</th>
-                  <th class="py-1">{{ $t('common.remark') }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in versions" :key="row.id" class="border-t">
-                  <td class="py-1">{{ row.versionNo }}</td>
-                  <td class="py-1">
-                    <Tag :color="modelStatusColor(row.modelStatus)">
-                      {{ modelStatusLabel(row.modelStatus) }}
-                    </Tag>
-                  </td>
-                  <td class="py-1">{{ formatDateTime(row.publishedAt) }}</td>
-                  <td class="py-1">{{ row.remark || '-' }}</td>
-                </tr>
-              </tbody>
-            </table>
+            <div v-else class="overflow-x-auto">
+              <table class="w-full min-w-[480px] text-sm whitespace-nowrap">
+                <thead>
+                  <tr class="text-left text-muted-foreground">
+                    <th class="py-1">{{ $t('page.iot.product.versionNo') }}</th>
+                    <th class="py-1">
+                      {{ $t('page.iot.product.modelStatus') }}
+                    </th>
+                    <th class="py-1">
+                      {{ $t('page.iot.product.publishedAt') }}
+                    </th>
+                    <th class="py-1">{{ $t('common.remark') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in versions" :key="row.id" class="border-t">
+                    <td class="py-1">{{ row.versionNo }}</td>
+                    <td class="py-1">
+                      <Tag :color="modelStatusColor(row.modelStatus)">
+                        {{ modelStatusLabel(row.modelStatus) }}
+                      </Tag>
+                    </td>
+                    <td class="py-1">{{ formatDateTime(row.publishedAt) }}</td>
+                    <td class="py-1">{{ row.remark || '-' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </Tabs.TabPane>
         </Tabs>
       </PanelErrorBoundary>

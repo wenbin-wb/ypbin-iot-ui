@@ -38,6 +38,7 @@ import {
   Spin,
   Switch,
   Tag,
+  Tooltip,
 } from 'ant-design-vue';
 import dayjs from 'dayjs';
 
@@ -1035,11 +1036,20 @@ function onExport(): void {
       <Button :loading="loading" type="primary" @click="onQuery">
         {{ $t('page.iot.series.query') }}
       </Button>
-      <Button :disabled="detail.total === 0" @click="onExport">
-        {{ $t('page.iot.series.exportCsv') }}
-      </Button>
+      <!-- 无数据时禁用导出并说明原因（灰按钮不给理由 = 用户以为功能坏了） -->
+      <Tooltip :title="detail.total === 0 ? $t('page.iot.series.empty') : ''">
+        <span :tabindex="detail.total === 0 ? 0 : -1" class="inline-block">
+          <Button :disabled="detail.total === 0" @click="onExport">
+            {{ $t('page.iot.series.exportCsv') }}
+          </Button>
+        </span>
+      </Tooltip>
       <span class="flex items-center gap-2 text-sm">
-        <Switch v-model:checked="autoRefresh" size="small" />
+        <Switch
+          v-model:checked="autoRefresh"
+          :aria-label="$t('page.iot.series.autoRefresh')"
+          size="small"
+        />
         {{ $t('page.iot.series.autoRefresh') }}
         <span class="text-xs text-muted-foreground">
           {{

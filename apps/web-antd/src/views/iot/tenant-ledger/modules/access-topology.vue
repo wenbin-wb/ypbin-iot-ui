@@ -518,7 +518,9 @@ watch(
           class="mt-1 text-xl font-semibold tabular-nums"
           :class="{
             'text-muted-foreground': item.tone === 'muted',
-            'text-red-600': item.tone === 'danger',
+            // 语义 token：text-red-600（#dc2626）在暗色下仍是硬编码红、对比度不可控；
+            // text-destructive 跟随主题（亮/暗各一份），与全仓其余危险色口径一致。
+            'text-destructive': item.tone === 'danger',
           }"
         >
           {{ item.value }}

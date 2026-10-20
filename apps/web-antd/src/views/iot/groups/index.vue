@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { RefreshGuard } from '../shared/refresh-guard';
 import type { GroupRow } from './data';
 
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
@@ -18,6 +19,11 @@ import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
 
 import ListErrorAlert from '../shared/list-error-alert.vue';
+import {
+  createRefreshGuard,
+  QueryTimeoutError,
+  withQueryTimeout,
+} from '../shared/refresh-guard';
 import { useColumns } from './data';
 import Form from './modules/form.vue';
 import Members from './modules/members.vue';
@@ -35,6 +41,15 @@ const [MembersDrawer, MembersDrawerApi] = useVbenDrawer({
  * 那是彻底的**假空态**（用户会以为分组真的没了）。失败必须单独、持续可见。
  */
 const listError = ref('');
+
+/**
+ * 列表的「静默丢弃」守卫（见 shared/refresh-guard.ts）。
+ *
+ * 本页关闭了分页器，但工具栏刷新/删除后刷新/表单提交后的刷新仍可能撞上
+ * vxe 的在途查询守卫（此时 query 会被直接吞掉，页面毫无反馈）；
+ * 登记意图后在本周期结束补发一次，查询也有客户端超时。
+ */
+let listGuard: RefreshGuard;
 
 /**
  * 给列表行补展示用的 `parentIdName`：parentId → groupName 的映射来自**同一次**列表结果
@@ -60,8 +75,17 @@ const [Grid, gridApi] = useVbenVxeGrid({
     proxyConfig: {
       ajax: {
         query: async () => {
+          // 查询真的启动了 ⇒ 登记过的刷新意图已被执行（没被 vxe 丢弃）
+          listGuard.consumeIntent();
           try {
-            const rows = await getGroupList();
+            const rows = await withQueryTimeout(getGroupList()).catch(
+              (error: unknown) => {
+                if (error instanceof QueryTimeoutError) {
+                  throw new TypeError($t('page.iot.common.queryTimeout'));
+                }
+                throw error;
+              },
+            );
             listError.value = '';
             return withParentIdName(rows);
           } catch (error) {
@@ -71,6 +95,9 @@ const [Grid, gridApi] = useVbenVxeGrid({
               $t('page.iot.group.listLoadFailed'),
             );
             throw error;
+          } finally {
+            // 周期结束（成功/失败）⇒ 有被丢弃的意图就补发一次
+            listGuard.notifyCycleEnd();
           }
         },
       },
@@ -78,6 +105,21 @@ const [Grid, gridApi] = useVbenVxeGrid({
     rowConfig: { keyField: 'id' },
     toolbarConfig: { custom: true, export: false, refresh: true, zoom: true },
   } as VxeTableGridOptions<GroupRow>,
+  gridEvents: {
+    toolbarButtonClick: ({ code }: { code?: string }) => {
+      if (code === 'reload' || code === 'query') {
+        listGuard.markIntent();
+      }
+    },
+  },
+});
+
+listGuard = createRefreshGuard({
+  isBusy: () => Boolean(gridApi.grid?.reactData?.tableLoading),
+  issue: () => {
+    void gridApi.query();
+  },
+  onTrailing: (active) => gridApi.setLoading(active),
 });
 
 function onEdit(row: GroupRow) {
@@ -88,18 +130,23 @@ function onMembers(row: GroupRow) {
   MembersDrawerApi.setData(row).open();
 }
 
+/** 列表刷新入口（宿主/表单/删除后共用；走守卫以覆盖「慢查询在途」的丢弃窗口）。 */
+function reloadList() {
+  listGuard.request();
+}
+
 function onDelete(row: GroupRow) {
   deleteGroup(row.id)
     .then(() => {
       message.success($t('common.success'));
-      gridApi.query();
+      reloadList();
     })
     .catch(() => {});
 }
 </script>
 <template>
   <Page auto-content-height>
-    <FormDrawer @reload="gridApi.query()" />
+    <FormDrawer @reload="reloadList" />
     <MembersDrawer />
     <!-- 失败态必须挂在表格之外：真实 vxe 只在表体无行时渲染 `#empty` 槽，
          「已有数据后刷新失败」时槽不渲染 ⇒ 放槽里的失败提示会看不见。

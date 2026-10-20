@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 
 import { Check, Copy } from '@vben/icons';
 
@@ -34,7 +34,28 @@ const props = withDefaults(
   },
 );
 
+/** 「已复制」勾选态保持时长（毫秒）：够看到反馈，又不至于干扰连续复制下一个字段。 */
+const COPIED_FEEDBACK_MS = 1500;
+
 const copied = ref(false);
+
+/**
+ * 「已复制」勾选态的复位定时器。
+ *
+ * 必须在卸载时清掉：复制后被点走的抽屉/页面（如设备详情里的 AccessKey）
+ * 卸载后定时器仍会跑到 1.5s 才释放闭包，属实打实的句柄泄漏；
+ * 单测里表现为 `vitest-pool Timeout terminating forks worker`。
+ */
+let resetTimer: ReturnType<typeof setTimeout> | undefined;
+
+function clearResetTimer() {
+  if (resetTimer !== undefined) {
+    clearTimeout(resetTimer);
+    resetTimer = undefined;
+  }
+}
+
+onBeforeUnmount(clearResetTimer);
 
 const text = computed(() => props.value ?? '');
 
@@ -51,9 +72,12 @@ async function copy() {
     await navigator.clipboard.writeText(value);
     copied.value = true;
     message.success($t('page.iot.display.copySuccess'));
-    window.setTimeout(() => {
+    // 连点/连续复制时先清上一个定时器，避免旧定时器提前把新一次的勾选态复位
+    clearResetTimer();
+    resetTimer = setTimeout(() => {
       copied.value = false;
-    }, 1500);
+      resetTimer = undefined;
+    }, COPIED_FEEDBACK_MS);
   } catch {
     // 剪贴板 API 受浏览器安全上下文/权限限制；失败必须让用户知道，不能静默。
     message.error($t('page.iot.display.copyFailed'));

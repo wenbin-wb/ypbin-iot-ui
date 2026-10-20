@@ -181,6 +181,15 @@ export namespace IotAlertApi {
     productId?: string;
     propertyId?: string;
     ruleId?: string;
+    /**
+     * 时间窗（起/止）。
+     *
+     * ⚠️ 后端 `AlertInstanceQuery.from/to` 是 `LocalDateTime` 且**当前没有** `@DateTimeFormat`，
+     * 传字符串有解析失败风险（尤其 `Date.toISOString()` 的 `Z` 后缀）。
+     * 页面目前不传这两个字段；将来启用前，先确认后端补了
+     * `@DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")`（与 availability/maintenance 同口径），
+     * 前端再按该格式传，否则会重演 trace 页的 400 事故。
+     */
     from?: string;
     to?: string;
   }

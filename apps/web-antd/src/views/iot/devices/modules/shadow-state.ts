@@ -375,8 +375,24 @@ function sameShadowMap(
 }
 
 /**
+ * 十进制归一化允许的最大指数绝对值。
+ *
+ * 4096 足以覆盖任何真实传感器量程（10^-4096 ~ 10^4096），超出即认为「不是可比较的十进制数」。
+ * 🔴 设上限是**安全边界**：`point` 直接决定下面 `'0'.repeat(...)` 的次数，
+ * 而 `reported` 来自设备 MQTT 原始读数（完全不可信）——不设限时 `1e-999999999`
+ * 会抛 `RangeError: Invalid string length`，把整个设备详情概览页签渲染崩溃。
+ */
+const DECIMAL_MAX_EXPONENT = 4096;
+
+/** 归一化后允许的最大数字位数：超出放弃规范化、退回原串比较（避免分配巨串）。 */
+const DECIMAL_MAX_DIGITS = 1000;
+
+/**
  * 十进制归一化：仅接受 `[+-]?(digits[.digits?] | .digits)(e[+-]digits)?`，
  * 返回去尾零后的规范十进制串（`"25.0"` → `"25"`）；不可解析返回 null。
+ *
+ * 不可解析（含**指数/位数超限**）时调用方退回原串比较 —— 与「后端 BigDecimal 解析失败
+ * 时按原串比较」同一口径，宁可判「不一致」也绝不抛异常。
  */
 function decimalOf(raw: string): null | string {
   // 注意：**不 trim**（后端口径），带空格的串直接判为不可解析、走原串比较
@@ -386,6 +402,13 @@ function decimalOf(raw: string): null | string {
   }
   const mantissa = match[1] ?? '';
   const exponent = Number(match[2] ?? '0');
+  // 指数先收敛：'1e999999999' 这类会让 point 变成天文数字（甚至 Infinity）⇒ 补零时崩溃
+  if (
+    !Number.isSafeInteger(exponent) ||
+    Math.abs(exponent) > DECIMAL_MAX_EXPONENT
+  ) {
+    return null;
+  }
   const sign = raw.startsWith('-') ? '-' : '';
   const [intPart = '', fracPart = ''] = mantissa.split('.');
   // 小数点位置 = 整数部分长度 + 指数；先按原样拼数字，再去前导零并同步移动小数点
@@ -396,6 +419,13 @@ function decimalOf(raw: string): null | string {
   point -= leadingZeros;
   if (digits === '') {
     return '0';
+  }
+  // 位数守卫必须在 repeat 之前：`point` 与 `digits.length` 决定补零长度
+  if (
+    Math.abs(point) > DECIMAL_MAX_DIGITS ||
+    digits.length > DECIMAL_MAX_DIGITS
+  ) {
+    return null;
   }
   let integerPart: string;
   let fractionPart: string;

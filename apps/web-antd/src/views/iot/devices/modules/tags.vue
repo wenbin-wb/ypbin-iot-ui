@@ -176,13 +176,18 @@ onMounted(() => {
       <div v-else class="flex flex-wrap gap-1">
         <Tag v-for="(tag, index) in tags" :key="tagDisplayKey(index, tag)">
           {{ tag.tagKey }}={{ tag.tagValue }}
-          <span
+          <!--
+            用原生 <button> 而不是 <span @click>：span 不可聚焦、键盘不可达（WCAG 2.1.1）。
+            原生按钮自带 Tab 聚焦 + Enter/Space 激活；type=button 避免在表单上下文里误触发提交。
+          -->
+          <button
             v-if="canUpdate"
-            class="ml-1 cursor-pointer text-xs text-primary"
+            class="ml-1 cursor-pointer border-0 bg-transparent p-0 text-xs text-primary"
+            type="button"
             @click.stop="openEdit(tag)"
           >
             {{ $t('page.iot.tag.edit') }}
-          </span>
+          </button>
           <Popconfirm
             v-if="canDelete"
             :title="$t('page.iot.tag.deleteConfirm', [tag.tagKey])"
@@ -190,9 +195,12 @@ onMounted(() => {
             :cancel-text="$t('page.iot.tag.cancel')"
             @confirm="remove(tag)"
           >
-            <span class="ml-1 cursor-pointer text-xs text-red-500">
+            <button
+              class="ml-1 cursor-pointer border-0 bg-transparent p-0 text-xs text-red-500"
+              type="button"
+            >
               {{ $t('page.iot.tag.delete') }}
-            </span>
+            </button>
           </Popconfirm>
         </Tag>
       </div>

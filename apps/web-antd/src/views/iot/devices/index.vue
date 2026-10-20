@@ -1,4 +1,7 @@
 <script lang="ts" setup>
+import type { RefreshGuard } from '../shared/refresh-guard';
+import type { BatchOutcome } from './list-actions';
+
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { IotDeviceApi } from '#/api/iot';
 
@@ -8,7 +11,15 @@ import { useRoute, useRouter } from 'vue-router';
 import { Page, useVbenDrawer } from '@vben/common-ui';
 import { Download, Plus } from '@vben/icons';
 
-import { Button, message, Popconfirm, Switch, Tag } from 'ant-design-vue';
+import {
+  Alert,
+  Button,
+  message,
+  Popconfirm,
+  Switch,
+  Tag,
+  Tooltip,
+} from 'ant-design-vue';
 import dayjs from 'dayjs';
 
 import { useVbenVxeGrid, VbenTableAction } from '#/adapter/vxe-table';
@@ -29,6 +40,7 @@ import {
   createTrailingDebounce,
   deviceStatusTouchesDevices,
 } from '#/api/iot/realtime';
+import { handleSessionExpired } from '#/api/request';
 import { $t } from '#/locales';
 import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
@@ -37,9 +49,20 @@ import { downloadBlobSafe } from '#/utils/file';
 import EmptyGuide from '../onboarding/modules/empty-guide.vue';
 import OnboardingGuide from '../onboarding/modules/guide.vue';
 import ListErrorAlert from '../shared/list-error-alert.vue';
+import {
+  createRefreshGuard,
+  QueryTimeoutError,
+  withQueryTimeout,
+} from '../shared/refresh-guard';
 import { useIotRealtime } from '../shared/use-iot-realtime';
 import TenantLedger from '../tenant-ledger/modules/ledger.vue';
 import { useColumns, useGridFormSchema } from './data';
+import {
+  resolveBatchDisabledReason,
+  resolveBatchOutcome,
+  resolvePageAfterDelete,
+  resolvePageAfterEmptyQuery,
+} from './list-actions';
 import Availability from './modules/availability.vue';
 import BatchCommand from './modules/batch-command.vue';
 import BatchTags from './modules/batch-tags.vue';
@@ -144,10 +167,48 @@ const batchPending = ref(false);
 /** 导出请求在途：按钮 loading + 防重复点击。 */
 const exportLoading = ref(false);
 
-/** 批量按钮禁用条件：未勾选任何行，或已有批量请求在途。 */
-const batchActionDisabled = computed(
-  () => selectedIds.value.length === 0 || batchPending.value,
+/**
+ * 批量按钮的**禁用原因**（空串 = 可用）。
+ *
+ * 🔴 为什么要把原因分开：「未勾选」与「请求在途」在视觉上都只是一排灰按钮，
+ * 用户无法判断该做什么（勾选？还是等？）。拆出原因后由模板给出 Tooltip。
+ */
+const batchDisabledReason = computed(() =>
+  resolveBatchDisabledReason(selectedIds.value.length, batchPending.value),
 );
+
+/** 批量按钮是否禁用（与 {@link batchDisabledReason} 同源，避免两处判断漂移）。 */
+const batchActionDisabled = computed(() => batchDisabledReason.value !== '');
+
+/** 禁用原因的人话（可用时为空串 ⇒ 不渲染 Tooltip）。 */
+const batchDisabledTooltip = computed(() => {
+  switch (batchDisabledReason.value) {
+    case 'noSelection': {
+      return $t('page.iot.common.disabledSelectFirst');
+    }
+    case 'pending': {
+      return $t('page.iot.common.disabledPending');
+    }
+    default: {
+      return '';
+    }
+  }
+});
+
+/** 批量打标签/移除标签的禁用原因（只受「未勾选」影响，与批量写操作不同源）。 */
+const tagDisabledTooltip = computed(() =>
+  selectedIds.value.length === 0
+    ? $t('page.iot.common.disabledSelectFirst')
+    : '',
+);
+
+/**
+ * 列表查询的「静默丢弃」守卫（见 `../shared/refresh-guard.ts`）。
+ *
+ * 生命周期：`useVbenVxeGrid` 返回的 api 先就位，再创建守卫；网格真正挂载/查询发生在
+ * setup 之后，闭包拿到的引用必然已赋值。
+ */
+let deviceGuard: RefreshGuard;
 
 /**
  * `?productId=` 带来的**初始筛选值**（产品详情「添加设备」与按产品浏览共用这个参数）。
@@ -189,6 +250,23 @@ const [Grid, gridApi] = useVbenVxeGrid({
    */
   gridEvents: {
     checkboxChange: onCheckboxChange,
+    /**
+     * 翻页与工具栏按钮（刷新/查询）由 vxe 自己发起 `commitProxy`，
+     * 页面拿不到调用点 ⇒ 只能靠这两个事件登记「查询意图」。
+     * 在途时 vxe 会**直接丢弃**这次查询（`grid.js` 的 `tableLoading` 早退），
+     * 由守卫在周期结束后用最新状态补发（否则用户点刷新/翻页「什么都没发生」）。
+     */
+    pageChange: () => deviceGuard.markIntent(),
+    toolbarButtonClick: ({ code }: { code?: string }) => {
+      if (code === 'reload' || code === 'query') {
+        deviceGuard.markIntent();
+      }
+    },
+    // 残余缺口（如实登记，不假装已覆盖）：vben 搜索表单的提交/重置走适配层
+    // `api.reload()`（`commitProxy('reload')`），**不触发 vxe 的任何 grid 事件** ⇒
+    // 在途时提交筛选仍可能被丢弃且无法登记意图。该窗口极窄（只在慢查询在途期间），
+    // 与告警页同一已知边界；彻底收口需要改 vben 适配层（`packages/effects/plugins`），
+    // 不在本页/本轮范围。
   },
   gridOptions: {
     columns: useColumns(),
@@ -200,22 +278,47 @@ const [Grid, gridApi] = useVbenVxeGrid({
     proxyConfig: {
       ajax: {
         query: async ({ page }, formValues: IotDeviceApi.DeviceQuery = {}) => {
+          // 查询真正启动 ⇒ 任何刷新意图都被执行了（没被 vxe 丢弃），消费掉
+          deviceGuard.consumeIntent();
           // 翻页/筛选/刷新会整表重载：旧页勾选的 id 不能继续留在批量目标里
           // （否则界面上看不到勾选、按钮却可用，可能对上一页设备误操作）。
           selectedIds.value = [];
           try {
-            // 搜索条件原样透传（字段与后端同名，不做改名校验/映射）
-            const result = await getDevicePage({
-              page: page.currentPage,
-              pageSize: page.pageSize,
-              ...formValues,
+            // 搜索条件原样透传（字段与后端同名，不做改名校验/映射）。
+            // 客户端超时：`ajax.query` 不无限挂起（挂起时 vxe 的 tableLoading 永远为真，
+            // 之后的查询全被丢弃）⇒ 超时改写成用户看得懂的话，沿既有失败链展示。
+            const result = await withQueryTimeout(
+              getDevicePage({
+                page: page.currentPage,
+                pageSize: page.pageSize,
+                ...formValues,
+              }),
+            ).catch((error: unknown) => {
+              if (error instanceof QueryTimeoutError) {
+                throw new TypeError($t('page.iot.common.queryTimeout'));
+              }
+              throw error;
             });
             listError.value = '';
             await loadAlertCounts(result.items ?? []);
             // 后端 `PageResult.total` 是 `long` ⇒ 全局序列化成**字符串**（`"17"`），
             // 而 vxe 的 pager 拿到 total 后要做算术语义（页数 = ceil(total/pageSize)）⇒
             // 在**进入表格前**转成 number，别把契约违例一路喂到分页组件里。
-            return { ...result, total: toBackendNumber(result.total) };
+            const total = toBackendNumber(result.total);
+            // 查到空页但总数 > 0 ⇒ 数据在别的页（同事删除/实时删除事件/筛选变化都可能造成）：
+            // 改查「还有数据的最后一页」并登记意图，由守卫补发。否则 `#empty` 槽会把
+            // 「本页空了」说成「一台设备都没有」（P1-9 的兜底防线）。
+            if ((result.items?.length ?? 0) === 0 && page.currentPage > 1) {
+              const corrected = resolvePageAfterEmptyQuery(
+                page.pageSize,
+                total,
+              );
+              if (corrected > 0 && corrected !== page.currentPage) {
+                setGridCurrentPage(corrected);
+                deviceGuard.markIntent();
+              }
+            }
+            return { ...result, total };
           } catch (error) {
             // 记下失败原因（原样展示后端 message），再把异常**继续抛出**：
             // 不改动原有失败语义（全局拦截器照旧弹提示、vxe 照旧走失败分支）。
@@ -224,6 +327,9 @@ const [Grid, gridApi] = useVbenVxeGrid({
               $t('page.iot.device.listLoadFailed'),
             );
             throw error;
+          } finally {
+            // 一个查询周期结束（成功或失败）⇒ 若这段时间里有被丢弃的刷新意图，守卫补发
+            deviceGuard.notifyCycleEnd();
           }
         },
       },
@@ -239,9 +345,25 @@ const [Grid, gridApi] = useVbenVxeGrid({
   } as VxeTableGridOptions<IotDeviceApi.DeviceResp>,
 });
 
+deviceGuard = createRefreshGuard({
+  isBusy: () => Boolean(gridApi.grid?.reactData?.tableLoading),
+  issue: () => {
+    void gridApi.query();
+  },
+  onTrailing: (active) => gridApi.setLoading(active),
+});
+
 // ---------------------------------------------------------------- 实时状态
 
+/**
+ * 实时鉴权失败原因（实时层在 401/403 后写入：401 ⇒ `unauthorized`，403 ⇒ `forbidden`）。
+ *
+ * 为什么需要它：`state === 'unauthorized'` 时实时流**不会自动重连**（401/403 重试没有意义，
+ * 且会被后端当异常流量），页面若只看 `reconnecting` 就完全不提示 ⇒ 用户拿过期数据做处置。
+ * 所以鉴权失败必须是一条**常驻**提示（见模板里的 Alert），并在重登后由实时层自愈。
+ */
 const {
+  authError: realtimeAuthError,
   error: realtimeError,
   onEvent: onRealtimeEvent,
   state: realtimeState,
@@ -251,6 +373,26 @@ const {
 const realtimeDisconnected = computed(
   () => realtimeState.value === 'reconnecting',
 );
+
+/** 实时鉴权失败（持续状态，必须常驻提示而不是一次性 toast）。 */
+const realtimeUnauthorized = computed(() => realtimeAuthError.value !== '');
+
+/**
+ * 重新登录：复用全局会话过期入口（清 token + 按登录过期模式弹窗/登出），
+ * 不在本页自己实现登出，避免与请求拦截器的会话语义分叉。
+ *
+ * 403（无实时端点权限）不给这个按钮：重新登录不会改变角色权限。
+ */
+async function handleRealtimeReLogin() {
+  try {
+    await handleSessionExpired();
+  } catch (error) {
+    // 登出本身也可能失败（例如网络/存储异常）：必须给用户可见反馈，不能静默
+    message.error(
+      extractErrorMessage(error, $t('ui.actionMessage.operationFailed')),
+    );
+  }
+}
 
 /** 工具栏实时状态 Tag：`closed`（无 token/已释放）不渲染，避免误报「实时」。 */
 const realtimeTag = computed(() => {
@@ -268,6 +410,8 @@ const realtimeTag = computed(() => {
       return { color: 'warning', text: $t('page.iot.realtime.reconnecting') };
     }
     default: {
+      // `closed` / `unauthorized` 等状态**不得**显示成绿色「实时连接」：
+      // 那是「数据在实时更新」的承诺，此时恰恰没有实时数据（鉴权失败另有常驻 Alert）。
       return null;
     }
   }
@@ -284,9 +428,12 @@ function currentVisibleDeviceIds(): string[] {
  *
  * 只对**命中当前可见行**的事件刷新（单台 deviceId / 批量 deviceIds / 删除 deviceIds 或
  * deletedIds）；无关设备的事件不产生任何请求。无设备上下文的事件按保守策略刷新一次。
+ *
+ * 走守卫 `request()`：实时事件常与用户操作/上一轮查询重叠，直接 `query()` 会被 vxe 静默丢弃
+ * （表现为「提示已离线但列表状态没变」）。
  */
 const refreshOnDeviceStatus = createTrailingDebounce(() => {
-  void gridApi.query();
+  deviceGuard.request();
 }, REALTIME_DEVICE_STATUS_DEBOUNCE_MS);
 
 onRealtimeEvent('device-status', (payload) => {
@@ -297,6 +444,7 @@ onRealtimeEvent('device-status', (payload) => {
 
 onUnmounted(() => {
   refreshOnDeviceStatus.cancel();
+  deviceGuard?.dispose();
 });
 
 /**
@@ -338,7 +486,7 @@ function consumeCreateQuery() {
     return;
   }
   FormDrawerApi.setData({ productId }).open();
-  gridApi.query();
+  deviceGuard.request();
   // 参数只消费一次：不清理的话刷新/切回标签页会再弹一次表单
   void router.replace({ query: {} });
 }
@@ -367,11 +515,101 @@ function onAlerts(row: IotDeviceApi.DeviceResp) {
   router.push({ path: '/iot/alerts', query: { deviceId: row.id } });
 }
 
+/**
+ * 读 vxe 分页快照（当前页/每页/删除前总数）。
+ *
+ * 未挂载或测试桩没有 `reactData` 时返回 `undefined` ⇒ 页面**不做**页码判断，
+ * 行为与改动前完全一致（不去猜 vxe 内部状态）。
+ */
+function readPagerSnapshot():
+  | undefined
+  | { currentPage: number; pageSize: number; totalBefore: number } {
+  const tablePage = gridApi.grid?.reactData?.tablePage as
+    | undefined
+    | { currentPage?: number; pageSize?: number; total?: number };
+  if (!tablePage) {
+    return undefined;
+  }
+  const currentPage = toBackendNumber(tablePage.currentPage ?? 0);
+  const pageSize = toBackendNumber(tablePage.pageSize ?? 0);
+  const totalBefore = toBackendNumber(tablePage.total ?? 0);
+  if (currentPage <= 0 || pageSize <= 0) {
+    return undefined;
+  }
+  return { currentPage, pageSize, totalBefore };
+}
+
+/**
+ * 设置 vxe 当前页码。
+ *
+ * vxe 4.22.4 **没有**公开的 `setPager`：分页状态就是 `reactData.tablePage`（响应式），
+ * 翻页时 vxe 自己也是直接改这个对象（`grid.js:355`）。
+ */
+function setGridCurrentPage(page: number) {
+  const tablePage = gridApi.grid?.reactData?.tablePage as
+    | undefined
+    | { currentPage?: number };
+  if (tablePage) {
+    tablePage.currentPage = page;
+  }
+}
+
+/**
+ * 删除成功后的刷新（单删与批量删共用）。
+ *
+ * 🔴 不能只 `query()`：vxe 只在 `initial`/`reload` 时重置页码（4.22.4 `grid.js:968`），
+ * `query` **保留当前页** ⇒ 删光最后一页的最后一条后仍查 `page=N`，得到一张空表，
+ * 而空态插槽会把「本页空了」说成「还没有设备」。这里先按
+ * {@link resolvePageAfterDelete} 判断是否需要回退页码，再走守卫刷新。
+ *
+ * @param deletedCount 本次**实际生效**的删除台数（后端 `R<Integer>`）
+ */
+function refreshAfterDelete(deletedCount: number) {
+  const pager = readPagerSnapshot();
+  if (pager) {
+    const rows = (gridApi.grid?.getData?.() ?? []) as IotDeviceApi.DeviceResp[];
+    const nextPage = resolvePageAfterDelete({
+      ...pager,
+      deletedCount,
+      visibleCount: rows.length,
+    });
+    if (nextPage !== pager.currentPage) {
+      setGridCurrentPage(nextPage);
+      message.info($t('page.iot.device.pageRollbackHint'));
+    }
+  }
+  deviceGuard.request();
+}
+
+/**
+ * 按后端**实际生效台数**播报批量结果（审查 P1-5）。
+ *
+ * 为什么不能用勾选数：勾中的设备可能已被他人删除、或已处于目标状态未命中 `UPDATE`，
+ * 后端 `R<Integer>` 才是真相。报「已删除 3 台」而实际只删掉 2 台，会让用户以为处理完了。
+ */
+function announceBatchOutcome(outcome: BatchOutcome, fullSuccessKey: string) {
+  if (outcome.level === 'none') {
+    message.info($t('page.iot.device.batchNoChange'));
+    return;
+  }
+  if (outcome.level === 'partial') {
+    message.warning(
+      $t('page.iot.device.batchPartialDone', [
+        String(outcome.affected),
+        String(outcome.notEffective),
+      ]),
+    );
+    return;
+  }
+  message.success($t(fullSuccessKey, [String(outcome.affected)]));
+}
+
 function onDelete(row: IotDeviceApi.DeviceResp) {
   deleteDevice(row.id)
     .then(() => {
       message.success($t('common.success'));
-      gridApi.query();
+      // 单删同样可能删空当前页 ⇒ 走统一的「页码回落 + 守卫刷新」
+      refreshAfterDelete(1);
     })
     // 失败提示由全局请求拦截器统一处理，这里仅兜底避免未处理拒绝
     .catch(() => {});
@@ -397,7 +635,7 @@ function clearSelection() {
  * 批量启用/停用（`iot:device:update`）。
  *
  * - 停用是破坏性动作（接入侧解绑、撤销点位订阅）⇒ 调用方（模板）用 Popconfirm 讲清后果；
- * - 成功：message + 清空勾选 + 刷新列表（不能只改本地行状态，要以后端真实结果为准）；
+ * - 成功：按**后端实际生效台数**播报 + 清空勾选 + 刷新列表（不能只改本地行状态）；
  * - 失败：原样展示后端 message（不静默、不假装成功），且**不清空勾选**，用户可直接重试。
  */
 async function onBatchStatus(status: number) {
@@ -407,17 +645,16 @@ async function onBatchStatus(status: number) {
   }
   batchPending.value = true;
   try {
-    await batchUpdateDeviceStatus(ids, status);
-    message.success(
-      $t(
-        status === DEVICE_ENABLED
-          ? 'page.iot.device.batchEnableDone'
-          : 'page.iot.device.batchDisableDone',
-        [String(ids.length)],
-      ),
+    const affected = await batchUpdateDeviceStatus(ids, status);
+    announceBatchOutcome(
+      resolveBatchOutcome(ids.length, affected),
+      status === DEVICE_ENABLED
+        ? 'page.iot.device.batchEnableDone'
+        : 'page.iot.device.batchDisableDone',
     );
     clearSelection();
-    gridApi.query();
+    // 启停不改行数 ⇒ 不需要页码回落，但仍走守卫（在途时补发）
+    deviceGuard.request();
   } catch (error) {
     message.error(
       extractErrorMessage(error, $t('page.iot.device.batchStatusFailed')),
@@ -430,8 +667,8 @@ async function onBatchStatus(status: number) {
 /**
  * 批量删除（`iot:device:delete`）。
  *
- * 删除不可恢复 ⇒ 模板用 Popconfirm + danger；成功 message + 清空勾选 + 刷新，
- * 失败原样展示后端 message 且保留勾选（不静默、不把失败当成功）。
+ * 删除不可恢复 ⇒ 模板用 Popconfirm + danger；成功按后端实际删除台数播报 +
+ * 清空勾选 + **页码回落**后刷新；失败原样展示后端 message 且保留勾选。
  */
 async function onBatchDelete() {
   const ids = [...selectedIds.value];
@@ -440,12 +677,13 @@ async function onBatchDelete() {
   }
   batchPending.value = true;
   try {
-    await batchDeleteDevices(ids);
-    message.success(
-      $t('page.iot.device.batchDeleteDone', [String(ids.length)]),
-    );
+    const affected = await batchDeleteDevices(ids);
+    // 同一个 outcome 既用于播报、也用于页码回落：部分未生效时本页未必被删空，
+    // 页码不能按勾选数算（两处必须同源，否则会「报 2 台却按 3 台回退」）
+    const outcome = resolveBatchOutcome(ids.length, affected);
+    announceBatchOutcome(outcome, 'page.iot.device.batchDeleteDone');
     clearSelection();
-    gridApi.query();
+    refreshAfterDelete(outcome.affected);
   } catch (error) {
     message.error(
       extractErrorMessage(error, $t('page.iot.device.batchDeleteFailed')),
@@ -470,10 +708,10 @@ function openBatchTags(mode: 'remove' | 'set') {
   }).open();
 }
 
-/** 批量标签成功：清空勾选 + 刷新列表（与批量启停/删除同口径）。 */
+/** 批量标签成功：清空勾选 + 刷新列表（与批量启停/删除同口径；在途时由守卫补发）。 */
 function onBatchTagsSuccess() {
   clearSelection();
-  gridApi.query();
+  deviceGuard.request();
 }
 
 /**
@@ -506,7 +744,7 @@ function openBatchCommand() {
 
 /** 批量下发成功（**部分失败也算成功返回**，由弹窗逐台如实展示）：保留勾选，只刷新列表。 */
 function onBatchCommandSuccess() {
-  gridApi.query();
+  deviceGuard.request();
 }
 
 /**
@@ -606,7 +844,8 @@ function onToggleStatus(row: IotDeviceApi.DeviceResp, checked: boolean) {
       const { [row.id]: _removed, ...rest } = statusPending.value;
       void _removed;
       statusPending.value = rest;
-      gridApi.query();
+      // 启停结果必须以后端为准（失败也要把开关拉回真实值）⇒ 守卫刷新
+      deviceGuard.request();
     });
 }
 
@@ -642,7 +881,7 @@ function openImport() {
 </script>
 <template>
   <Page auto-content-height>
-    <FormDrawer @reload="gridApi.query()" />
+    <FormDrawer @reload="deviceGuard.request()" />
     <DetailDrawer />
     <AvailabilityDrawer />
     <SeriesDrawer />
@@ -650,7 +889,10 @@ function openImport() {
       :title="$t('page.iot.onboarding.title')"
       class="w-full max-w-[900px]"
     >
-      <OnboardingGuide @add-device="onGuideAddDevice" @done="gridApi.query()" />
+      <OnboardingGuide
+        @add-device="onGuideAddDevice"
+        @done="deviceGuard.request()"
+      />
     </GuideDrawer>
     <LedgerDrawer
       :title="$t('page.iot.ledger.pageTitle')"
@@ -691,6 +933,34 @@ function openImport() {
       :title="$t('page.iot.realtime.disconnected')"
       type="warning"
     />
+    <!--
+      实时鉴权失败（401/403）：实时层**不自动重连**，页面若只提示 reconnecting 就完全不提示，
+      用户会拿过期数据做处置。因此这里常驻一条 Alert：
+      - unauthorized（会话可能过期）⇒ 给「重新登录」按钮（复用全局会话过期入口）；
+      - forbidden（角色无实时端点权限）⇒ 重新登录也没用，只说明原因、不给按钮。
+    -->
+    <Alert
+      v-if="realtimeUnauthorized"
+      show-icon
+      type="warning"
+      :message="
+        $t(
+          realtimeAuthError === 'unauthorized'
+            ? 'page.iot.realtime.authFailed'
+            : 'page.iot.realtime.forbidden',
+        )
+      "
+    >
+      <template v-if="realtimeAuthError === 'unauthorized'" #action>
+        <Button
+          data-testid="realtime-relogin"
+          size="small"
+          @click="handleRealtimeReLogin"
+        >
+          {{ $t('authentication.loginAgainTitle') }}
+        </Button>
+      </template>
+    </Alert>
     <ListErrorAlert
       :error="listError"
       :title="$t('page.iot.device.listLoadFailed')"
@@ -721,14 +991,18 @@ function openImport() {
           批量运维：按钮按权限码显示（iot:device:update / iot:device:delete），
           未勾选或批量请求在途时禁用。启用无破坏性后果直接执行；停用/删除必须 Popconfirm 讲清后果。
         -->
-          <Button
-            v-access:code="['iot:device:update']"
-            data-testid="batch-enable"
-            :disabled="batchActionDisabled"
-            @click="onBatchStatus(DEVICE_ENABLED)"
-          >
-            {{ $t('page.iot.device.batchEnable') }}
-          </Button>
+          <Tooltip :title="batchDisabledTooltip">
+            <span class="inline-block" :tabindex="batchActionDisabled ? 0 : -1">
+              <Button
+                v-access:code="['iot:device:update']"
+                data-testid="batch-enable"
+                :disabled="batchActionDisabled"
+                @click="onBatchStatus(DEVICE_ENABLED)"
+              >
+                {{ $t('page.iot.device.batchEnable') }}
+              </Button>
+            </span>
+          </Tooltip>
           <Popconfirm
             :cancel-text="$t('common.cancel')"
             :ok-text="$t('page.iot.device.disabled')"
@@ -739,13 +1013,20 @@ function openImport() {
             "
             @confirm="onBatchStatus(DEVICE_DISABLED)"
           >
-            <Button
-              v-access:code="['iot:device:update']"
-              data-testid="batch-disable"
-              :disabled="batchActionDisabled"
-            >
-              {{ $t('page.iot.device.batchDisable') }}
-            </Button>
+            <Tooltip :title="batchDisabledTooltip">
+              <span
+                class="inline-block"
+                :tabindex="batchActionDisabled ? 0 : -1"
+              >
+                <Button
+                  v-access:code="['iot:device:update']"
+                  data-testid="batch-disable"
+                  :disabled="batchActionDisabled"
+                >
+                  {{ $t('page.iot.device.batchDisable') }}
+                </Button>
+              </span>
+            </Tooltip>
           </Popconfirm>
           <Popconfirm
             :cancel-text="$t('common.cancel')"
@@ -757,45 +1038,64 @@ function openImport() {
             "
             @confirm="onBatchDelete"
           >
-            <Button
-              v-access:code="['iot:device:delete']"
-              danger
-              data-testid="batch-delete"
-              :disabled="batchActionDisabled"
-            >
-              {{ $t('page.iot.device.batchDelete') }}
-            </Button>
+            <Tooltip :title="batchDisabledTooltip">
+              <span
+                class="inline-block"
+                :tabindex="batchActionDisabled ? 0 : -1"
+              >
+                <Button
+                  v-access:code="['iot:device:delete']"
+                  danger
+                  data-testid="batch-delete"
+                  :disabled="batchActionDisabled"
+                >
+                  {{ $t('page.iot.device.batchDelete') }}
+                </Button>
+              </span>
+            </Tooltip>
           </Popconfirm>
           <!--
             批量下发命令：权限沿用 iot:debug:send（后端 @SaCheckPermission 同码）；
             未勾选或批量请求在途时禁用。批量会**明确拒绝停用设备**（单台端点不拒），
             该结果由弹窗逐台如实展示。
           -->
-          <Button
-            v-access:code="['iot:debug:send']"
-            data-testid="batch-command"
-            :disabled="batchActionDisabled"
-            @click="openBatchCommand"
-          >
-            {{ $t('page.iot.device.batchCommand.entry') }}
-          </Button>
+          <Tooltip :title="batchDisabledTooltip">
+            <span class="inline-block" :tabindex="batchActionDisabled ? 0 : -1">
+              <Button
+                v-access:code="['iot:debug:send']"
+                data-testid="batch-command"
+                :disabled="batchActionDisabled"
+                @click="openBatchCommand"
+              >
+                {{ $t('page.iot.device.batchCommand.entry') }}
+              </Button>
+            </span>
+          </Tooltip>
           <!-- 批量打标签：后端权限为 iot:tag:create/update 任一（SaMode.OR），故两码都放行 -->
-          <Button
-            v-access:code="['iot:tag:create', 'iot:tag:update']"
-            data-testid="batch-tag-set"
-            :disabled="selectedIds.length === 0"
-            @click="openBatchTags('set')"
-          >
-            {{ $t('page.iot.device.batchTagSet') }}
-          </Button>
-          <Button
-            v-access:code="['iot:tag:delete']"
-            data-testid="batch-tag-remove"
-            :disabled="selectedIds.length === 0"
-            @click="openBatchTags('remove')"
-          >
-            {{ $t('page.iot.device.batchTagRemove') }}
-          </Button>
+          <Tooltip :title="tagDisabledTooltip">
+            <span class="inline-block" :tabindex="tagDisabledTooltip ? 0 : -1">
+              <Button
+                v-access:code="['iot:tag:create', 'iot:tag:update']"
+                data-testid="batch-tag-set"
+                :disabled="selectedIds.length === 0"
+                @click="openBatchTags('set')"
+              >
+                {{ $t('page.iot.device.batchTagSet') }}
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip :title="tagDisabledTooltip">
+            <span class="inline-block" :tabindex="tagDisabledTooltip ? 0 : -1">
+              <Button
+                v-access:code="['iot:tag:delete']"
+                data-testid="batch-tag-remove"
+                :disabled="selectedIds.length === 0"
+                @click="openBatchTags('remove')"
+              >
+                {{ $t('page.iot.device.batchTagRemove') }}
+              </Button>
+            </span>
+          </Tooltip>
           <!-- 导出当前筛选结果（服务端全量，不是当前页）；权限沿用列表读权限 -->
           <Button
             v-access:code="['iot:device:list']"
@@ -858,6 +1158,7 @@ function openImport() {
         >
           <Switch
             v-access:code="['iot:device:update']"
+            :aria-label="$t('page.iot.device.status')"
             :checked="true"
             :loading="!!statusPending[row.id]"
             size="small"
@@ -866,6 +1167,7 @@ function openImport() {
         <Switch
           v-else
           v-access:code="['iot:device:update']"
+          :aria-label="$t('page.iot.device.status')"
           :checked="false"
           :loading="!!statusPending[row.id]"
           size="small"

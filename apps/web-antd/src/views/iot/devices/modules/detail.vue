@@ -474,274 +474,316 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
       <Tabs :animated="false">
         <!-- ===== 概览 ===== -->
         <Tabs.TabPane key="overview" :tab="$t('page.iot.device.tabOverview')">
-          <div class="space-y-4" data-section="overview">
-            <!-- 基本信息：编码/名称/产品/协议/端点/启停/在线/最近在线/备注 -->
-            <section
-              class="rounded-xl border border-border/80 bg-card p-4"
-              data-section="overview-basic"
-            >
-              <h3 class="mb-3 text-sm font-semibold">
-                {{ $t('page.iot.device.basicInfo') }}
-              </h3>
-              <Descriptions
-                :column="{ sm: 1, md: 2, xl: 3 }"
-                bordered
-                size="small"
-              >
-                <DescriptionsItem :label="$t('page.iot.device.code')">
-                  <CopyText :value="device?.deviceCode" />
-                </DescriptionsItem>
-                <DescriptionsItem :label="$t('page.iot.device.name')">
-                  {{ device?.deviceName ?? '-' }}
-                </DescriptionsItem>
-                <DescriptionsItem :label="$t('page.iot.device.product')">
-                  <template v-if="device?.productId">
-                    {{ productName || device?.productId }}
-                    <span v-if="device?.productVersion" class="text-gray-400">
-                      （{{ device?.productVersion }}）
-                    </span>
-                  </template>
-                  <template v-else>
-                    <span class="text-amber-600">
-                      {{ $t('page.iot.device.noProduct') }}
-                    </span>
-                  </template>
-                </DescriptionsItem>
-                <DescriptionsItem :label="$t('page.iot.device.protocol')">
-                  {{ protocolLabel(device?.protocol) }}
-                </DescriptionsItem>
-                <DescriptionsItem :label="$t('page.iot.device.endpoint')">
-                  <CopyText :value="device?.endpoint" :wrap="true" />
-                </DescriptionsItem>
-                <!--
-                  启停位：与在线状态相邻但语义不同——
-                  「在线状态」是设备现在连没连上的**观测值**，本行是运维**意图**；
-                  停用后接入侧会解绑并撤销点位订阅 ⇒ 采集停止，故给出后果说明。
-                -->
-                <DescriptionsItem :label="$t('page.iot.device.status')">
-                  <Tag :color="isDeviceEnabled ? 'success' : 'default'">
-                    {{
-                      isDeviceEnabled
-                        ? $t('page.iot.device.enabled')
-                        : $t('page.iot.device.disabled')
-                    }}
-                  </Tag>
-                  <span v-if="!isDeviceEnabled" class="ml-2 text-amber-600">
-                    {{ $t('page.iot.device.statusHint') }}
-                  </span>
-                </DescriptionsItem>
-                <DescriptionsItem :label="$t('page.iot.device.onlineStatus')">
-                  <Tag :color="onlineStatusColor(device?.onlineStatus)">
-                    {{ onlineStatusLabel(device?.onlineStatus) }}
-                  </Tag>
-                </DescriptionsItem>
-                <DescriptionsItem :label="$t('page.iot.device.lastSeenAt')">
-                  <!-- 绝对时间为主、相对时间为辅：只看「3 分钟前」判断不了跨天/时钟口径 -->
-                  <Tooltip :title="formatRelativeTime(device?.lastSeenAt)">
-                    {{ formatDateTime(device?.lastSeenAt) }}
-                  </Tooltip>
-                </DescriptionsItem>
-                <DescriptionsItem :label="$t('page.iot.device.remark')">
-                  {{ device?.remark || '-' }}
-                </DescriptionsItem>
-              </Descriptions>
-            </section>
-
-            <!-- 最新值 + 可用率：两卡响应式并排（窄屏上下堆叠，不互相压缩） -->
-            <div class="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
+          <!--
+            渲染错误边界：概览页签是**默认激活**的页签，且数据全部来自设备上报/影子（不可信）。
+            历史事故形态：异常上报值（如 1e-999999999 影子比对补零 RangeError）或 i18n 消息编译
+            异常会让整个抽屉渲染中断/整块空白。四个页签必须同一防线（此前只有 debug/trace/alert 有）。
+          -->
+          <PanelErrorBoundary title-key="page.iot.device.overviewRenderFailed">
+            <div class="space-y-4" data-section="overview">
+              <!-- 基本信息：编码/名称/产品/协议/端点/启停/在线/最近在线/备注 -->
               <section
                 class="rounded-xl border border-border/80 bg-card p-4"
-                data-section="overview-latest"
+                data-section="overview-basic"
               >
-                <div class="mb-3 flex flex-wrap items-baseline gap-x-2">
-                  <h3 class="text-sm font-semibold">
-                    {{ $t('page.iot.device.latestValues') }}
+                <h3 class="mb-3 text-sm font-semibold">
+                  {{ $t('page.iot.device.basicInfo') }}
+                </h3>
+                <Descriptions
+                  :column="{ sm: 1, md: 2, xl: 3 }"
+                  bordered
+                  size="small"
+                >
+                  <DescriptionsItem :label="$t('page.iot.device.code')">
+                    <CopyText :value="device?.deviceCode" />
+                  </DescriptionsItem>
+                  <DescriptionsItem :label="$t('page.iot.device.name')">
+                    {{ device?.deviceName ?? '-' }}
+                  </DescriptionsItem>
+                  <DescriptionsItem :label="$t('page.iot.device.product')">
+                    <template v-if="device?.productId">
+                      {{ productName || device?.productId }}
+                      <span v-if="device?.productVersion" class="text-gray-400">
+                        （{{ device?.productVersion }}）
+                      </span>
+                    </template>
+                    <template v-else>
+                      <span class="text-amber-600">
+                        {{ $t('page.iot.device.noProduct') }}
+                      </span>
+                    </template>
+                  </DescriptionsItem>
+                  <DescriptionsItem :label="$t('page.iot.device.protocol')">
+                    {{ protocolLabel(device?.protocol) }}
+                  </DescriptionsItem>
+                  <DescriptionsItem :label="$t('page.iot.device.endpoint')">
+                    <CopyText :value="device?.endpoint" :wrap="true" />
+                  </DescriptionsItem>
+                  <!--
+                    启停位：与在线状态相邻但语义不同——
+                    「在线状态」是设备现在连没连上的**观测值**，本行是运维**意图**；
+                    停用后接入侧会解绑并撤销点位订阅 ⇒ 采集停止，故给出后果说明。
+                  -->
+                  <DescriptionsItem :label="$t('page.iot.device.status')">
+                    <Tag :color="isDeviceEnabled ? 'success' : 'default'">
+                      {{
+                        isDeviceEnabled
+                          ? $t('page.iot.device.enabled')
+                          : $t('page.iot.device.disabled')
+                      }}
+                    </Tag>
+                    <span v-if="!isDeviceEnabled" class="ml-2 text-amber-600">
+                      {{ $t('page.iot.device.statusHint') }}
+                    </span>
+                  </DescriptionsItem>
+                  <DescriptionsItem :label="$t('page.iot.device.onlineStatus')">
+                    <Tag :color="onlineStatusColor(device?.onlineStatus)">
+                      {{ onlineStatusLabel(device?.onlineStatus) }}
+                    </Tag>
+                  </DescriptionsItem>
+                  <DescriptionsItem :label="$t('page.iot.device.lastSeenAt')">
+                    <!-- 绝对时间为主、相对时间为辅：只看「3 分钟前」判断不了跨天/时钟口径 -->
+                    <Tooltip :title="formatRelativeTime(device?.lastSeenAt)">
+                      {{ formatDateTime(device?.lastSeenAt) }}
+                    </Tooltip>
+                  </DescriptionsItem>
+                  <DescriptionsItem :label="$t('page.iot.device.remark')">
+                    {{ device?.remark || '-' }}
+                  </DescriptionsItem>
+                </Descriptions>
+              </section>
+
+              <!-- 最新值 + 可用率：两卡响应式并排（窄屏上下堆叠，不互相压缩） -->
+              <div class="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
+                <section
+                  class="rounded-xl border border-border/80 bg-card p-4"
+                  data-section="overview-latest"
+                >
+                  <div class="mb-3 flex flex-wrap items-baseline gap-x-2">
+                    <h3 class="text-sm font-semibold">
+                      {{ $t('page.iot.device.latestValues') }}
+                    </h3>
+                    <span class="text-xs text-muted-foreground">
+                      {{ $t('page.iot.device.latestHint') }}
+                    </span>
+                  </div>
+                  <Alert
+                    v-if="latestError"
+                    :message="latestError"
+                    show-icon
+                    type="error"
+                  />
+                  <Empty
+                    v-else-if="latestLoaded && latest.length === 0"
+                    :description="$t('page.iot.device.latestEmpty')"
+                  />
+                  <div v-else class="overflow-x-auto">
+                    <table class="w-full min-w-[480px] text-sm">
+                      <thead>
+                        <tr
+                          class="border-b border-border/60 text-left text-xs text-muted-foreground"
+                        >
+                          <th class="py-1.5 pr-3 font-medium">
+                            {{ $t('page.iot.device.propertyId') }}
+                          </th>
+                          <th class="py-1.5 pr-3 font-medium">
+                            {{ $t('page.iot.series.value') }}
+                          </th>
+                          <th class="py-1.5 pr-3 font-medium">
+                            {{ $t('page.iot.series.quality') }}
+                          </th>
+                          <th class="py-1.5 font-medium">
+                            {{ $t('page.iot.series.ts') }}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr
+                          v-for="item in latest"
+                          :key="item.propertyId"
+                          class="border-b border-border/60 last:border-b-0"
+                        >
+                          <td class="py-1.5 pr-3 break-all">
+                            {{ item.propertyId || '-' }}
+                          </td>
+                          <td class="py-1.5 pr-3">{{ item.value || '-' }}</td>
+                          <td class="py-1.5 pr-3">
+                            {{ qualityLabel(item.quality) }}
+                          </td>
+                          <td class="py-1.5 whitespace-nowrap">
+                            {{ formatDateTime(item.ts) }}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+
+                <section
+                  class="rounded-xl border border-border/80 bg-card p-4"
+                  data-section="overview-availability"
+                >
+                  <h3 class="mb-3 text-sm font-semibold">
+                    {{ $t('page.iot.availability.title', ['']) }}
                   </h3>
-                  <span class="text-xs text-muted-foreground">
-                    {{ $t('page.iot.device.latestHint') }}
-                  </span>
-                </div>
+                  <Alert
+                    v-if="availabilityError"
+                    :message="availabilityError"
+                    show-icon
+                    type="error"
+                  />
+                  <Descriptions v-else :column="1" bordered size="small">
+                    <DescriptionsItem
+                      :label="$t('page.iot.availability.availability')"
+                    >
+                      <span class="text-lg font-semibold">
+                        {{ availabilityText }}
+                      </span>
+                    </DescriptionsItem>
+                    <DescriptionsItem
+                      :label="$t('page.iot.availability.outageSeconds')"
+                    >
+                      {{ human(availability?.outageSeconds) }}
+                    </DescriptionsItem>
+                    <DescriptionsItem
+                      :label="$t('page.iot.availability.outageCount')"
+                    >
+                      {{ availability?.outageCount ?? '-' }}
+                      <span
+                        v-if="ongoingOutageCount > 0"
+                        class="ml-2 text-red-600"
+                      >
+                        （{{ $t('page.iot.availability.ongoing') }}
+                        {{ ongoingOutageCount }}）
+                      </span>
+                    </DescriptionsItem>
+                  </Descriptions>
+                  <div class="mt-3 flex flex-wrap gap-2">
+                    <Button size="small" @click="onOpenAvailability">
+                      {{ $t('page.iot.device.openAvailability') }}
+                    </Button>
+                    <Button size="small" @click="onOpenSeries()">
+                      {{ $t('page.iot.series.title') }}
+                    </Button>
+                  </div>
+                </section>
+              </div>
+
+              <!-- 最近事件：有数据给时间线，无数据给空态，查询失败单独报错 -->
+              <section
+                class="rounded-xl border border-border/80 bg-card p-4"
+                data-section="overview-recent-events"
+              >
+                <h3 class="mb-3 text-sm font-semibold">
+                  {{ $t('page.iot.device.recentEvents') }}
+                </h3>
                 <Alert
-                  v-if="latestError"
-                  :message="latestError"
+                  v-if="eventsError"
+                  :message="eventsError"
                   show-icon
                   type="error"
                 />
                 <Empty
-                  v-else-if="latestLoaded && latest.length === 0"
-                  :description="$t('page.iot.device.latestEmpty')"
-                />
-                <div v-else class="overflow-x-auto">
-                  <table class="w-full min-w-[480px] text-sm">
-                    <thead>
-                      <tr
-                        class="border-b border-border/60 text-left text-xs text-muted-foreground"
-                      >
-                        <th class="py-1.5 pr-3 font-medium">
-                          {{ $t('page.iot.device.propertyId') }}
-                        </th>
-                        <th class="py-1.5 pr-3 font-medium">
-                          {{ $t('page.iot.series.value') }}
-                        </th>
-                        <th class="py-1.5 pr-3 font-medium">
-                          {{ $t('page.iot.series.quality') }}
-                        </th>
-                        <th class="py-1.5 font-medium">
-                          {{ $t('page.iot.series.ts') }}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr
-                        v-for="item in latest"
-                        :key="item.propertyId"
-                        class="border-b border-border/60 last:border-b-0"
-                      >
-                        <td class="py-1.5 pr-3 break-all">
-                          {{ item.propertyId || '-' }}
-                        </td>
-                        <td class="py-1.5 pr-3">{{ item.value || '-' }}</td>
-                        <td class="py-1.5 pr-3">
-                          {{ qualityLabel(item.quality) }}
-                        </td>
-                        <td class="py-1.5 whitespace-nowrap">
-                          {{ formatDateTime(item.ts) }}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-
-              <section
-                class="rounded-xl border border-border/80 bg-card p-4"
-                data-section="overview-availability"
-              >
-                <h3 class="mb-3 text-sm font-semibold">
-                  {{ $t('page.iot.availability.title', ['']) }}
-                </h3>
-                <Alert
-                  v-if="availabilityError"
-                  :message="availabilityError"
-                  show-icon
-                  type="error"
-                />
-                <Descriptions v-else :column="1" bordered size="small">
-                  <DescriptionsItem
-                    :label="$t('page.iot.availability.availability')"
-                  >
-                    <span class="text-lg font-semibold">
-                      {{ availabilityText }}
-                    </span>
-                  </DescriptionsItem>
-                  <DescriptionsItem
-                    :label="$t('page.iot.availability.outageSeconds')"
-                  >
-                    {{ human(availability?.outageSeconds) }}
-                  </DescriptionsItem>
-                  <DescriptionsItem
-                    :label="$t('page.iot.availability.outageCount')"
-                  >
-                    {{ availability?.outageCount ?? '-' }}
-                    <span
-                      v-if="ongoingOutageCount > 0"
-                      class="ml-2 text-red-600"
-                    >
-                      （{{ $t('page.iot.availability.ongoing') }}
-                      {{ ongoingOutageCount }}）
-                    </span>
-                  </DescriptionsItem>
-                </Descriptions>
-                <div class="mt-3 flex flex-wrap gap-2">
-                  <Button size="small" @click="onOpenAvailability">
-                    {{ $t('page.iot.device.openAvailability') }}
-                  </Button>
-                  <Button size="small" @click="onOpenSeries()">
-                    {{ $t('page.iot.series.title') }}
-                  </Button>
-                </div>
-              </section>
-            </div>
-
-            <!-- 最近事件：有数据给时间线，无数据给空态，查询失败单独报错 -->
-            <section
-              class="rounded-xl border border-border/80 bg-card p-4"
-              data-section="overview-recent-events"
-            >
-              <h3 class="mb-3 text-sm font-semibold">
-                {{ $t('page.iot.device.recentEvents') }}
-              </h3>
-              <Alert
-                v-if="eventsError"
-                :message="eventsError"
-                show-icon
-                type="error"
-              />
-              <Empty
-                v-else-if="recentEvents.length === 0"
-                :description="$t('page.iot.event.empty')"
-              />
-              <template v-else>
-                <Timeline>
-                  <TimelineItem
-                    v-for="event in recentEvents"
-                    :key="event.id"
-                    :color="eventColor(event.level)"
-                  >
-                    <div class="flex flex-wrap items-center gap-2">
-                      <Tag :color="eventColor(event.level)">
-                        {{ eventLevelText(event.level) }}
-                      </Tag>
-                      <span class="font-medium">
-                        {{ event.eventName || event.eventCode }}
-                      </span>
-                      <span class="text-xs text-muted-foreground">
-                        {{ formatDateTime(event.eventTs) }}
-                      </span>
-                    </div>
-                  </TimelineItem>
-                </Timeline>
-                <div
-                  v-if="eventsTruncated"
-                  class="text-xs text-muted-foreground"
-                >
-                  {{ $t('page.iot.event.goToTab') }}
-                </div>
-              </template>
-            </section>
-
-            <!-- 设备影子：reported / desired 两卡响应式并排 -->
-            <div class="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
-              <section
-                class="rounded-xl border border-border/80 bg-card p-4"
-                data-section="overview-shadow-reported"
-              >
-                <h3 class="mb-3 text-sm font-semibold">
-                  {{ $t('page.iot.shadow.reported') }}
-                </h3>
-                <Alert
-                  v-if="shadowError"
-                  :message="shadowError"
-                  show-icon
-                  type="error"
+                  v-else-if="recentEvents.length === 0"
+                  :description="$t('page.iot.event.empty')"
                 />
                 <template v-else>
-                  <!--
-                    如实语义：这里只展示「平台已写入影子的上报值」。
-                    为空只能说「当前没有可展示的上报记录」，**不得**推断成「设备没上报」
-                    （后端 reported 写入链路已存在，见 AvailabilityServiceImpl#shadowReportedWriter）。
-                  -->
-                  <template v-if="shadowRows(shadow?.reported).length === 0">
-                    <Empty :description="$t('page.iot.shadow.reportedEmpty')" />
+                  <Timeline>
+                    <TimelineItem
+                      v-for="event in recentEvents"
+                      :key="event.id"
+                      :color="eventColor(event.level)"
+                    >
+                      <div class="flex flex-wrap items-center gap-2">
+                        <Tag :color="eventColor(event.level)">
+                          {{ eventLevelText(event.level) }}
+                        </Tag>
+                        <span class="font-medium">
+                          {{ event.eventName || event.eventCode }}
+                        </span>
+                        <span class="text-xs text-muted-foreground">
+                          {{ formatDateTime(event.eventTs) }}
+                        </span>
+                      </div>
+                    </TimelineItem>
+                  </Timeline>
+                  <div
+                    v-if="eventsTruncated"
+                    class="text-xs text-muted-foreground"
+                  >
+                    {{ $t('page.iot.event.goToTab') }}
+                  </div>
+                </template>
+              </section>
+
+              <!-- 设备影子：reported / desired 两卡响应式并排 -->
+              <div class="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
+                <section
+                  class="rounded-xl border border-border/80 bg-card p-4"
+                  data-section="overview-shadow-reported"
+                >
+                  <h3 class="mb-3 text-sm font-semibold">
+                    {{ $t('page.iot.shadow.reported') }}
+                  </h3>
+                  <Alert
+                    v-if="shadowError"
+                    :message="shadowError"
+                    show-icon
+                    type="error"
+                  />
+                  <template v-else>
+                    <!--
+                      如实语义：这里只展示「平台已写入影子的上报值」。
+                      为空只能说「当前没有可展示的上报记录」，**不得**推断成「设备没上报」
+                      （后端 reported 写入链路已存在，见 AvailabilityServiceImpl#shadowReportedWriter）。
+                    -->
+                    <template v-if="shadowRows(shadow?.reported).length === 0">
+                      <Empty
+                        :description="$t('page.iot.shadow.reportedEmpty')"
+                      />
+                      <div class="mt-2 text-xs text-muted-foreground">
+                        {{ $t('page.iot.shadow.reportedEmptyHint') }}
+                      </div>
+                    </template>
+                    <div v-else class="overflow-x-auto">
+                      <table class="w-full min-w-[320px] text-sm">
+                        <tbody>
+                          <tr
+                            v-for="row in shadowRows(shadow?.reported)"
+                            :key="row.key"
+                            class="border-t border-border/60"
+                          >
+                            <td class="py-1.5 pr-3 break-all">{{ row.key }}</td>
+                            <td class="py-1.5 break-all whitespace-pre-wrap">
+                              {{ row.value }}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
                     <div class="mt-2 text-xs text-muted-foreground">
-                      {{ $t('page.iot.shadow.reportedEmptyHint') }}
+                      {{ $t('page.iot.shadow.reportTs') }}:
+                      {{ formatDateTime(shadow?.reportTs) }}
                     </div>
                   </template>
+                </section>
+
+                <section
+                  class="rounded-xl border border-border/80 bg-card p-4"
+                  data-section="overview-shadow-desired"
+                >
+                  <h3 class="mb-3 text-sm font-semibold">
+                    {{ $t('page.iot.shadow.desired') }}
+                  </h3>
+                  <Empty
+                    v-if="shadowRows(shadow?.desired).length === 0"
+                    :description="$t('page.iot.shadow.empty')"
+                  />
                   <div v-else class="overflow-x-auto">
                     <table class="w-full min-w-[320px] text-sm">
                       <tbody>
                         <tr
-                          v-for="row in shadowRows(shadow?.reported)"
+                          v-for="row in shadowRows(shadow?.desired)"
                           :key="row.key"
                           class="border-t border-border/60"
                         >
@@ -754,78 +796,45 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
                     </table>
                   </div>
                   <div class="mt-2 text-xs text-muted-foreground">
-                    {{ $t('page.iot.shadow.reportTs') }}:
-                    {{ formatDateTime(shadow?.reportTs) }}
+                    {{ $t('page.iot.shadow.desiredTs') }}:
+                    {{ formatDateTime(shadow?.desiredTs) }}
                   </div>
-                </template>
-              </section>
+                </section>
+              </div>
 
+              <!--
+                影子差异对比：reported / desired 逐键四态，与两张卡同区但独立成卡。
+                只读区块（无 iot:shadow:update 也完整可见），写入口（手工编辑 / 一键应用）在其内部把门。
+              -->
               <section
                 class="rounded-xl border border-border/80 bg-card p-4"
-                data-section="overview-shadow-desired"
+                data-section="overview-shadow-diff"
               >
-                <h3 class="mb-3 text-sm font-semibold">
-                  {{ $t('page.iot.shadow.desired') }}
-                </h3>
-                <Empty
-                  v-if="shadowRows(shadow?.desired).length === 0"
-                  :description="$t('page.iot.shadow.empty')"
+                <ShadowDiff
+                  :desired="shadow?.desired"
+                  :device-id="deviceId"
+                  :reported="shadow?.reported"
+                  @saved="load"
                 />
-                <div v-else class="overflow-x-auto">
-                  <table class="w-full min-w-[320px] text-sm">
-                    <tbody>
-                      <tr
-                        v-for="row in shadowRows(shadow?.desired)"
-                        :key="row.key"
-                        class="border-t border-border/60"
-                      >
-                        <td class="py-1.5 pr-3 break-all">{{ row.key }}</td>
-                        <td class="py-1.5 break-all whitespace-pre-wrap">
-                          {{ row.value }}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-                <div class="mt-2 text-xs text-muted-foreground">
-                  {{ $t('page.iot.shadow.desiredTs') }}:
-                  {{ formatDateTime(shadow?.desiredTs) }}
-                </div>
               </section>
-            </div>
 
-            <!--
-              影子差异对比：reported / desired 逐键四态，与两张卡同区但独立成卡。
-              只读区块（无 iot:shadow:update 也完整可见），写入口（手工编辑 / 一键应用）在其内部把门。
-            -->
-            <section
-              class="rounded-xl border border-border/80 bg-card p-4"
-              data-section="overview-shadow-diff"
-            >
-              <ShadowDiff
-                :desired="shadow?.desired"
-                :device-id="deviceId"
-                :reported="shadow?.reported"
-                @saved="load"
-              />
-            </section>
-
-            <!-- 标签 + 凭据：两卡响应式并排（组件自带标题，外层只负责卡片容器） -->
-            <div class="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
-              <section
-                class="rounded-xl border border-border/80 bg-card p-4"
-                data-section="overview-tags"
-              >
-                <DeviceTags :device-id="deviceId" />
-              </section>
-              <section
-                class="rounded-xl border border-border/80 bg-card p-4"
-                data-section="overview-credential"
-              >
-                <Credential :device-id="deviceId" />
-              </section>
+              <!-- 标签 + 凭据：两卡响应式并排（组件自带标题，外层只负责卡片容器） -->
+              <div class="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
+                <section
+                  class="rounded-xl border border-border/80 bg-card p-4"
+                  data-section="overview-tags"
+                >
+                  <DeviceTags :device-id="deviceId" />
+                </section>
+                <section
+                  class="rounded-xl border border-border/80 bg-card p-4"
+                  data-section="overview-credential"
+                >
+                  <Credential :device-id="deviceId" />
+                </section>
+              </div>
             </div>
-          </div>
+          </PanelErrorBoundary>
         </Tabs.TabPane>
 
         <!-- ===== 属性与点位 ===== -->

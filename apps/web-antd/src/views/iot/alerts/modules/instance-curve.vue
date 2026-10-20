@@ -82,12 +82,19 @@ onMounted(load);
         :description="$t('page.iot.alert.curve.empty')"
         :image="Empty.PRESENTED_IMAGE_SIMPLE"
       />
+      <!--
+        趋势图是纯装饰性 SVG：读屏/键盘用户无法从路径里获得信息，
+        但也不能完全隐藏——用 role="img" + aria-label 把「这是什么」说出来，
+        精确数值由下方 range 文案承担（避免把整条路径念成噪声）。
+      -->
       <svg
         v-else
+        :aria-label="$t('page.iot.alert.curve.chartLabel')"
         :height="48"
+        role="img"
         viewBox="0 0 220 48"
         :width="220"
-        class="rounded border border-solid border-gray-200"
+        class="rounded border border-solid border-border"
       >
         <line
           v-if="sparkline.thresholdY !== null"

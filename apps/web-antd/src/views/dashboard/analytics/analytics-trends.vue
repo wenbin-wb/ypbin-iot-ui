@@ -123,7 +123,17 @@ watch(() => props.points, renderChart, { deep: true, flush: 'post' });
 </script>
 
 <template>
-  <EchartsUI v-if="hasData" ref="chartRef" />
+  <!--
+    图表是纯 canvas，读屏拿不到任何信息；ECharts 的 aria 组件未在本项目注册
+    （`packages/effects/plugins/src/echarts/echarts.ts` 未 `echarts.use([AriaComponent])`），
+    所以在容器上给 `role="img"` + `aria-label`，让读屏至少能播报「这是一张什么图」。
+  -->
+  <EchartsUI
+    v-if="hasData"
+    ref="chartRef"
+    :aria-label="$t('page.dashboard.messageTrend')"
+    role="img"
+  />
   <div
     v-else
     class="flex h-[300px] flex-col items-center justify-center gap-2 text-sm text-muted-foreground"

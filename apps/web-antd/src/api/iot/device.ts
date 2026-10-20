@@ -202,13 +202,20 @@ export async function deleteDevice(id: string) {
  *
  * 与单条 `updateDeviceStatus` 同一码值口径（1 启用 / 0 停用），但只发一个请求；
  * `ids` 为空时**不发请求**（由页面禁用按钮兜底，这里再短路一道防呆）。
+ *
+ * @returns 后端 `R<Integer>` 的**实际生效台数**（`UPDATE` 命中的行数）；空 ids 短路时为
+ *   `undefined`。页面必须用这个数字播报，不能用勾选数——勾中的设备可能已被他人删除、
+ *   或已处于目标状态而 `UPDATE` 未命中。
  */
-export async function batchUpdateDeviceStatus(ids: string[], status: number) {
+export async function batchUpdateDeviceStatus(
+  ids: string[],
+  status: number,
+): Promise<number | undefined> {
   if (ids.length === 0) {
-    return;
+    return undefined;
   }
   const data: IotDeviceApi.DeviceBatchStatusReq = { ids, status };
-  return requestClient.put('/iot/devices/batch/status', data);
+  return requestClient.put<number>('/iot/devices/batch/status', data);
 }
 
 /**
@@ -216,11 +223,15 @@ export async function batchUpdateDeviceStatus(ids: string[], status: number) {
  *
  * ⚠️ 破坏性操作：删除后设备从台账移除且不可恢复（后端逻辑删除）；
  * 页面必须由 Popconfirm 明确后果，`ids` 为空时短路不发请求。
+ *
+ * @returns 后端 `R<Integer>` 的**实际删除台数**；空 ids 短路时为 `undefined`。
  */
-export async function batchDeleteDevices(ids: string[]) {
+export async function batchDeleteDevices(
+  ids: string[],
+): Promise<number | undefined> {
   if (ids.length === 0) {
-    return;
+    return undefined;
   }
   const data: IotDeviceApi.DeviceBatchDeleteReq = { ids };
-  return requestClient.post('/iot/devices/batch/delete', data);
+  return requestClient.post<number>('/iot/devices/batch/delete', data);
 }

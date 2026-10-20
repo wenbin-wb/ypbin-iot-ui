@@ -21,6 +21,13 @@ export namespace IotOpenApiKeyApi {
     scopes: string;
     rateLimitQps?: number;
     dailyQuota?: number;
+    /**
+     * 来源 IP 白名单（逗号分隔的 IP/CIDR；空/缺席 = 不限来源）。
+     *
+     * 后端 `OpenApiKeyService.normalizeIpWhitelist` 会在创建时逐条校验，
+     * **非法条目直接拒绝建 Key**（不静默降级），前端 `parseIpWhitelist` 已先拦一遍。
+     */
+    ipWhitelist?: string;
     expireAt?: string;
   }
 
@@ -51,6 +58,14 @@ export namespace IotOpenApiKeyApi {
     rateLimitQps?: number;
     /** 日配额（0 = 不限）。 */
     dailyQuota?: number;
+    /**
+     * 来源 IP 白名单（前向兼容字段）。
+     *
+     * ⚠️ 后端 `ListItemResp` **当前不返回**该字段（2026-10-20 对照 `OpenApiKeyDtos` 核实），
+     * 故列表里 `undefined` = 「后端未提供」而不是「不限来源」，展示必须区分（见 state）。
+     * 后端补齐该字段后此列无需再改。
+     */
+    ipWhitelist?: null | string;
   }
 }
 

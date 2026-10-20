@@ -10,12 +10,19 @@ import {
   useVbenDrawer,
 } from '@vben/common-ui';
 import { LayoutGrid } from '@vben/icons';
+import { usePreferences } from '@vben/preferences';
 
 import { Alert, Button, Tag, Tooltip } from 'ant-design-vue';
 
 import { $t } from '#/locales';
 
 import HelpDrawer from '../../iot/shared/help-drawer.vue';
+import ListErrorAlert from '../../iot/shared/list-error-alert.vue';
+import {
+  brandTextColor,
+  METRIC_VISUALS,
+  metricTextColor,
+} from '../shared/metric-visuals';
 import NoviceGuideCard from '../shared/novice-guide-card.vue';
 import { useDashboardRealtime } from '../shared/use-dashboard-realtime';
 import { useIotOverview } from '../shared/use-iot-overview';
@@ -29,17 +36,19 @@ import AnalyticsVisitsSource from './analytics-visits-source.vue';
 import AnalyticsVisits from './analytics-visits.vue';
 import BoardDrawer from './board/board-drawer.vue';
 
-// ---- 统一视觉（与工作台同一套语言）----
-const BRAND_GRAD =
-  'linear-gradient(135deg, hsl(var(--primary)), hsl(245 82% 67%))';
+// ---- 统一视觉（与工作台同一套语言；色值见 shared/metric-visuals.ts）----
+const { isDark } = usePreferences();
 
 const router = useRouter();
-const { load, loading, overview, usingDemo } = useIotOverview();
+// failed / notice 必须接：失败态常驻可见 + 可重试，演示兜底常驻标注（见 04 §P0-1）
+const { load, loading, notice, overview, usingDemo } = useIotOverview();
 
-// SSE 实时刷新：latest/device-status/alert 去抖后重拉总览；断线状态用于可见提示
-const { error: realtimeError, state: realtimeState } = useDashboardRealtime(
-  () => void load(),
-);
+// SSE 实时刷新：latest/device-status/alert 去抖后重拉总览；断线/鉴权失败都要可见提示
+const {
+  authError,
+  error: realtimeError,
+  state: realtimeState,
+} = useDashboardRealtime(() => void load());
 
 // 术语词典抽屉：与工作台/接入向导共用同一份内容（view 层只负责打开）
 const [HelpDrawerContainer, helpDrawerApi] = useVbenDrawer({
@@ -92,52 +101,74 @@ const dayBadges = computed(() => {
   ];
 });
 
+/**
+ * 指标卡数据。
+ *
+ * 数值文字**不再用渐变裁切字**：实测渐变端点对白底卡片只有 2.01:1 / 2.86:1，
+ * 连大文本 3:1 都不到，且 `-webkit-text-fill-color: transparent` 在高对比度模式下会让数字消失。
+ * 现在数值用「亮/暗各一档、各自 ≥4.5:1」的实色（`shared/metric-visuals.ts` 有回归用例），
+ * 渐变只保留在图标块与卡片光斑这些**图形元素**上（判据 3:1）。
+ */
 const overviewCards = computed(() => {
   const d = data.value;
   if (!d) return [];
   return [
     {
-      key: 'device',
+      key: 'device' as const,
       icon: 'i-lucide-cpu',
       title: $t('page.dashboard.deviceTotal'),
       value: d.deviceTotal,
       footLeft: $t('page.dashboard.newDevicesWeek'),
       footRight: `+${d.newDevicesWeek}`,
-      grad: 'linear-gradient(135deg, hsl(var(--primary)), hsl(245 82% 67%))',
-      glow: 'hsl(var(--primary) / 30%)',
+      ...METRIC_VISUALS.device,
+      textColor: metricTextColor('device', isDark.value),
     },
     {
-      key: 'online',
+      key: 'online' as const,
       icon: 'i-lucide-wifi',
       title: $t('page.dashboard.onlineRate'),
       value: `${d.onlineRate}%`,
       footLeft: $t('page.dashboard.online'),
       footRight: d.deviceOnline.toLocaleString(),
-      grad: 'linear-gradient(135deg, hsl(161 90% 43%), hsl(199 89% 48%))',
-      glow: 'hsl(161 90% 43% / 30%)',
+      ...METRIC_VISUALS.online,
+      textColor: metricTextColor('online', isDark.value),
     },
     {
-      key: 'message',
+      key: 'message' as const,
       icon: 'i-lucide-radio-tower',
       title: $t('page.dashboard.messageToday'),
       value: formatCompact(d.messageToday),
       footLeft: $t('page.dashboard.downlink'),
       footRight: formatCompact(d.messageDownlinkToday),
-      grad: 'linear-gradient(135deg, hsl(199 89% 48%), hsl(161 90% 43%))',
-      glow: 'hsl(199 89% 48% / 30%)',
+      ...METRIC_VISUALS.message,
+      textColor: metricTextColor('message', isDark.value),
     },
     {
-      key: 'alert',
+      key: 'alert' as const,
       icon: 'i-lucide-triangle-alert',
       title: $t('page.dashboard.alertPending'),
       value: d.alertPending,
       footLeft: $t('page.dashboard.alertToday'),
       footRight: String(d.alertToday),
-      grad: 'linear-gradient(135deg, hsl(32 95% 44%), hsl(16 90% 50%))',
-      glow: 'hsl(32 95% 44% / 30%)',
+      ...METRIC_VISUALS.alert,
+      textColor: metricTextColor('alert', isDark.value),
     },
   ];
 });
+
+/** 页头「今日徽章」与指标卡同色（品牌蓝），避免页头与指标卡两套蓝。 */
+const badgeTextColor = computed(() => brandTextColor(isDark.value));
+
+/**
+ * 实时鉴权失败时的「重新登录」。
+ *
+ * 动态 import 的理由：`#/api/request` 会拉起 axios 客户端 + Pinia store + 埋点，
+ * 而「重新登录」只在用户点那一下才需要 —— 页面首屏与单测都不该为它付加载成本。
+ */
+async function onRelogin() {
+  const { handleSessionExpired } = await import('#/api/request');
+  await handleSessionExpired();
+}
 
 const chartTabs = computed<TabOption[]>(() => [
   { label: $t('page.dashboard.messageTrend'), value: 'trends' },
@@ -219,12 +250,16 @@ function openBoard() {
       >
         <div>
           <p class="text-xs text-muted-foreground">{{ now }}</p>
-          <h2
+          <!--
+            页面主标题用 <h1>：全站此前 0 个 h1，读屏「按 H 键跳标题」在长表格页完全失效。
+            这是本页唯一的 h1，区块标题（最近告警等）保持 h3 的语义层级由卡片组件给。
+          -->
+          <h1
             class="mt-1 flex items-center gap-2 text-2xl font-bold tracking-tight"
           >
             {{ $t('page.dashboard.analyticsTitle') }}
             <Tooltip v-if="usingDemo" :title="$t('page.dashboard.demoReason')">
-              <Tag color="orange" class="!mr-0 cursor-help">
+              <Tag class="!mr-0 cursor-help" color="orange" tabindex="0">
                 {{ $t('page.dashboard.demoBadge') }}
               </Tag>
             </Tooltip>
@@ -242,7 +277,7 @@ function openBoard() {
             >
               {{ $t('page.iot.realtime.connecting') }}
             </Tag>
-          </h2>
+          </h1>
           <p class="mt-1 text-sm text-muted-foreground">
             {{ $t('page.dashboard.analyticsSubtitle') }}
           </p>
@@ -256,11 +291,7 @@ function openBoard() {
             <p class="text-xs text-muted-foreground">{{ b.label }}</p>
             <p
               class="mt-0.5 text-lg font-bold tabular-nums leading-none"
-              :style="{
-                background: BRAND_GRAD,
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-              }"
+              :style="{ color: badgeTextColor }"
             >
               {{ b.value }}
             </p>
@@ -268,6 +299,42 @@ function openBoard() {
         </div>
       </div>
     </div>
+
+    <!--
+      常驻提示区（**不再藏在 hover tooltip 里**）：
+      ① 总览接口失败 ⇒ 错误态 + 重试（生产环境此时没有任何假数据可看）；
+      ② 演示兜底 ⇒ 明确告知「这是演示数据」，且原因写在正文里，触屏/键盘/读屏都能拿到；
+      ③ 实时流鉴权失败 ⇒ 单独提示（重连解决不了 token 过期），unauthorized 给「重新登录」。
+    -->
+    <ListErrorAlert
+      v-if="notice"
+      class="mt-3"
+      :error="notice.error"
+      :retry-text="$t('page.dashboard.retry')"
+      :title="notice.title"
+      :type="notice.type"
+      @retry="() => void load()"
+    />
+    <Alert
+      v-if="authError === 'forbidden'"
+      class="mt-3"
+      :message="$t('page.iot.realtime.forbidden')"
+      show-icon
+      type="error"
+    />
+    <Alert
+      v-if="authError === 'unauthorized'"
+      class="mt-3"
+      :message="$t('page.iot.realtime.authFailed')"
+      show-icon
+      type="error"
+    >
+      <template #action>
+        <Button danger size="small" @click="onRelogin">
+          {{ $t('common.login') }}
+        </Button>
+      </template>
+    </Alert>
 
     <Alert
       v-if="realtimeState === 'reconnecting'"
@@ -289,19 +356,24 @@ function openBoard() {
     <!-- 新手快速上手：面向第一次接入的物业/值班人员，术语问题统一走帮助抽屉 -->
     <NoviceGuideCard class="mt-5" @open-help="openHelp" />
 
-    <!-- 指标卡（设备 / 在线率 / 消息 / 告警） -->
+    <!--
+      指标卡（设备 / 在线率 / 消息 / 告警）。
+      骨架**只在「还没有任何数据」的首屏出现**：以前是 `v-if="loading"` 与卡片互斥，
+      每轮 SSE 刷新都会把卡片卸载重建 ⇒ `metric-in` 入场动画每 1.2s 重放一次，页面持续闪烁。
+    -->
     <div
-      v-if="loading"
+      v-if="loading && !data"
+      aria-hidden="true"
       class="mt-5 h-[132px] animate-pulse rounded-xl bg-card"
     ></div>
     <div
-      v-else
+      v-else-if="data"
       class="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
     >
       <div
         v-for="(c, i) in overviewCards"
         :key="c.key"
-        class="metric-card group relative overflow-hidden rounded-xl border border-border/80 bg-card p-5"
+        class="iot-metric-card group relative overflow-hidden rounded-xl border border-border/80 bg-card p-5"
         :style="{ '--glow': c.glow, animationDelay: `${i * 60}ms` }"
       >
         <span
@@ -313,11 +385,7 @@ function openBoard() {
             <p class="text-sm text-muted-foreground">{{ c.title }}</p>
             <p
               class="mt-2 text-3xl font-bold tabular-nums leading-none tracking-tight"
-              :style="{
-                background: c.grad,
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-              }"
+              :style="{ color: c.textColor }"
             >
               {{ c.value }}
             </p>
@@ -338,6 +406,7 @@ function openBoard() {
       </div>
     </div>
 
+    <!-- 失败态已由上方常驻 ListErrorAlert 承担，这里不再画第二块「加载失败」大框（避免重复噪声） -->
     <AnalysisChartsTabs v-if="!loading && data" :tabs="chartTabs" class="mt-5">
       <template #trends>
         <AnalyticsTrends :points="data.messageTrend" />
@@ -352,12 +421,6 @@ function openBoard() {
         <AnalyticsDeviceGrowth :points="deviceGrowthPoints" />
       </template>
     </AnalysisChartsTabs>
-    <div
-      v-else-if="!loading"
-      class="mt-5 flex h-64 items-center justify-center rounded-xl border border-border/80 bg-card text-sm text-muted-foreground"
-    >
-      {{ $t('page.dashboard.loadFailed') }}
-    </div>
 
     <div v-if="data" class="mt-5 w-full md:flex">
       <AnalysisChartCard
@@ -389,9 +452,15 @@ function openBoard() {
           <h3 class="text-sm font-semibold">
             {{ $t('page.dashboard.recentAlerts') }}
           </h3>
-          <a class="text-xs text-primary" @click="goAlerts">
+          <!-- 改用 Button(type=link)：「查看全部」原先是个无 href 的 <a>，键盘 Tab 不到、读屏也不认作链接 -->
+          <Button
+            class="px-0 text-xs"
+            size="small"
+            type="link"
+            @click="goAlerts"
+          >
             {{ $t('page.dashboard.viewAllAlerts') }} →
-          </a>
+          </Button>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
@@ -470,6 +539,11 @@ function openBoard() {
 </template>
 
 <style scoped>
+/*
+ * 只剩本页专属的 hero 渐变底色。指标卡（.iot-metric-card）与入场动画已抽到
+ * shared/metric-visuals.css —— 那一份同时带 `prefers-reduced-motion` 兜底，
+ * 两页共用才不会出现「一页关了动效、一页没关」。
+ */
 .iot-hero {
   background: linear-gradient(
     120deg,
@@ -477,33 +551,5 @@ function openBoard() {
     hsl(245deg 82% 67% / 8%) 50%,
     hsl(199deg 89% 48% / 10%)
   );
-}
-
-.metric-card {
-  transition:
-    transform 0.25s ease,
-    border-color 0.25s ease,
-    box-shadow 0.25s ease;
-  animation: metric-in 0.4s ease-out both;
-}
-
-.metric-card:hover {
-  border-color: hsl(var(--primary) / 40%);
-  box-shadow:
-    0 8px 24px hsl(var(--foreground) / 8%),
-    0 0 24px var(--glow);
-  transform: translateY(-2px);
-}
-
-@keyframes metric-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
 }
 </style>

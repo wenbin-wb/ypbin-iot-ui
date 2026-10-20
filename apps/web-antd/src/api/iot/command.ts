@@ -18,7 +18,8 @@ import { requestClient } from '#/api/request';
  *    非 0 由后端**原样保存**设备的 `code`/`message`（页面因此必须能展示设备原始回执）；
  * 5. `NO_SUBSCRIBER` = EMQX 无订阅者 ⇒ **不等超时**立即判 `failed`，页面对应「设备未连接」；
  * 6. 重发**不生成新 `requestId`**（`retry_count+1`），且只有 `failed`/`timeout` 可重发；
- * 7. 业务失败走 **HTTP 200 + `R.code`** 信封（`writeDesired=true` 被显式拒绝，不是静默忽略）。
+ * 7. 业务失败走 **HTTP 200 + `R.code`** 信封；`writeDesired` 仅 `property_set` 支持
+ *    （其它 kind 置 `true` 由后端显式拒绝，不是静默忽略，见字段注释）。
  */
 export namespace IotCommandApi {
   /** 动作类型码（后端 `CommandKind`）。 */
@@ -95,8 +96,14 @@ export namespace IotCommandApi {
     /** 超时（毫秒，1 ~ 3600000）；省略用平台默认。 */
     timeoutMs?: number;
     /**
-     * 本轮**不支持**：置 `true` 会被后端显式拒绝（后端契约未开放该写入口）。
-     * 页面不提供该开关，字段保留仅为对齐后端契约。
+     * 是否**同时**把该值写入设备影子 `desired`（后端 `CommandSendReq.writeDesired`）。
+     *
+     * ⚠️ 契约要点（以 `ypbin-iot` 后端一手代码为准，勿按旧注释理解）：
+     * - **只对 `property_set` 有效**；`property_get`/`service_call` 置 `true` 会被后端
+     *   `requireWriteDesiredScope` **显式拒绝**（业务错误，不是静默忽略）；
+     * - 生效时点 = 命令**投递成功**（`statusCode=sent`）后，把 `{identifier: params.value}`
+     *   合并进影子 desired；设备离线（`NO_SUBSCRIBER`）时**不写**（不制造假期望）；
+     * - 写 desired 失败会抛业务错误（命令已投递），不会静默成功。
      */
     writeDesired?: boolean;
   }

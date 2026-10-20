@@ -1,4 +1,3 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createApp,
   defineComponent,
@@ -11,8 +10,18 @@ import {
 import { registerAccessDirective } from '@vben/access';
 import { i18n } from '@vben/locales';
 
-import DetailDebug from './detail-debug.vue';
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
+
 import PanelErrorBoundary from '../../shared/panel-error-boundary.vue';
+import DetailDebug from './detail-debug.vue';
 
 /**
  * 「在线调试」页签（`detail-debug.vue`）的**运行时**组件级用例。
@@ -101,7 +110,10 @@ vi.mock('@vben/common-ui', () => ({
     };
     const Stub = defineComponent({
       name: 'DrawerStub',
-      setup: (_props, { slots }) => () => h('div', { class: 'drawer-stub' }, slots.default?.()),
+      setup:
+        (_props, { slots }) =>
+        () =>
+          h('div', { class: 'drawer-stub' }, slots.default?.()),
     });
     return [Stub, api];
   },
@@ -132,9 +144,8 @@ function bizFailure(code: number, message: string) {
  * 「口径只有一处」的实际意义：测试与 CI 门禁若各写一份遍历，两者对「叶子」的理解迟早漂移，
  * 于是出现「测试绿、CI 绿、线上红」。
  */
-const { collectLeafKeys } = await import(
-  '../../../../../../../scripts/check-i18n-message-compile.mjs'
-);
+const { collectLeafKeys } =
+  await import('../../../../../../../scripts/check-i18n-message-compile.mjs');
 
 /** 后端分页响应（`PageResult`，`total/page/pageSize` 都是字符串——后端 Long 序列化口径）。 */
 function page(items: unknown[], total = items.length) {
@@ -201,7 +212,7 @@ function stubApi(history: () => Promise<unknown>) {
 
 async function flush(times = 6) {
   for (let index = 0; index < times; index += 1) {
-    // eslint-disable-next-line no-await-in-loop
+     
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
   await nextTick();
@@ -220,9 +231,7 @@ function mountWith(
       h(
         component as never,
         props,
-        slot
-          ? { default: () => slot() as never }
-          : undefined,
+        slot ? { default: () => slot() as never } : undefined,
       ),
   });
   registerAccessDirective(app);
@@ -374,7 +383,8 @@ describe('detail-debug.vue 运行时（真实 i18n + 真实 antdv + 真实权限
     expect(html).toContain('失败');
     expect(html).toContain('成功');
     // 失败原因码给人话（`NO_SUBSCRIBER` → 「设备未连接(无订阅者)」）
-    expect(html).toContain('设备未连接(无订阅者)');
+    // 半角/全角括号都接受：文案口径归 Lead 统一（G7 把半角括号改成了全角）
+    expect(html).toMatch(/设备未连接[（(]无订阅者[）)]/);
     expect(html).not.toContain('暂无指令记录');
     // 失败态可重发（按钮文案就是「重发同一请求」）
     expect(html).toContain('重发同一请求');
@@ -558,7 +568,8 @@ describe('页签渲染错误边界（panel-error-boundary.vue）', () => {
     const container = document.createElement('div');
     document.body.append(container);
     const app = createApp({
-      render: () => h(PanelErrorBoundary, null, { default: () => h(Exploding) }),
+      render: () =>
+        h(PanelErrorBoundary, null, { default: () => h(Exploding) }),
     });
     app.config.errorHandler = (error) => {
       reported.push(error);
@@ -577,10 +588,8 @@ describe('页签渲染错误边界（panel-error-boundary.vue）', () => {
   });
 
   it('无错误时只渲染插槽内容（不吞掉正常渲染）', async () => {
-    const handle = mountWith(
-      PanelErrorBoundary,
-      {},
-      () => h('div', { class: 'ok-panel' }, 'NORMAL'),
+    const handle = mountWith(PanelErrorBoundary, {}, () =>
+      h('div', { class: 'ok-panel' }, 'NORMAL'),
     );
     mounted = handle;
     await flush(2);
@@ -689,5 +698,136 @@ describe('detail.vue 接线（第 5 个页签）+ 真机形态的空白事故复
     expect(html).toContain('在线调试页渲染失败');
     expect(html).toContain('Message compilation error');
     expect(html).toContain('Invalid token in placeholder');
+  });
+});
+
+describe('writeDesired 接线（P1-8：勾了必须真的发出去）', () => {
+  /** 物模型桩：一个服务 + 一个可写属性（属性设置是默认分支）。 */
+  function stubFormModel() {
+    mockGet.mockImplementation((url: string) => {
+      if (url.includes('/products/') && url.endsWith('/services')) {
+        return Promise.resolve([{ id: '7', serviceName: '默认服务' }]);
+      }
+      if (url.includes('/products/') && url.endsWith('/properties')) {
+        return Promise.resolve([
+          {
+            accessMode: 'RW',
+            dataType: 'int',
+            identifier: 'temperature',
+            propertyName: '温度',
+          },
+        ]);
+      }
+      if (url.includes('/products/') && url.endsWith('/commands')) {
+        return Promise.resolve([]);
+      }
+      // 设备命令历史
+      return Promise.resolve(page([]));
+    });
+  }
+
+  /** 在真实 antd Select 上选中属性（点开下拉 → 点选项），不经内部状态。 */
+  async function pickProperty(container: HTMLElement, label: string) {
+    const select = container.querySelector(
+      '[data-testid="debug-set-identifier-0"]',
+    );
+    expect(select, '未找到属性设置的点位下拉').toBeTruthy();
+    (
+      select?.querySelector('.ant-select-selector') as HTMLElement
+    )?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    await flush();
+    const option = [
+      ...document.querySelectorAll('.ant-select-item-option'),
+    ].find((element) => element.textContent?.includes(label)) as
+      | HTMLElement
+      | undefined;
+    expect(option, `下拉里没有可选属性 ${label}`).toBeTruthy();
+    option?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flush();
+  }
+
+  async function typeValue(container: HTMLElement, value: string) {
+    const input = container.querySelector(
+      '[data-testid="debug-set-value-0"]',
+    ) as HTMLInputElement | null;
+    expect(input, '未找到属性值输入框').toBeTruthy();
+    if (!input) {
+      throw new Error('未找到属性值输入框（属性设置表单未渲染）');
+    }
+    input.value = value;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await flush(2);
+  }
+
+  it('🔴 勾选「同时写影子期望值」⇒ 请求体带 writeDesired=true（不是假控件）', async () => {
+    stubFormModel();
+    mockPost.mockResolvedValue({ requestId: 'cmd-1', statusCode: 'sent' });
+    const handle = mountWith(DetailDebug, {
+      deviceId: '9300012',
+      productId: '9100001',
+    });
+    mounted = handle;
+    await flush();
+
+    await pickProperty(handle.container, '温度');
+    await typeValue(handle.container, '25.5');
+    // antd 的 Checkbox 把 attrs 透传到内部 <input>，data-testid 直接落在 input 上
+    const checkbox = handle.container.querySelector(
+      '[data-testid="debug-write-desired"]',
+    ) as HTMLInputElement | null;
+    expect(
+      checkbox,
+      '属性设置下必须渲染「同时写影子期望值」复选框',
+    ).toBeTruthy();
+    // expect 已断言存在（缺失即失败），用可选链点击避免非空断言
+    checkbox?.click();
+    await flush(2);
+
+    (
+      handle.container.querySelector(
+        '[data-testid="debug-send"]',
+      ) as HTMLButtonElement
+    )?.click();
+    await flush();
+
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    const [url, body] = mockPost.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(url, '下发路径漂移').toBe('/iot/devices/9300012/commands');
+    expect(body).toMatchObject({
+      identifier: 'temperature',
+      kind: 'property_set',
+      params: { value: 25.5 },
+      writeDesired: true,
+    });
+  });
+
+  it('未勾选 ⇒ 请求体不出现 writeDesired（不写用户没要求的期望值）', async () => {
+    stubFormModel();
+    mockPost.mockResolvedValue({ requestId: 'cmd-2', statusCode: 'sent' });
+    const handle = mountWith(DetailDebug, {
+      deviceId: '9300012',
+      productId: '9100001',
+    });
+    mounted = handle;
+    await flush();
+
+    await pickProperty(handle.container, '温度');
+    await typeValue(handle.container, '26');
+    (
+      handle.container.querySelector(
+        '[data-testid="debug-send"]',
+      ) as HTMLButtonElement
+    )?.click();
+    await flush();
+
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    const [, body] = mockPost.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(Object.hasOwn(body, 'writeDesired')).toBe(false);
   });
 });

@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { RefreshGuard } from '../shared/refresh-guard';
 import type { MaintenanceWindowRow } from './data';
 
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
@@ -24,6 +25,11 @@ import EmptyGuide from '../onboarding/modules/empty-guide.vue';
 import OnboardingGuide from '../onboarding/modules/guide.vue';
 import { maintenanceState } from '../shared/display';
 import ListErrorAlert from '../shared/list-error-alert.vue';
+import {
+  createRefreshGuard,
+  QueryTimeoutError,
+  withQueryTimeout,
+} from '../shared/refresh-guard';
 import { useColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
 
@@ -97,6 +103,15 @@ async function loadWindowRows(
  */
 const listError = ref('');
 
+/**
+ * 列表的「静默丢弃」守卫（见 shared/refresh-guard.ts）。
+ *
+ * 本页关闭了分页器，但工具栏刷新/关闭窗口后刷新/向导完成后刷新仍可能撞上
+ * vxe 的在途查询守卫（query 被吞、页面无反馈）；登记意图后在本周期结束补发，
+ * 并给查询加客户端超时（慢接口不会永远转圈）。
+ */
+let listGuard: RefreshGuard;
+
 const [Grid, gridApi] = useVbenVxeGrid({
   formOptions: {
     schema: useGridFormSchema(),
@@ -110,8 +125,17 @@ const [Grid, gridApi] = useVbenVxeGrid({
     proxyConfig: {
       ajax: {
         query: async (_params, formValues: MaintenanceWindowQuery) => {
+          // 查询真的启动了 ⇒ 登记过的刷新意图已被执行（没被 vxe 丢弃）
+          listGuard.consumeIntent();
           try {
-            const rows = await loadWindowRows(formValues ?? {});
+            const rows = await withQueryTimeout(
+              loadWindowRows(formValues ?? {}),
+            ).catch((error: unknown) => {
+              if (error instanceof QueryTimeoutError) {
+                throw new TypeError($t('page.iot.common.queryTimeout'));
+              }
+              throw error;
+            });
             listError.value = '';
             return rows;
           } catch (error) {
@@ -121,6 +145,9 @@ const [Grid, gridApi] = useVbenVxeGrid({
               $t('page.iot.maintenance.listLoadFailed'),
             );
             throw error;
+          } finally {
+            // 周期结束（成功/失败）⇒ 有被丢弃的意图就补发一次
+            listGuard.notifyCycleEnd();
           }
         },
       },
@@ -134,13 +161,33 @@ const [Grid, gridApi] = useVbenVxeGrid({
       zoom: true,
     },
   } as VxeTableGridOptions<MaintenanceWindowRow>,
+  gridEvents: {
+    toolbarButtonClick: ({ code }: { code?: string }) => {
+      if (code === 'reload' || code === 'query') {
+        listGuard.markIntent();
+      }
+    },
+  },
 });
+
+listGuard = createRefreshGuard({
+  isBusy: () => Boolean(gridApi.grid?.reactData?.tableLoading),
+  issue: () => {
+    void gridApi.query();
+  },
+  onTrailing: (active) => gridApi.setLoading(active),
+});
+
+/** 列表刷新入口（表单/向导/关闭窗口后共用；走守卫覆盖「慢查询在途」窗口）。 */
+function reloadList() {
+  listGuard.request();
+}
 
 function onClose(row: IotMaintenanceApi.MaintenanceWindowDto) {
   closeMaintenanceWindow(row.id)
     .then(() => {
       message.success($t('common.success'));
-      gridApi.query();
+      reloadList();
     })
     .catch(() => {});
 }
@@ -152,12 +199,12 @@ function openGuide() {
 </script>
 <template>
   <Page auto-content-height>
-    <FormDrawer @reload="gridApi.query()" />
+    <FormDrawer @reload="reloadList" />
     <GuideDrawer
       :title="$t('page.iot.onboarding.title')"
       class="w-full max-w-[900px]"
     >
-      <OnboardingGuide @done="gridApi.query()" />
+      <OnboardingGuide @done="reloadList" />
     </GuideDrawer>
     <!-- 失败态必须挂在表格之外：真实 vxe 只在表体无行时渲染 `#empty` 槽，
          「已有数据后刷新失败」时槽不渲染 ⇒ 放槽里的失败提示会看不见。

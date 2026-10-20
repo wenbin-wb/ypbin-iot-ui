@@ -76,6 +76,17 @@ async function bootstrap(namespace: string) {
   const { MotionPlugin } = await import('@vben/plugins/motion');
   app.use(MotionPlugin);
 
+  /**
+   * 把当前 locale 同步到 `<html lang>`。
+   *
+   * 为什么必须做：index.html 里写死 `lang="zh"`，切到 en-US 后读屏软件仍按中文发音，
+   * 英文页面对读屏用户等于不可用（WCAG 3.1.1 语言声明）。放在 watchEffect 里而不是启动时
+   * 设一次，是因为用户可以在偏好设置里在线切换语言（不刷新页面）。
+   */
+  watchEffect(() => {
+    document.documentElement.lang = preferences.app.locale;
+  });
+
   // 动态更新标题
   watchEffect(() => {
     if (preferences.app.dynamicTitle) {
