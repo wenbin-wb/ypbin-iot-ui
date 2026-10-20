@@ -95,20 +95,30 @@ vi.mock('#/api/iot', () => ({
     mockApi.updateDeviceStatus(...args),
 }));
 
-/** 只留 `Page` 与 `useVbenDrawer`；抽屉渲染成空壳 ⇒ 抽屉里的内容组件不会被挂载。 */
-vi.mock('@vben/common-ui', () => ({
-  Page: defineComponent({
+/**
+ * 只留 `Page` 与 `useVbenDrawer`；抽屉渲染成空壳 ⇒ 抽屉里的内容组件不会被挂载。
+ *
+ * 必须保留 `z`：`#/adapter/form` 从本模块再导出 `z`，而告警页的筛选 schema
+ * （含 2026-10-21 新增的时间范围规则）会用到；整体替换掉会让 `z` 变成 undefined，
+ * 挂载时抛 `Cannot read properties of undefined (reading 'unknown')`（本次全量回归踩到）。
+ */
+vi.mock('@vben/common-ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    Page: defineComponent({
     name: 'PageStub',
     setup:
       (_props, { slots }) =>
       () =>
         h('div', slots.default?.()),
   }),
-  useVbenDrawer: () => [
-    defineComponent({ name: 'DrawerStub', setup: () => () => null }),
-    { close: vi.fn(), open: vi.fn(), setData: vi.fn() },
-  ],
-}));
+    useVbenDrawer: () => [
+      defineComponent({ name: 'DrawerStub', setup: () => () => null }),
+      { close: vi.fn(), open: vi.fn(), setData: vi.fn() },
+    ],
+  };
+});
 
 vi.mock('#/adapter/vxe-table', () => ({
   VbenTableAction: defineComponent({

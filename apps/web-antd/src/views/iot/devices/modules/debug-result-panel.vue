@@ -6,6 +6,7 @@ import { Alert, Tag, Tooltip } from 'ant-design-vue';
 import { $t } from '#/locales';
 
 import CopyText from '../../shared/copy-text.vue';
+import { NOT_APPLICABLE_TEXT } from '../../shared/display';
 import { statusColor, statusText } from './debug-status';
 
 /**
@@ -75,7 +76,9 @@ withDefaults(
             :key="index"
             class="border-t border-border/60"
           >
-            <td class="py-1.5 pr-3">{{ item.identifier || '-' }}</td>
+            <td class="py-1.5 pr-3">
+              {{ item.identifier || NOT_APPLICABLE_TEXT }}
+            </td>
             <td class="py-1.5 pr-3">
               <CopyText :value="item.requestId" />
             </td>

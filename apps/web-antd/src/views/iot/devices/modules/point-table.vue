@@ -135,8 +135,8 @@ function registerDecodeText(point: {
           <td class="py-1">
             {{ row.point ? registerDecodeText(row.point) : EMPTY_TEXT }}
           </td>
-          <td class="py-1">{{ row.point?.pollIntervalMs ?? '-' }}</td>
-          <td class="py-1">{{ row.point?.scaleFactor ?? '-' }}</td>
+          <td class="py-1">{{ row.point?.pollIntervalMs ?? EMPTY_TEXT }}</td>
+          <td class="py-1">{{ row.point?.scaleFactor ?? EMPTY_TEXT }}</td>
           <td class="py-1">
             <Tag v-if="row.point" :color="tagColor(row.point.enabled)">
               {{ row.point.enabled === false ? 'off' : 'on' }}

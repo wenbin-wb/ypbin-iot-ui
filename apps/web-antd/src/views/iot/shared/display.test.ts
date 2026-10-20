@@ -149,11 +149,15 @@ describe('json 展示', () => {
  *   `>-<`（模板直接写字符）、`?? '-'`、`|| '-'`、`? '-' :`、`: '-'`、`'—'`；
  * - 白名单（{@link BARE_PLACEHOLDER_ALLOWLIST}）逐条登记：负号判断、时间格式化内部。
  *
- * 阈值 {@link MAX_BARE_PLACEHOLDER_LINES} 的来源：批次 8 统一前实测约 **70 行**，
- * 按语义替换 39 处后实测 **29 行**；取 **32** 作为上限，留 3 行余量给并行批次
- * （只允许减、不允许新增加；新增页面必须用 `EMPTY_TEXT` / `PENDING_TEXT`）。
+ * 阈值 {@link MAX_BARE_PLACEHOLDER_LINES} 的来源：
+ * - 批次 8 统一前实测约 **70 行**，按语义替换 39 处后 **29 行**（当时阈值 32）；
+ * - 批次 9 再替换 17 处（诊断项 12 处 → `NOT_APPLICABLE_TEXT`、业务字段 5 处 → `EMPTY_TEXT`）后
+ *   实测 **12 行**，阈值同步下调到 **12**（**只减不增**）。
+ * 剩余 12 行均为已登记例外：alerts 目录（并行任务在改，留给下一批）6 行 + 格式化/映射
+ * 函数内部 6 行（规则 2 明确不改；其单测直接断言 `'-'`）。新增页面必须用三个具名常量
+ * （`EMPTY_TEXT` / `PENDING_TEXT` / `NOT_APPLICABLE_TEXT`）。
  */
-const MAX_BARE_PLACEHOLDER_LINES = 32;
+const MAX_BARE_PLACEHOLDER_LINES = 12;
 
 /** 允许保留裸占位的行（逐条给理由；禁止文件级豁免）。 */
 const BARE_PLACEHOLDER_ALLOWLIST: Array<{

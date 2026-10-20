@@ -4,6 +4,12 @@ import type { IotAlertApi } from '#/api/iot';
 import { getDeviceOptions } from '#/api/iot';
 import { $t } from '#/locales';
 
+import {
+  ALERT_TIME_RANGE_FORMAT,
+  alertTimeRangePlaceholders,
+  alertTimeRangeRule,
+} from './time-range';
+
 /** 状态码 → 展示文案的键（后端只回码，文案在前端）。 */
 export function stateLabelKey(state?: string): string {
   switch (state) {
@@ -304,6 +310,28 @@ export function useInstanceFormSchema(initial?: InstanceFilterInitial) {
       fieldName: 'deviceId',
       defaultValue: init.deviceId,
       label: $t('page.iot.device.name'),
+    },
+    {
+      /**
+       * 「首次越界时间」范围（后端 `AlertInstanceQuery.from/to`）。
+       *
+       * - `valueFormat` 必须与后端 `@DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")` 逐字同口径，
+       *   否则 400（历史事故形态见设备消息跟踪，前端曾传带 `Z` 的 ISO 串）；
+       * - `rules` 校验起点不得晚于终点：`submitOnChange` 走 `validateAndSubmit()`，
+       *   校验失败不触发查询（「阻止查询并提示」由表单层完成）；
+       * - 留空 = 不限定时间（查询层不传 from/to，见 `./time-range`）。
+       */
+      component: 'RangePicker',
+      componentProps: {
+        allowClear: true,
+        placeholder: alertTimeRangePlaceholders(),
+        showTime: { format: 'HH:mm:ss' },
+        valueFormat: ALERT_TIME_RANGE_FORMAT,
+      },
+      fieldName: 'firstTsRange',
+      help: $t('page.iot.alert.timeRangeHint'),
+      label: $t('page.iot.alert.timeRange'),
+      rules: alertTimeRangeRule(),
     },
   ];
 }

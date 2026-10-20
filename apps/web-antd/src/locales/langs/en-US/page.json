@@ -303,7 +303,11 @@
       "exportName": "alerts",
       "exportFailed": "Failed to export alerts",
       "activeTotal": "Total {0} (page {1})",
-      "loadMore": "Load more"
+      "loadMore": "Load more",
+      "timeRange": "First triggered time",
+      "timeRangePlaceholder": "From ~ To",
+      "timeRangeInvalid": "The start time must not be later than the end time",
+      "timeRangeHint": "Leave empty for no time limit"
     },
     "display": {
       "unknown": "Unknown",

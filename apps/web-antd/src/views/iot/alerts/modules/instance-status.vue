@@ -34,6 +34,8 @@ withDefaults(
     summary?: IotAlertApi.SummaryResp;
     /** 摘要加载失败原因。 */
     summaryError?: string;
+    /** 时间范围校验失败原因（起点晚于终点）：阻止查询的同时必须给出可见原因。 */
+    timeRangeError?: string;
   }>(),
   {
     listError: '',
@@ -43,6 +45,7 @@ withDefaults(
     realtimeError: '',
     summary: undefined,
     summaryError: '',
+    timeRangeError: '',
   },
 );
 
@@ -114,6 +117,18 @@ const emit = defineEmits<{ clearDeviceFilter: [] }>();
     :message="$t('page.iot.realtime.disconnected')"
     show-icon
     type="warning"
+  />
+  <!--
+    「首次越界时间」非法（起点 > 终点）：查询被表单校验拦下时，屏幕上看不到任何变化，
+    必须显式说明原因（compact 表单的错误气泡只在字段旁 hover 才可见）。
+  -->
+  <Alert
+    v-if="timeRangeError"
+    class="mb-2"
+    data-testid="time-range-error"
+    :message="timeRangeError"
+    show-icon
+    type="error"
   />
   <Alert
     v-if="listError"

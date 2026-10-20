@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { RefreshGuard } from '../shared/refresh-guard';
+import type { AlertTimeRangeValue } from './time-range';
 
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { IotAlertApi } from '#/api/iot';
@@ -35,6 +36,7 @@ import {
   QueryTimeoutError,
   withQueryTimeout,
 } from '../shared/refresh-guard';
+import { useCsvExport } from '../shared/use-csv-export';
 import { watchGridForRunawayHeight } from './alerts-layout';
 import { resolveBatchDisabledReason } from './batch-reasons';
 import {
@@ -57,7 +59,7 @@ import InstanceToolbar from './modules/instance-toolbar.vue';
 import NotifyRiskTag from './modules/notify-risk-tag.vue';
 import RuleForm from './modules/rule-form.vue';
 import RuleToolbar from './modules/rule-toolbar.vue';
-import { useCsvExport } from '../shared/use-csv-export';
+import { isAlertTimeRangeValid, resolveAlertTimeQuery } from './time-range';
 import { useAlertInstanceActions } from './use-alert-instance-actions';
 import { useAlertRealtime } from './use-alert-realtime';
 import { useAlertRuleActions } from './use-alert-rule-actions';
@@ -154,6 +156,15 @@ const { reload: reloadSummary, summary, summaryError } = useAlertSummary();
 
 const listError = ref('');
 
+/**
+ * 时间范围校验失败原因（页面级可见提示）。
+ *
+ * 为什么表单层已经用 zod 拦了还要这条：网格搜索表单是 compact 形态，错误文案默认只在
+ * 字段旁的气泡/图标里出现；「起点晚于终点」是一个**阻止查询**的硬错误，必须让用户
+ * 不 hover 也能看到原因（与失败态同一条可见性原则）。校验通过/清空时立即清空。
+ */
+const timeRangeError = ref('');
+
 const selectedIds = ref<string[]>([]);
 
 /**
@@ -175,6 +186,16 @@ const [InstanceGrid, instanceGridApi] = useVbenVxeGrid({
   formOptions: {
     schema: useInstanceFormSchema(savedInstanceFilter),
     submitOnChange: true,
+    /**
+     * 时间范围变化时同步页面级提示：zod 规则负责**阻止查询**（validateAndSubmit 失败即不发请求），
+     * 这里负责把原因**显式展示**出来（网格搜索表单是 compact 形态，错误默认只在字段旁的
+     * 气泡/图标里；阻止查询这种硬错误必须不 hover 也能看到）。
+     */
+    handleValuesChange: (values) => {
+      timeRangeError.value = isAlertTimeRangeValid(values.firstTsRange)
+        ? ''
+        : $t('page.iot.alert.timeRangeInvalid');
+    },
   },
 
   gridOptions: {
@@ -189,26 +210,39 @@ const [InstanceGrid, instanceGridApi] = useVbenVxeGrid({
         query: async ({ page }, formValues: IotAlertApi.InstanceQuery) => {
           // 查询真正启动 ⇒ 任何刷新意图都被执行了（没被 vxe 丢弃），消费掉
           instanceGuard.consumeIntent();
-          // 筛选持久化：查询启动即持久化当前筛选（幂等：值无变化不写）
+          // 时间范围不是实例查询字段（契约是 from/to 两个独立参数）⇒ 从表单值里拆出来单独映射；
+          // 其余字段原样透传（字段名与后端 InstanceQuery 一致，不做改名）。
+          const formValuesWithRange = (formValues ?? {}) as
+            IotAlertApi.InstanceQuery & {
+              firstTsRange?: AlertTimeRangeValue;
+            };
+          const { firstTsRange, ...filters } = formValuesWithRange;
+          // 筛选持久化：只存真正的筛选项（时间范围不持久化：刷新后回到「不限时间」更符合预期）
           saveFilterIfChanged(
             ALERT_INSTANCE_FILTER_PAGE,
             ALERT_INSTANCE_FILTER_VERSION,
             Object.assign(
               {},
               ALERT_INSTANCE_FILTER_DEFAULTS,
-              pickFilterFields(formValues ?? {}),
+              pickFilterFields(filters),
             ),
           );
           try {
+            // 请求层兜底：刷新/翻页/实时补发都不经过表单提交（zod 校验拦不到），
+            // 非法区间必须在这里拦下——绝不把「起点 > 终点」的时间条件发给后端。
+            if (!isAlertTimeRangeValid(firstTsRange)) {
+              throw new TypeError($t('page.iot.alert.timeRangeInvalid'));
+            }
             const result = await withQueryTimeout(
               getAlertPage({
                 page: page.currentPage,
                 pageSize: page.pageSize,
-                ...formValues,
+                ...filters,
+                // 时间范围只在两端都有值时并入查询（空值不传 from/to）
+                ...resolveAlertTimeQuery(firstTsRange),
                 // 合并规则见 `resolveDeviceFilter`（表单显式选择优先，其次才是 URL 带来的设备）
                 deviceId: resolveDeviceFilter(
-                  (formValues as IotAlertApi.InstanceQuery | undefined)
-                    ?.deviceId,
+                  filters.deviceId,
                   presetDeviceId.value || undefined,
                 ),
               }),
@@ -276,6 +310,7 @@ instanceGuard = createRefreshGuard({
   onTrailing: (active) => instanceGridApi.setLoading(active),
 });
 
+
 function onCheckboxChange({
   records,
 }: {
@@ -324,12 +359,18 @@ const batchSilenceDisabledReason = computed(() =>
  */
 const { exportLoading, onExportCsv } = useCsvExport({
   exportFn: () => {
-    const formValues = (instanceGridApi.formApi?.form?.values ??
-      {}) as IotAlertApi.InstanceQuery;
+    const formValues = (instanceGridApi.formApi?.form?.values ?? {}) as
+      IotAlertApi.InstanceQuery & { firstTsRange?: AlertTimeRangeValue };
+    const { firstTsRange, ...filters } = formValues;
+    // 导出与列表查询同源：非法区间不导出（否则用户以为导出了指定时间段，实际是别的范围）
+    if (!isAlertTimeRangeValid(firstTsRange)) {
+      throw new TypeError($t('page.iot.alert.timeRangeInvalid'));
+    }
     return exportAlertsCsv({
-      ...formValues,
+      ...filters,
+      ...resolveAlertTimeQuery(firstTsRange),
       deviceId: resolveDeviceFilter(
-        formValues.deviceId,
+        filters.deviceId,
         presetDeviceId.value || undefined,
       ),
     });
@@ -522,6 +563,7 @@ onUnmounted(() => {
           <!-- 状态区（入口提示/摘要/断线/失败/租户引导）是只读展示 + 一个关闭动作，见子组件 -->
           <InstanceStatus
             :list-error="listError"
+            :time-range-error="timeRangeError"
             :preset-device-id="presetDeviceId"
             :preset-device-label="presetDeviceLabel"
             :realtime-disconnected="realtimeDisconnected"

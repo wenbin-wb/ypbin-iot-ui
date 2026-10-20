@@ -25,7 +25,8 @@ export type DisplayValue = null | number | string | undefined;
  * | 语义 | 常量 | 字形 | 典型场景 |
  * | --- | --- | --- | --- |
  * | **数据缺省**（字段 null/undefined/空串，但这一行/这张卡本身有效） | {@link EMPTY_TEXT} | `-` | 设备备注为空、属性单位未填、错误码为空 |
- * | **尚未加载 / 尚未上报 / 不适用**（数据源还没给，页面在等或该指标不适用） | {@link PENDING_TEXT} | `—` | 可用率指标 `reported=false` 时的占位数 |
+ * | **尚未加载 / 尚未上报**（数据源还没给，**将来会**有值） | {@link PENDING_TEXT} | `—` | 可用率指标 `reported=false` 时的占位数 |
+ * | **诊断项不存在 / 不适用**（该记录没有这个诊断信息，**不会**再有值） | {@link NOT_APPLICABLE_TEXT} | `—` | 成功回执的错误码、未产生 EMQX messageId、缺失的请求 ID |
  *
  * 为什么区分两个字形：
  * - `-` 是「值为空」的通用占位（也是表格/Descriptions 的多数口径），占宽小、不抢眼；
@@ -50,6 +51,24 @@ export const EMPTY_TEXT = '-';
  * 占位只用于「指标卡已有壳、值还没上报」这种位置）。
  */
 export const PENDING_TEXT = '—';
+
+/**
+ * 「诊断项不存在 / 不适用」占位符（与 {@link PENDING_TEXT} **同为全角破折号**，
+ * 靠常量名区分语义，不靠字形）。
+ *
+ * 为什么需要它：
+ * - 诊断字段（`errorCode` / `requestId` / `emqxMessageId` / 断线原因 / 回执状态码…）
+ *   在「成功行」「未产生」时本来就没有值，属于**该诊断项不存在**，不是业务数据为空；
+ * - 与 {@link PENDING_TEXT} 的区别：PENDING 是「数据源还没给、**将来会**有」，
+ *   NOT_APPLICABLE 是「这条记录**不会**再有该诊断值」；两者字形相同（都是 `—`），
+ *   但调用方语义/后续演进不同（PENDING 未来可能换成 Skeleton/占位动效；
+ *   NOT_APPLICABLE 永远保持静态占位），所以用两个具名常量而不是复用。
+ *
+ * 不用 {@link EMPTY_TEXT}（`-`）的原因：诊断字段为空是**正常且预期**的（成功的命令
+ * 本就没有错误码），`-` 容易被读成「业务值缺失」；`—` 的「暂无」观感更贴近诊断语义，
+ * 也与「尚未上报」保持同一视觉家族。
+ */
+export const NOT_APPLICABLE_TEXT = '—';
 
 /** 展示空值兜底：`null` / `undefined` / 空串 / 纯空白都返回 `fallback`。 */
 export function displayOrFallback(

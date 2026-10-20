@@ -30,6 +30,7 @@ import {
 } from '#/api/iot/series';
 import { $t } from '#/locales';
 
+import { EMPTY_TEXT } from '../../shared/display';
 import SeriesChart from './series-chart.vue';
 import SeriesDetailTable from './series-detail-table.vue';
 import {
@@ -193,7 +194,7 @@ const [Drawer, drawerApi] = useVbenDrawer<SeriesDrawerData>({
 <template>
   <Drawer class="w-[min(1200px,96vw)]">
     <div class="mb-3 text-sm text-muted-foreground">
-      {{ $t('page.iot.series.device') }}：{{ deviceLabel || '-' }}
+      {{ $t('page.iot.series.device') }}：{{ deviceLabel || EMPTY_TEXT }}
     </div>
 
     <!-- ===== 第 1 步：选点位（下拉候选，不再手填标识符） ===== -->

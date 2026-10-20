@@ -15,6 +15,8 @@ import {
   vi,
 } from 'vitest';
 
+import { $t } from '#/locales';
+
 import AlertsPage from './index.vue';
 
 /**
@@ -79,19 +81,25 @@ vi.mock('#/api/iot', () => ({
   silenceAlerts: (...args: unknown[]) => mockApi.silenceAlerts(...args),
 }));
 
-vi.mock('@vben/common-ui', () => ({
-  Page: defineComponent({
-    name: 'PageStub',
-    setup:
-      (_props, { slots }) =>
-      () =>
-        h('div', slots.default?.()),
-  }),
-  useVbenDrawer: () => [
-    defineComponent({ name: 'DrawerStub', setup: () => () => null }),
-    { close: vi.fn(), open: vi.fn(), setData: vi.fn() },
-  ],
-}));
+vi.mock('@vben/common-ui', async (importOriginal) => {
+  // 不能整体替换 @vben/common-ui：`#/adapter/form` 从这里再导出 `z`，
+  // 整体 mock 会让查询表单的 zod 校验规则在用例里变成 undefined（页面 setup 直接抛错）。
+  const actual = (await importOriginal()) as Record<string, any>;
+  return {
+    ...actual,
+    Page: defineComponent({
+      name: 'PageStub',
+      setup:
+        (_props, { slots }) =>
+        () =>
+          h('div', slots.default?.()),
+    }),
+    useVbenDrawer: () => [
+      defineComponent({ name: 'DrawerStub', setup: () => () => null }),
+      { close: vi.fn(), open: vi.fn(), setData: vi.fn() },
+    ],
+  };
+});
 
 vi.mock('#/adapter/vxe-table', () => ({
   VbenTableAction: defineComponent({
@@ -236,6 +244,51 @@ describe('告警中心导出 CSV', () => {
     expect(mockApi.exportAlertsCsv).toHaveBeenCalledWith(
       expect.objectContaining({ deviceId: 'd-1', state: 'ACKED' }),
     );
+  });
+
+  it('★ 导出沿用时间范围筛选：映射为 from/to，且不外泄 firstTsRange 字段', async () => {
+    gridApiMock.formApi.form.values = {
+      firstTsRange: ['2026-10-01 00:00:00', '2026-10-02 12:30:00'],
+      state: 'FIRING',
+    };
+    const container = await mountPage();
+
+    exportButton(container)?.click();
+    await flush();
+
+    expect(mockApi.exportAlertsCsv).toHaveBeenCalledTimes(1);
+    const [payload] = mockApi.exportAlertsCsv.mock.calls[0] as [
+      Record<string, unknown>,
+    ];
+    expect(payload).toEqual(
+      expect.objectContaining({
+        from: '2026-10-01 00:00:00',
+        state: 'FIRING',
+        to: '2026-10-02 12:30:00',
+      }),
+    );
+    // 表单字段名不是后端契约字段：不得原样透传
+    expect('firstTsRange' in payload).toBe(false);
+    expect(fileMock.downloadBlobSafe).toHaveBeenCalledTimes(1);
+  });
+
+  it('★ 导出的时间范围非法 ⇒ 报错且不发起导出（不导出「别的范围」冒充结果）', async () => {
+    gridApiMock.formApi.form.values = {
+      firstTsRange: ['2026-10-03 00:00:00', '2026-10-02 00:00:00'],
+    };
+    const errorSpy = vi
+      .spyOn(message, 'error')
+      .mockImplementation(() => ({}) as any);
+    const container = await mountPage();
+
+    exportButton(container)?.click();
+    await flush();
+
+    expect(mockApi.exportAlertsCsv).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith(
+      $t('page.iot.alert.timeRangeInvalid'),
+    );
+    expect(fileMock.downloadBlobSafe).not.toHaveBeenCalled();
   });
 
   it('★ 请求失败：原样展示后端 message，不触发下载', async () => {

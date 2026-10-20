@@ -37,7 +37,12 @@ import { $t } from '#/locales';
 import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
 
-import { formatDateTime, prettyJson } from '../../shared/display';
+import {
+  EMPTY_TEXT,
+  formatDateTime,
+  NOT_APPLICABLE_TEXT,
+  prettyJson,
+} from '../../shared/display';
 import PanelErrorBoundary from '../../shared/panel-error-boundary.vue';
 import { useIotRealtime } from '../../shared/use-iot-realtime';
 import Availability from './availability.vue';
@@ -400,7 +405,9 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
         v-if="realtimeDisconnected"
         class="mb-2"
         :description="
-          $t('page.iot.realtime.disconnectedHint', [realtimeError || '-'])
+          $t('page.iot.realtime.disconnectedHint', [
+            realtimeError || NOT_APPLICABLE_TEXT,
+          ])
         "
         :message="$t('page.iot.realtime.disconnected')"
         show-icon
@@ -627,7 +634,7 @@ const [Drawer, drawerApi] = useVbenDrawer<IotDeviceApi.DeviceResp | null>({
                       <td class="py-1.5 pr-3 whitespace-nowrap">
                         {{ human(outage.durationSec) }}
                       </td>
-                      <td class="py-1.5">{{ outage.reason || '-' }}</td>
+                      <td class="py-1.5">{{ outage.reason || EMPTY_TEXT }}</td>
                     </tr>
                   </tbody>
                 </table>

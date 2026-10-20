@@ -33,7 +33,11 @@ import {
   stateLabelKey,
 } from '../../alerts/data';
 import InstanceCurve from '../../alerts/modules/instance-curve.vue';
-import { displayOrFallback, formatDateTime } from '../../shared/display';
+import {
+  displayOrFallback,
+  EMPTY_TEXT,
+  formatDateTime,
+} from '../../shared/display';
 
 /**
  * 设备详情抽屉的**第 6 个「告警」页签**。
@@ -504,7 +508,7 @@ watch(
         data-index="reason"
       >
         <template #default="{ record }">
-          {{ record.reason ? $t(reasonLabelKey(record.reason)) : '-' }}
+          {{ record.reason ? $t(reasonLabelKey(record.reason)) : EMPTY_TEXT }}
         </template>
       </Table.Column>
     </Table>

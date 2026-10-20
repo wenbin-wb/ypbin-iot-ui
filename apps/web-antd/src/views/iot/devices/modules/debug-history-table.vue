@@ -27,6 +27,7 @@ import CopyText from '../../shared/copy-text.vue';
 import {
   formatDateTime,
   formatRelativeTime,
+  NOT_APPLICABLE_TEXT,
   prettyJson,
 } from '../../shared/display';
 import {
@@ -94,7 +95,6 @@ const props = withDefaults(
     pollError: undefined,
   },
 );
-
 
 const emit = defineEmits<{
   pageChange: [page: number];
@@ -187,7 +187,9 @@ function rowClassName(record: IotCommandApi.CommandInstanceResp): string {
       <template #description>
         <div>
           {{ $t('page.iot.debug.rawEnvelope') }}:
-          <span class="font-mono">{{ historyError.code || '-' }}</span>
+          <span class="font-mono">{{
+            historyError.code || NOT_APPLICABLE_TEXT
+          }}</span>
         </div>
         <pre
           class="mt-1 max-h-[240px] overflow-auto text-xs break-all whitespace-pre-wrap"
@@ -208,7 +210,9 @@ function rowClassName(record: IotCommandApi.CommandInstanceResp): string {
           <div>{{ pollError.message }}</div>
           <div>
             {{ $t('page.iot.debug.rawEnvelope') }}:
-            <span class="font-mono">{{ pollError.code || '-' }}</span>
+            <span class="font-mono">{{
+              pollError.code || NOT_APPLICABLE_TEXT
+            }}</span>
           </div>
           <pre
             class="mt-1 max-h-[240px] overflow-auto text-xs break-all whitespace-pre-wrap"
@@ -237,7 +241,7 @@ function rowClassName(record: IotCommandApi.CommandInstanceResp): string {
             {{ kindText(record.kind) }}
           </template>
           <template v-else-if="column.key === 'identifier'">
-            {{ record.identifier || '-' }}
+            {{ record.identifier || NOT_APPLICABLE_TEXT }}
             <Tag v-if="batchRequestIds.has(record.requestId)" color="blue">
               {{ $t('page.iot.debug.batchTag') }}
             </Tag>
@@ -308,16 +312,18 @@ function rowClassName(record: IotCommandApi.CommandInstanceResp): string {
               {{ record.retryCount ?? 0 }}
             </DescriptionsItem>
             <DescriptionsItem :label="$t('page.iot.debug.errorCode')">
-              <span class="font-mono">{{ record.errorCode || '-' }}</span>
+              <span class="font-mono">{{
+                record.errorCode || NOT_APPLICABLE_TEXT
+              }}</span>
               <span v-if="record.errorCode" class="ml-1">
                 {{ errorCodeText(record.errorCode) }}
               </span>
             </DescriptionsItem>
             <DescriptionsItem :label="$t('page.iot.debug.errorMsg')">
-              {{ record.errorMsg || '-' }}
+              {{ record.errorMsg || NOT_APPLICABLE_TEXT }}
             </DescriptionsItem>
             <DescriptionsItem :label="$t('page.iot.debug.emqxMessageId')">
-              {{ record.emqxMessageId || '-' }}
+              {{ record.emqxMessageId || NOT_APPLICABLE_TEXT }}
             </DescriptionsItem>
             <DescriptionsItem :label="$t('page.iot.debug.source')">
               {{ sourceText(record.source) }}
