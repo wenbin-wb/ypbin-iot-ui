@@ -61,6 +61,23 @@ const activeRows = ref<any[]>([]);
 
 const activeError = ref('');
 
+/** 活动告警总数（后端 long → 全局字符串；展示/比较前显式 toBackendNumber）。 */
+const activeTotal = ref(0);
+
+/** 当前**已加载到**第几页（加载更多成功后 +1；刷新/切设备回到 1）。 */
+const activePage = ref(1);
+
+/** 加载更多在途（与首次加载的 `loading` 分开：翻页期间表格继续可读）。 */
+const activeLoadingMore = ref(false);
+
+/** 加载更多失败原因（失败**不得清空已加载行**，提示挂在这条独立错误上）。 */
+const activeMoreError = ref('');
+
+/** 是否还有未加载的活动告警（按 total 与已加载行数判断，不猜后端页数）。 */
+const hasMoreActive = computed(
+  () => activeRows.value.length < activeTotal.value,
+);
+
 const historyRows = ref<any[]>([]);
 
 const historyTotal = ref(0);
@@ -102,29 +119,73 @@ async function loadSummary() {
   }
 }
 
-async function loadActive() {
+/**
+ * 加载活动告警。
+ *
+ * @param reset `true`=回到第 1 页并**整体替换**（首次加载/刷新/切换设备/处置后）；
+ *              `false`=加载下一页并**追加**（「加载更多」）。
+ *
+ * 失败语义（两条不同路径，刻意分开）：
+ * - 首屏失败 ⇒ 清空并展示 `activeError`（没有可保留的数据）；
+ * - 加载更多失败 ⇒ **保留已加载行**，只把后端 message 挂到 `activeMoreError`
+ *   （把已看到的活动告警清掉，等于在故障时让用户失去处置依据）。
+ */
+async function loadActive(reset = true) {
   if (!props.deviceId) {
     activeRows.value = [];
+    activeTotal.value = 0;
+    activePage.value = 1;
+    activeError.value = '';
+    activeMoreError.value = '';
     return;
   }
-  loading.value = true;
+  const page = reset ? 1 : activePage.value + 1;
+  if (reset) {
+    loading.value = true;
+  } else {
+    activeLoadingMore.value = true;
+  }
   try {
     const result = await getDeviceAlertPage(props.deviceId, {
-      page: 1,
-      pageSize: ACTIVE_PAGE_SIZE,
       activeOnly: true,
+      page,
+      pageSize: ACTIVE_PAGE_SIZE,
     });
-    activeRows.value = result.items ?? [];
+    const items = result.items ?? [];
+    activeRows.value = reset ? items : [...activeRows.value, ...items];
+    activeTotal.value = toBackendNumber(result.total);
+    activePage.value = page;
     activeError.value = '';
+    activeMoreError.value = '';
   } catch (error) {
-    activeRows.value = [];
-    activeError.value = extractErrorMessage(
+    const reason = extractErrorMessage(
       error,
       $t('page.iot.alert.loadFailed'),
     );
+    if (reset) {
+      activeRows.value = [];
+      activeTotal.value = 0;
+      activePage.value = 1;
+      activeError.value = reason;
+    } else {
+      // 保留已加载行：失败只是「更多没拿到」，不是「已有数据作废」
+      activeMoreError.value = reason;
+    }
   } finally {
-    loading.value = false;
+    if (reset) {
+      loading.value = false;
+    } else {
+      activeLoadingMore.value = false;
+    }
   }
+}
+
+/** 「加载更多」：在途/已到末页时短路，避免重复请求与末页空翻。 */
+function loadMoreActive() {
+  if (activeLoadingMore.value || !hasMoreActive.value) {
+    return;
+  }
+  void loadActive(false);
 }
 
 async function loadHistory() {
@@ -156,7 +217,11 @@ async function loadHistory() {
 }
 
 async function reload() {
-  await Promise.all([loadSummary(), loadActive(), loadHistory()]);
+  // 刷新（含处置后的重拉）必须回到活动告警第 1 页：否则会停在旧页码上，
+  // 用户会看到「已确认的告警消失但总数没变」这类错位。
+  activePage.value = 1;
+  activeMoreError.value = '';
+  await Promise.all([loadSummary(), loadActive(true), loadHistory()]);
 }
 
 async function onAck(id: string) {
@@ -213,21 +278,43 @@ watch(
       v-else-if="activeRows.length === 0"
       :description="$t('page.iot.alert.noActive')"
     />
-    <Table
-      v-else
-      :data-source="activeRows"
-      :loading="loading"
-      :pagination="false"
-      :row-key="(row: any) => row.id"
-      :scroll="{ x: 1000 }"
-      size="small"
-      :expanded-row-keys="expandedKeys"
-      @expanded-rows-change="
-        (keys: any) => {
-          expandedKeys = keys as string[];
-        }
-      "
-    >
+    <template v-else>
+      <!--
+        分页口径必须**显式可见**：旧实现固定取第 1 页 20 条且分页器关闭 ⇒ 用户不知道还有多少条、
+        也看不到更多（审查 03 P2-5）。这里给出「共 N 条（当前第 x 页）」+「加载更多」，
+        total 是后端 long（全局字符串），展示前已用 `toBackendNumber` 归一。
+      -->
+      <div
+        class="flex items-center justify-between text-xs text-muted-foreground"
+        data-testid="active-page-info"
+      >
+        <span>
+          {{ $t('page.iot.alert.activeTotal', [activeTotal, activePage]) }}
+        </span>
+      </div>
+      <!-- 加载更多失败：保留已加载行，只提示「更多没拿到」（不得清空已有活动告警） -->
+      <Alert
+        v-if="activeMoreError"
+        :message="activeMoreError"
+        data-testid="active-more-error"
+        show-icon
+        type="error"
+      />
+      <Table
+        data-testid="active-alert-table"
+        :data-source="activeRows"
+        :loading="loading"
+        :pagination="false"
+        :row-key="(row: any) => row.id"
+        :scroll="{ x: 1000 }"
+        size="small"
+        :expanded-row-keys="expandedKeys"
+        @expanded-rows-change="
+          (keys: any) => {
+            expandedKeys = keys as string[];
+          }
+        "
+      >
       <Table.Column
         :title="$t('page.iot.alert.severityField')"
         data-index="severity"
@@ -336,7 +423,18 @@ watch(
           </div>
         </div>
       </template>
-    </Table>
+      </Table>
+      <div v-if="hasMoreActive" class="mt-2">
+        <Button
+          data-testid="active-load-more"
+          :loading="activeLoadingMore"
+          size="small"
+          @click="loadMoreActive"
+        >
+          {{ $t('page.iot.alert.loadMore') }}
+        </Button>
+      </div>
+    </template>
 
     <!-- 历史告警区 -->
     <div class="font-semibold">{{ $t('page.iot.alert.historySection') }}</div>

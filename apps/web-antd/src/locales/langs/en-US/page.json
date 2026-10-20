@@ -301,7 +301,9 @@
       "notifyUnrecognized": "These legacy entries are neither users nor emails; they are kept as-is (the platform will not send to them): {0}",
       "exportCsv": "Export CSV",
       "exportName": "alerts",
-      "exportFailed": "Failed to export alerts"
+      "exportFailed": "Failed to export alerts",
+      "activeTotal": "Total {0} (page {1})",
+      "loadMore": "Load more"
     },
     "display": {
       "unknown": "Unknown",

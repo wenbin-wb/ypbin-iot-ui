@@ -301,7 +301,9 @@
       "notifyUnrecognized": "以下历史条目既不是用户也不是邮箱，将原样保留（平台不会向它们发送）：{0}",
       "exportCsv": "导出 CSV",
       "exportName": "告警列表",
-      "exportFailed": "告警列表导出失败"
+      "exportFailed": "告警列表导出失败",
+      "activeTotal": "共 {0} 条（当前第 {1} 页）",
+      "loadMore": "加载更多"
     },
     "display": {
       "unknown": "未知",

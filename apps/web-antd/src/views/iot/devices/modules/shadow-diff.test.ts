@@ -1,9 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
 import { createApp, h, nextTick } from 'vue';
-
-import { i18n } from '@vben/locales';
 
 import { message } from 'ant-design-vue';
 import {
@@ -29,9 +24,10 @@ import ShadowEdit from './shadow-edit.vue';
  * 3. **权限桩必须响应式**（与生产同构）：computed 的失效通知只对响应式读取生效，
  *    普通对象当桩会让「权限码变化 ⇒ 写入口消失/出现」这条路径**结构性地抓不到**。
  *
- * 新键来自 \`temp/i18n-requests-frontend-shadow-diff.json\`（仓规：不直接改 page.json，由 Lead 合并）。
- * 用例显式加载该请求文件并合并进 i18n 实例：既保证本用例在合并前后都跑真实新文案，
- * 也把「请求文件里的键/值」本身纳入断言（缺键会以原始 key 渲染而被下面的断言抓住）。
+ * i18n 的**唯一事实源是已提交的 `page.json`**（下面 setupI18n 加载）。
+ * 本用例曾额外读取仓外 `temp/i18n-requests-frontend-shadow-diff.json` 并合并：
+ * 本地有该文件、CI 检出没有 ⇒ 本地可能绿、CI 可能红（2026-10-20 PR #118 已在
+ * board.test.ts 踩到同类问题）。该机制已移除；文案变更必须随 page.json 一起提交。
  */
 const { accessStore, mockPut } = vi.hoisted(() => ({
   accessStore: { current: null as null | { accessCodes: string[] } },
@@ -62,9 +58,6 @@ vi.mock('@vben/preferences', () => ({
   updatePreferences: () => {},
 }));
 
-/** 待合并的新键（仓规产物；zh/en 键集合由该文件自身保证一致）。 */
-type I18nRequest = Record<string, string>;
-
 /** 设置权限码：写**响应式代理**（与生产同一条路径），不能改原始对象。 */
 function setCodes(codes: string[]) {
   if (!accessStore.current) {
@@ -73,64 +66,13 @@ function setCodes(codes: string[]) {
   accessStore.current.accessCodes = codes;
 }
 
-/**
- * 读取本任务的 i18n 请求文件（仓规：新键先落 \`temp/i18n-requests-*.json\`，由 Lead 合并进 page.json）。
- *
- * 用 \`node:fs\` 而不是 \`import\`：该文件在**前端仓之外**（跨仓目录），
- * 走 Vite 模块图会受 root 限制；而 vitest 直接跑在 Node 里，读文件是确定性的。
- * 两个候选路径都试：从 \`ypbin-iot-ui\` 或从聚合根 \`ypbin\` 启动都能命中。
- */
-function readI18nRequest(): null | Record<string, I18nRequest> {
-  const candidates = [
-    resolve(process.cwd(), '../temp/i18n-requests-frontend-shadow-diff.json'),
-    resolve(process.cwd(), 'temp/i18n-requests-frontend-shadow-diff.json'),
-  ];
-  const found = candidates.find((item) => existsSync(item));
-  // 合并进 page.json 后请求文件可能被清理 ⇒ 不是错误，静默跳过（此时新键已在真实语言包里）
-  return found
-    ? (JSON.parse(readFileSync(found, 'utf8')) as Record<string, I18nRequest>)
-    : null;
-}
-
-/** 把「page.iot.x.y」扁平键展开成 vue-i18n 需要的嵌套对象。 */
-function nestKeys(flat: I18nRequest): Record<string, unknown> {
-  const root: Record<string, any> = {};
-  for (const [key, value] of Object.entries(flat)) {
-    const parts = key.split('.');
-    let node = root;
-    for (const part of parts.slice(0, -1)) {
-      node[part] = node[part] ?? {};
-      node = node[part];
-    }
-    node[parts.at(-1) ?? ''] = value;
-  }
-  return root;
-}
-
 /** 真实 i18n 实例：只初始化一次（\`$t\` 就是 \`i18n.global.t\`）。 */
 beforeAll(async () => {
   const { setupI18n } = await import('#/locales');
   const app = createApp({ render: () => null });
   await setupI18n(app, { defaultLocale: 'zh-CN' });
 
-  // 真实语言包（含既有 shadow 键）+ 请求文件里的新键，两语都合并
-  for (const lang of ['zh-CN', 'en-US'] as const) {
-    const pageMod = (await import(`#/locales/langs/${lang}/page.json`)) as {
-      default?: Record<string, unknown>;
-    };
-    i18n.global.mergeLocaleMessage(lang, {
-      page: pageMod.default ?? pageMod,
-    } as never);
-    // 请求文件的键是**完整键**（含前导 page.），nestKeys 展开后直接合并，不能再套一层 page。
-    // 合并后（文件可能已被清理）回头再套一层：真实语言包已含新键，用例仍然自洽。
-    const request = readI18nRequest();
-    if (request) {
-      i18n.global.mergeLocaleMessage(
-        lang,
-        nestKeys(request[lang] ?? {}) as never,
-      );
-    }
-  }
+  // setupI18n 已把已提交的 zh-CN/en-US 语言包装进 i18n.global；断言直接读真实文案。
 });
 
 let mounted: undefined | { app: { unmount: () => void } };
