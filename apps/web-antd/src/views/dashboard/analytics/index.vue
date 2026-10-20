@@ -15,6 +15,7 @@ import { usePreferences } from '@vben/preferences';
 import { Alert, Button, Tag, Tooltip } from 'ant-design-vue';
 
 import { $t } from '#/locales';
+import { formatCompact } from '#/utils/number-format';
 
 import HelpDrawer from '../../iot/shared/help-drawer.vue';
 import ListErrorAlert from '../../iot/shared/list-error-alert.vue';
@@ -211,12 +212,6 @@ const now = computed(() => {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${week[d.getDay()]}`;
 });
-
-function formatCompact(n: number) {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
-  return String(n);
-}
 
 function goAlerts() {
   router.push('/iot/alerts');

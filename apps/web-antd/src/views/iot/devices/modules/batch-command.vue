@@ -39,10 +39,10 @@ import {
 } from '#/api/iot';
 import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
-import { downloadByBlob } from '#/utils/file';
 
 import CopyText from '../../shared/copy-text.vue';
-import { displayOrFallback } from '../../shared/display';
+import { useCsvExport } from '../../shared/use-csv-export';
+import { displayOrFallback, EMPTY_TEXT } from '../../shared/display';
 import {
   batchCountsConsistent,
   batchDeliveryReasonKey,
@@ -554,31 +554,41 @@ function nextStepText(row: BatchResultRow): string {
   }
 }
 
-function onExportCsv() {
-  if (resultRows.value.length === 0) {
-    return;
-  }
-  const header = [
-    $t('page.iot.device.batchCommand.colDevice'),
-    $t('page.iot.device.batchCommand.colDeviceCode'),
-    $t('page.iot.device.batchCommand.colDeviceId'),
-    $t('page.iot.device.batchCommand.colState'),
-    $t('page.iot.device.batchCommand.colStatusCode'),
-    $t('page.iot.device.batchCommand.colErrorCode'),
-    $t('page.iot.device.batchCommand.colCode'),
-    $t('page.iot.device.batchCommand.colMessage'),
-    $t('page.iot.debug.requestId'),
-  ];
-  const csv = buildBatchResultCsv(
-    header,
-    buildBatchResultCsvRows(resultRows.value, stateText),
-  );
-  // 前置 BOM：Excel 直接打开 UTF-8 CSV 时不乱码
-  downloadByBlob(
-    new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }),
-    `batch-command-${Date.now()}.csv`,
-  );
-}
+/**
+ * 导出「本次批量下发结果」CSV。
+ *
+ * 与后端导出（设备台账/告警）共用 `shared/use-csv-export` 的骨架（loading 防连点 /
+ * `downloadBlobSafe` 防伪文件 / 成功失败提示 / 文件名带日期），差别只在数据来源：
+ * 这里是**前端本地生成**（结果只在当前抽屉里，没有对应后端导出接口），所以 `exportFn`
+ * 直接 build blob；没有结果行时返回 `undefined` ⇒ 组合式静默跳过（与拆分前早退同口径）。
+ * 本地生成不会出现「HTTP 200 业务失败 JSON」，`errorText` 仅作兜底。
+ */
+const { exportLoading: exportCsvLoading, onExportCsv } = useCsvExport({
+  exportFn: async () => {
+    if (resultRows.value.length === 0) {
+      return undefined;
+    }
+    const header = [
+      $t('page.iot.device.batchCommand.colDevice'),
+      $t('page.iot.device.batchCommand.colDeviceCode'),
+      $t('page.iot.device.batchCommand.colDeviceId'),
+      $t('page.iot.device.batchCommand.colState'),
+      $t('page.iot.device.batchCommand.colStatusCode'),
+      $t('page.iot.device.batchCommand.colErrorCode'),
+      $t('page.iot.device.batchCommand.colCode'),
+      $t('page.iot.device.batchCommand.colMessage'),
+      $t('page.iot.debug.requestId'),
+    ];
+    const csv = buildBatchResultCsv(
+      header,
+      buildBatchResultCsvRows(resultRows.value, stateText),
+    );
+    // 前置 BOM：Excel 直接打开 UTF-8 CSV 时不乱码
+    return new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
+  },
+  fileName: () => 'batch-command-results',
+  errorText: $t('common.requestFailed'),
+});
 
 // ---------------------------------------------------------------- 抽屉
 
@@ -823,7 +833,9 @@ defineExpose({ drawerApi });
             >
               <li v-for="item in devices" :key="item.deviceId">
                 {{ item.deviceName || item.deviceCode || item.deviceId }}
-                <span class="text-muted-foreground">（{{ item.deviceId }}）</span>
+                <span class="text-muted-foreground"
+                  >（{{ item.deviceId }}）</span
+                >
               </li>
             </ul>
           </template>
@@ -884,6 +896,7 @@ defineExpose({ drawerApi });
             </span>
             <Button
               data-testid="batch-command-export"
+              :loading="exportCsvLoading"
               size="small"
               @click="onExportCsv"
             >
@@ -906,7 +919,7 @@ defineExpose({ drawerApi });
                   }}
                 </div>
                 <div class="text-xs text-muted-foreground">
-                  {{ record.deviceCode || '-' }} · {{ record.deviceId }}
+                  {{ record.deviceCode || EMPTY_TEXT }} · {{ record.deviceId }}
                 </div>
               </template>
               <template v-else-if="column.key === 'state'">
@@ -950,7 +963,9 @@ defineExpose({ drawerApi });
                     {{ $t('page.iot.debug.resend') }}
                   </Button>
                 </Popconfirm>
-                <span v-else class="text-xs text-muted-foreground">-</span>
+                <span v-else class="text-xs text-muted-foreground">
+                  {{ EMPTY_TEXT }}
+                </span>
               </template>
             </template>
             <template #emptyText>

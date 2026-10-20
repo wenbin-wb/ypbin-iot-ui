@@ -17,6 +17,7 @@ import { getTenantLedgerList } from '#/api/iot';
 import { getAccessOverview } from '#/api/iot/accessOverview';
 import { getTenantList } from '#/api/system/tenant';
 import { $t } from '#/locales';
+import { useChartThemeRefresh } from '#/utils/use-chart-theme';
 import { extractErrorMessage } from '#/utils/error';
 
 import { formatDateTime } from '../../shared/display';
@@ -491,6 +492,10 @@ watch(
   },
   { deep: true, flush: 'post' },
 );
+
+// 暗色/主题色变化后重绘：节点/边色在 `graphOption` 里解析为具体 rgb，
+// 重建 option 才能拿到新主题的色值（canvas 不会自己重算）。
+useChartThemeRefresh(renderChart);
 </script>
 
 <template>

@@ -43,10 +43,19 @@ vi.mock('@vben/plugins/echarts', async () => {
   };
 });
 
-vi.mock('@vben/preferences', () => ({
-  preferences: { app: { accessMode: 'frontend', locale: 'zh-CN' } },
-  updatePreferences: () => {},
-}));
+vi.mock('@vben/preferences', async () => {
+  const { reactive, ref } = await import('vue');
+  return {
+    preferences: reactive({
+      app: { accessMode: 'frontend', locale: 'zh-CN' },
+      theme: { colorPrimary: 'hsl(212 100% 45%)', mode: 'light' },
+    }),
+    updatePreferences: () => {},
+    // 图表组件用 `usePreferences().isDark` 做主题重绘（use-chart-theme.ts）；
+    // 提供真实 ref 才能让「主题变化触发重绘」在组件级可测。
+    usePreferences: () => ({ isDark: ref(false) }),
+  };
+});
 
 beforeAll(async () => {
   const { setupI18n } = await import('#/locales');

@@ -19,7 +19,17 @@ import { $t } from '#/locales';
 /** 可能来自接口的展示值（Long 会以字符串返回，时间可能是毫秒串）。 */
 export type DisplayValue = null | number | string | undefined;
 
-/** 空值占位符。 */
+/**
+ * 空值占位符（**iot 视图统一口径**）。
+ *
+ * 为什么选半角 `-` 而不是全角破折号 `—`：
+ * - 仓库现状里 `-` 是多数口径（iot 视图内约 30+ 处，`—` 主要出现在 dashboard 的
+ *   「尚未加载」占位，属另一套语义）；统一到多数口径改动面最小；
+ * - 表格/Descriptions 的密度场景里半角 `-` 占宽更小，不会让「空值」比真实值更抢眼；
+ * - `-` 与数字负号、区间连字符同形，但空值位置在视觉上独立，误读风险低。
+ * 新增 iot 页面请复用本常量（`displayOrFallback` 的默认 fallback 已是它），
+ * 不要再写裸 `'-'`；确需全角破折号请说明是「尚未加载」而非「值为空」。
+ */
 export const EMPTY_TEXT = '-';
 
 /** 展示空值兜底：`null` / `undefined` / 空串 / 纯空白都返回 `fallback`。 */

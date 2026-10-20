@@ -8,6 +8,7 @@ import { nextTick, ref, watch } from 'vue';
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 
 import { chartSeriesColorAt } from '#/utils/chart-tokens';
+import { useChartThemeRefresh } from '#/utils/use-chart-theme';
 
 import { formatAxisTs } from './series-utils';
 
@@ -107,6 +108,12 @@ watch(
   },
   { immediate: true },
 );
+
+// 暗色/主题色变化后重绘：曲线色在 `renderChart` 里按 CSS 变量解析，
+// 已画好的 canvas 不会自己重算 —— 不重绘则切主题后曲线仍是旧色。
+useChartThemeRefresh(() => {
+  void renderChart();
+});
 </script>
 
 <template>

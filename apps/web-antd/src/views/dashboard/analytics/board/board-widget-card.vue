@@ -26,6 +26,7 @@ import {
 } from 'ant-design-vue';
 
 import { $t } from '#/locales';
+import { useChartThemeRefresh } from '#/utils/use-chart-theme';
 
 import {
   displayOrFallback,
@@ -310,6 +311,12 @@ watch(
   },
   { deep: true, flush: 'post' },
 );
+
+// 暗色/主题色变化后重绘：`renderChart` 每次都重建 option（颜色在渲染时从 CSS 变量解析），
+// 而 canvas 上的旧位图不会自己重算 —— 不重绘就会出现「同屏新旧两套配色」。
+useChartThemeRefresh(() => {
+  void nextTick(renderChart);
+});
 
 function onDragStart(event: DragEvent): void {
   emit('dragstart', props.index);
