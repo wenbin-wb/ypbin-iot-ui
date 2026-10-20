@@ -84,6 +84,7 @@ catalog:
   '@tiptap/vue-3': ^3.31.4
   '@tsdown/css': ^0.22.13
   '@types/archiver': ^8.0.0
+  '@types/three': ^0.186.0
   '@types/html-minifier-terser': ^7.0.2
   '@types/json-bigint': ^1.0.4
   '@types/jsonwebtoken': ^9.0.10
@@ -125,6 +126,14 @@ catalog:
   dotenv: ^17.4.2
   echarts: ^6.1.0
   element-plus: ^2.14.5
+  # 数字孪生 3D 渲染（原生 three.js）。
+  # ⚠️ three 本身**不带 TypeScript 类型**（0.186.1 的 package.json 里 types/typings 均为空，
+  #    npm registry 一手核实），类型由 DefinitelyTyped 按小版本跟随发布 ⇒ 两者必须**成对**升级，
+  #    否则会出现「类型里有的 API 运行时不存在」。
+  # three-mesh-bvh：建筑级模型的原生 Raycaster 是 O(三角形数)，几百万面时点击卡顿数百毫秒；
+  #    它提供 BVH 加速，把拾取降到接近 O(log n)。MIT，peer 要求 three >= 0.159。
+  three: ^0.186.1
+  three-mesh-bvh: ^0.9.16
   es-toolkit: ^1.49.0
   eslint: ^10.7.0
   eslint-plugin-better-tailwindcss: ^4.7.0

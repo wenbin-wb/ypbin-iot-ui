@@ -48,6 +48,8 @@
     "highlight.js": "catalog:",
     "marked": "catalog:",
     "pinia": "catalog:",
+    "three": "catalog:",
+    "three-mesh-bvh": "catalog:",
     "vue": "catalog:",
     "vue-router": "catalog:"
   }

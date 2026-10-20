@@ -4,6 +4,34 @@ export default defineConfig(async () => {
   return {
     application: {},
     vite: {
+      build: {
+        rolldownOptions: {
+          output: {
+            // 数字孪生用的 three.js 单独切 chunk。
+            //
+            // 为什么需要：three 约 600KB（压缩后 ~150KB），且只有进入 /iot/twin 才用得到。
+            // 让它独立成 chunk 后：① 首屏主包不含它；② 版本不变时切页面不重复下载
+            // （浏览器长期缓存）；③ 便于在构建报告里单独看它的体积。
+            //
+            // 注：本仓构建链是 rolldown（见 internal/vite-config 的 `build.rolldownOptions`），
+            // 不是 rollup ⇒ 用 `advancedChunks` 而非 `manualChunks`。
+            // addons（GLTFLoader/CSS2DRenderer 等）不单独分组：它们由引擎层
+            // 动态 import 引入，会被自动并入对应的动态 chunk。
+            advancedChunks: {
+              groups: [
+                {
+                  name: 'three-core',
+                  test: /node_modules[\\/]three[\\/]build[\\/]three\.(module|core)\.js$/,
+                },
+                {
+                  name: 'three-bvh',
+                  test: /node_modules[\\/]three-mesh-bvh[\\/]/,
+                },
+              ],
+            },
+          },
+        },
+      },
       server: {
         proxy: {
           '/api': {

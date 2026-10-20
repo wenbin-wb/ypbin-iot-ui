@@ -156,6 +156,9 @@ catalogs:
     '@types/sortablejs':
       specifier: ^1.15.9
       version: 1.15.9
+    '@types/three':
+      specifier: ^0.186.0
+      version: 0.186.0
     '@typescript-eslint/parser':
       specifier: ^8.65.0
       version: 8.65.0
@@ -438,6 +441,12 @@ catalogs:
     theme-colors:
       specifier: ^0.1.0
       version: 0.1.0
+    three:
+      specifier: ^0.186.1
+      version: 0.186.1
+    three-mesh-bvh:
+      specifier: ^0.9.16
+      version: 0.9.16
     tippy.js:
       specifier: ^6.3.7
       version: 6.3.7
@@ -551,6 +560,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 25.9.5
+      '@types/three':
+        specifier: 'catalog:'
+        version: 0.186.0
       '@vben/commitlint-config':
         specifier: workspace:*
         version: link:internal/lint-configs/commitlint-config
@@ -732,6 +744,12 @@ importers:
       pinia:
         specifier: ^4.0.2
         version: 4.0.2(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.43(typescript@6.0.3))
+      three:
+        specifier: 'catalog:'
+        version: 0.186.1
+      three-mesh-bvh:
+        specifier: 'catalog:'
+        version: 0.9.16(three@0.186.1)
       vue:
         specifier: ^3.5.43
         version: 3.5.43(typescript@6.0.3)
@@ -3282,6 +3300,9 @@ packages:
   '@cyberalien/svg-utils@1.2.19':
     resolution: {integrity: sha512-paDJoDu+LhuH5Ma1q0BDqBpg6d16Xk22cZZrlg/s/J9oB8KgnnpU/snaEETJu2G1pwYcWQINUz6WUqu0Wm9k6A==}
 
+  '@dimforge/rapier3d-compat@0.12.0':
+    resolution: {integrity: sha512-uekIGetywIgopfD97oDL5PfeezkFpNhwlzlaEYNOA0N6ghdsOvh/HYjSMek5Q2O1PYvRSDFcqFVJl4r4ZBwOow==}
+
   '@docsearch/css@4.7.1':
     resolution: {integrity: sha512-AsMPnbNmVLDNjhtgfq4ZRskNvWR8vuK6riEegHp3kjBFtxbmTWPzZ5s1FJ04SGr2D0ZXglueUNISsV2sDgV6Jw==}
 
@@ -5601,6 +5622,9 @@ packages:
     cpu: [arm64]
     os: [win32]
 
+  '@tweenjs/tween.js@23.1.3':
+    resolution: {integrity: sha512-vJmvvwFxYuGnF2axRtPYocag6Clbb5YS7kLL+SO/TeVFzHqDIWrNKYtcsPMibjDx9O+bu+psAy9NKfWklassUA==}
+
   '@tybys/wasm-util@0.10.3':
     resolution: {integrity: sha512-F3fo1MYrRJYL3zER0OUOmkutjr1Vp23m7OsSgp7nq4SP6OqX6C/56XFIPAl5bt3zaBRjmW7SGz3u/6LwFpYcOg==}
 
@@ -5682,6 +5706,12 @@ packages:
   '@types/sortablejs@1.15.9':
     resolution: {integrity: sha512-7HP+rZGE2p886PKV9c9OJzLBI6BBJu1O7lJGYnPyG3fS4/duUCcngkNCjsLwIMV+WMqANe3tt4irrXHSIe68OQ==}
 
+  '@types/stats.js@0.17.4':
+    resolution: {integrity: sha512-jIBvWWShCvlBqBNIZt0KAshWpvSjhkwkEu4ZUcASoAvhmrgAUI2t1dXrjSL4xXVLB4FznPrIsX3nKXFl/Dt4vA==}
+
+  '@types/three@0.186.0':
+    resolution: {integrity: sha512-mxYSBpDC+D0pLfSP6sW4WZTcT+nrtmZcimMqnVmy36Hte3XpeYSrvgg4TRdaM1GemGog1AWzI5qL2VoIfMXbJQ==}
+
   '@types/tinycolor2@1.4.6':
     resolution: {integrity: sha512-iEN8J0BoMnsWBqjVbWH/c0G0Hh7O21lpR2/+PrvAVgWdzL7eexIFm4JN/Wn10PTcmNdtS6U67r499mlWMXOxNw==}
 
@@ -5696,6 +5726,9 @@ packages:
 
   '@types/web-bluetooth@0.0.21':
     resolution: {integrity: sha512-oIQLCGWtcFZy2JW77j9k8nHzAOpqMHLQejDA48XXMWH6tjCQHz5RCFz1bzsmROyL6PUm+LLnUiI4BCn221inxA==}
+
+  '@types/webxr@0.5.24':
+    resolution: {integrity: sha512-h8fgEd/DpoS9CBrjEQXR+dIDraopAEfu4wYVNY2tEPwk60stPWhvZMf4Foo5FakuQ7HFZoa8WceaWFervK2Ovg==}
 
   '@types/whatwg-mimetype@3.0.2':
     resolution: {integrity: sha512-c2AKvDT8ToxLIOUlN51gTiHXflsfIFisS4pO7pDPoKouJCESkhZnEy623gwP9laCy5lnLDAw1vAzu2vM2YLOrA==}
@@ -9053,6 +9086,9 @@ packages:
     resolution: {integrity: sha512-8q7VEgMJW4J8tcfVPy8g09NcQwZdbwFEqhe/WZkoIzjn/3TGDwtOCYtXGxA3O8tPzpczCCDgv+P2P5y00ZJOOg==}
     engines: {node: '>= 8'}
 
+  meshoptimizer@1.1.1:
+    resolution: {integrity: sha512-oRFNWJRDA/WTrVj7NWvqa5HqE1t9MYDj2VaWirQCzCCrAd2GHrqR/sQezCxiWATPNlKTcRaPRHPJwIRoPBAp5g==}
+
   micromark-util-character@2.1.1:
     resolution: {integrity: sha512-wv8tdUTJ3thSFFFJKtpYKOYiGP2+v96Hvk4Tu8KpCAsTMs6yi+nVmGh1syvSCsaxz45J6Jbw+9DD6g97+NV67Q==}
 
@@ -10594,6 +10630,14 @@ packages:
 
   theme-colors@0.1.0:
     resolution: {integrity: sha512-6gTEHQqWlQNiOEGHCSSQmU//E5SnXHJ4H7oHQOD8x77CvNYNQAmt73dqR71mzw5ULV87zaHLxK5pIBnsToFuZw==}
+
+  three-mesh-bvh@0.9.16:
+    resolution: {integrity: sha512-2RK+5MJOaiHJhopURn2CUkOHiF3tFloD0uZBfhebV0CKB7mgVLpWUWaDpOyhNJRDkKKe7x4rRfTHZ32GwpXdkw==}
+    peerDependencies:
+      three: '>= 0.159.0'
+
+  three@0.186.1:
+    resolution: {integrity: sha512-blFeqb49wRCSGUGj7gtpfnSGHy2lwDk94RhUmS1c/hTby70kvChbWpkJ4Pm1390LqzzvTmzgXKHPEafJwCb8jA==}
 
   throttle-debounce@5.0.2:
     resolution: {integrity: sha512-B71/4oyj61iNH0KeCamLuE2rmKuTO5byTOSVwECM5FA7TiAiAW+UqTKZ9ERueC4qvgSttUhdmq1mXC3kJqGX7A==}
@@ -13054,6 +13098,8 @@ snapshots:
     dependencies:
       '@iconify/types': 2.0.0
 
+  '@dimforge/rapier3d-compat@0.12.0': {}
+
   '@docsearch/css@4.7.1': {}
 
   '@docsearch/js@4.7.1': {}
@@ -14880,6 +14926,8 @@ snapshots:
   '@turbo/windows-arm64@2.10.6':
     optional: true
 
+  '@tweenjs/tween.js@23.1.3': {}
+
   '@tybys/wasm-util@0.10.3':
     dependencies:
       tslib: 2.8.1
@@ -14965,6 +15013,17 @@ snapshots:
 
   '@types/sortablejs@1.15.9': {}
 
+  '@types/stats.js@0.17.4': {}
+
+  '@types/three@0.186.0':
+    dependencies:
+      '@dimforge/rapier3d-compat': 0.12.0
+      '@tweenjs/tween.js': 23.1.3
+      '@types/stats.js': 0.17.4
+      '@types/webxr': 0.5.24
+      fflate: 0.8.3
+      meshoptimizer: 1.1.1
+
   '@types/tinycolor2@1.4.6': {}
 
   '@types/trusted-types@2.0.7': {}
@@ -14974,6 +15033,8 @@ snapshots:
   '@types/validator@13.15.10': {}
 
   '@types/web-bluetooth@0.0.21': {}
+
+  '@types/webxr@0.5.24': {}
 
   '@types/whatwg-mimetype@3.0.2': {}
 
@@ -18639,6 +18700,8 @@ snapshots:
 
   merge2@1.4.1: {}
 
+  meshoptimizer@1.1.1: {}
+
   micromark-util-character@2.1.1:
     dependencies:
       micromark-util-symbol: 2.0.1
@@ -20638,6 +20701,12 @@ snapshots:
       - react-native-b4a
 
   theme-colors@0.1.0: {}
+
+  three-mesh-bvh@0.9.16(three@0.186.1):
+    dependencies:
+      three: 0.186.1
+
+  three@0.186.1: {}
 
   throttle-debounce@5.0.2: {}
 
