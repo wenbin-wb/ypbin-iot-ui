@@ -48,8 +48,16 @@ export const MEMORY_LEAK_GEOMETRY_THRESHOLD = 20;
 /** 画布背景色（深色：设备状态色在深底上对比度更好）。 */
 const SCENE_BACKGROUND = '#0b1220';
 
-/** 环境光/平行光的白（three 用十六进制数表示颜色，此处集中定义避免散落魔法值）。 */
-const LIGHT_COLOR = 0xff_ff_ff;
+/**
+ * 环境光/平行光颜色。
+ *
+ * 刻意用 `Color` 对象 + CSS 字符串而不是十六进制字面量（`0xffffff`）：
+ * 本仓的 formatter（oxfmt）会把十六进制数字**降为小写**，而 linter（oxlint 的
+ * `unicorn/number-literal-case`）要求**大写** —— 两者对同一行互相改写，本地
+ * `--fix` 与 CI 检查永远对不上（实测：本地通过、CI 的「Lint（oxlint，类型感知）」失败）。
+ * 用 `Color` 从字符串构造既规避该冲突，也比裸数字更具可读性。
+ */
+const LIGHT_COLOR_HEX = '#ffffff';
 
 /** 锚点层契约（由 `anchor-layer.ts` 实现，画布组件装配）。 */
 export interface AnchorLayer {
@@ -370,8 +378,13 @@ export class TwinSceneManager {
 
     // 灯光：环境光给基础照明，平行光给方向感。
     // 刻意**不开阴影**：建筑级模型的阴影贴图成本高、收益低（用户主要看设备状态而非光影）。
-    this.scene.add(new THREE.AmbientLight(LIGHT_COLOR, 1.2));
-    const directional = new THREE.DirectionalLight(LIGHT_COLOR, 1.8);
+    this.scene.add(
+      new THREE.AmbientLight(new THREE.Color(LIGHT_COLOR_HEX), 1.2),
+    );
+    const directional = new THREE.DirectionalLight(
+      new THREE.Color(LIGHT_COLOR_HEX),
+      1.8,
+    );
     directional.position.set(50, 100, 50);
     this.scene.add(directional);
 

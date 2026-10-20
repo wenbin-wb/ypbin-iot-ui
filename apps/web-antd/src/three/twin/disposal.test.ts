@@ -11,6 +11,9 @@ import { disposeSubtree } from './disposal';
  * 不引入真实 three（避免 happy-dom 下的 WebGL 依赖）。
  */
 
+/** 假材质上的占位颜色值（仅用于验证「非贴图对象不被误判」，不参与渲染）。 */
+const FAKE_COLOR = '#ff0000';
+
 interface FakeTexture {
   dispose: ReturnType<typeof vi.fn>;
   isTexture: true;
@@ -118,7 +121,7 @@ describe('disposeSubtree', () => {
 
   it('不是贴图的对象（number/string/null）不被当成贴图', () => {
     const material = fakeMaterial({
-      color: 0xff_00_00,
+      color: FAKE_COLOR,
       name: 'mat',
       opacity: 1,
       userData: null,
