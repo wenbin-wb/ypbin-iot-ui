@@ -2,6 +2,8 @@ import type { AnchorTransform } from './types';
 
 import { describe, expect, it } from 'vitest';
 
+import { buildAncestryPivots } from './ancestry';
+
 /**
  * 世界坐标链的**纯数学**验证（不依赖 WebGL / 场景管理器实例）。
  *
@@ -19,11 +21,6 @@ import { describe, expect, it } from 'vitest';
  * `anchor = T × Rz × Ry × Rx × S`（three 的 Euler 默认 'XYZ'）。
  */
 
-/** 度 → 弧度（与实现同式）。 */
-function toRadians(degrees: number): number {
-  return (degrees * Math.PI) / 180;
-}
-
 /**
  * 用 three 的场景图建一条祖先链并返回模型根的世界矩阵。
  *
@@ -35,22 +32,10 @@ function toRadians(degrees: number): number {
 async function buildChain(ancestry: AnchorTransform[]) {
   const THREE = await import('three');
   const sceneRoot = new THREE.Scene();
-  let parent: import('three').Object3D = sceneRoot;
-  for (const anchor of ancestry) {
-    const pivot = new THREE.Group();
-    pivot.position.set(anchor.x, anchor.y, anchor.z);
-    pivot.rotation.set(
-      toRadians(anchor.rx),
-      toRadians(anchor.ry),
-      toRadians(anchor.rz),
-      'XYZ',
-    );
-    if (anchor.scale !== 1) {
-      pivot.scale.setScalar(anchor.scale);
-    }
-    parent.add(pivot);
-    parent = pivot;
-  }
+  // **调用生产代码**（不是测试里另写一份同构实现）：
+  // 若实现退回「只把自身 anchor 设到模型根」，这里算出的世界矩阵就会缺父链
+  // ⇒ 下面的断言必然红。测试与实现同源，才有真正的咬合力。
+  const { parent } = buildAncestryPivots(THREE, sceneRoot, ancestry);
   const modelRoot = new THREE.Group();
   parent.add(modelRoot);
   modelRoot.updateWorldMatrix(true, true);

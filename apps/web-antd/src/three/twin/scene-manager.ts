@@ -10,6 +10,7 @@ import type {
   TwinViewConfig,
 } from './types';
 
+import { applyAnchorToObject, buildAncestryPivots } from './ancestry';
 import { disposeSubtree } from './disposal';
 import { attachKtx2, loadModel } from './model-loader';
 
@@ -591,35 +592,17 @@ export class TwinSceneManager {
     //   scene → pivot(根 anchor) → pivot(第2级 anchor) → … → modelRoot
     // 于是 modelRoot.matrixWorld 自然等于 `parentWorld × anchor`（与后端口径一致），
     // 不需要前端再手写一套矩阵合成。
-    let parent: THREE_NS.Object3D = this.scene;
-    const createdPivots: THREE_NS.Object3D[] = [];
-    for (const anchor of request.ancestry) {
-      const pivot = new THREE.Group();
-      pivot.name = '__twin_anchor__';
-      pivot.position.set(anchor.x, anchor.y, anchor.z);
-      pivot.rotation.set(
-        toRadians(anchor.rx),
-        toRadians(anchor.ry),
-        toRadians(anchor.rz),
-        'XYZ',
-      );
-      pivot.scale.setScalar(anchor.scale);
-      parent.add(pivot);
-      parent = pivot;
-      createdPivots.push(pivot);
-    }
+    // 变换数学全部在 `ancestry.ts`（纯函数，可单测）——这里只负责挂载。
+    const { parent, pivots: createdPivots } = buildAncestryPivots(
+      THREE,
+      this.scene,
+      request.ancestry,
+    );
 
     // 模型根不再叠加 anchor：父链最后一环已包含自身 anchor。
     // ancestry 为空时（防御：后端保证至少含自身）退回用 request.anchor 兜底。
     if (createdPivots.length === 0) {
-      root.position.set(request.anchor.x, request.anchor.y, request.anchor.z);
-      root.rotation.set(
-        toRadians(request.anchor.rx),
-        toRadians(request.anchor.ry),
-        toRadians(request.anchor.rz),
-        'XYZ',
-      );
-      root.scale.setScalar(request.anchor.scale);
+      applyAnchorToObject(root, request.anchor);
     }
     parent.add(root);
     // 必须立刻刷新：matrixWorld 是「上次渲染时」算的，此处要马上用它换算坐标
