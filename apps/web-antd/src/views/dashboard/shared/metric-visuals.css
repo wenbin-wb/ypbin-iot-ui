@@ -1,0 +1,53 @@
+/**
+ * 仪表盘指标卡的共享样式（分析页 / 工作台共用，由 `metric-visuals.ts` 一次性引入）。
+ *
+ * 抽出来的两个理由：
+ * 1. 之前 `.metric-card` 与 `@keyframes metric-in` 在两个页面的 `\3c style scoped>` 里**逐字重复**，
+ *    改 hover 手感/入场时长必须双改，长期必然漂移；
+ * 2. `prefers-reduced-motion` 只能有一个落点 —— 分散在两处必漏一处。
+ */
+
+.iot-metric-card {
+  transition:
+    transform 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+  animation: iot-metric-in 0.4s ease-out both;
+}
+
+.iot-metric-card:hover {
+  border-color: hsl(var(--primary) / 40%);
+  box-shadow:
+    0 8px 24px hsl(var(--foreground) / 8%),
+    0 0 24px var(--glow);
+  transform: translateY(-2px);
+}
+
+@keyframes iot-metric-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/*
+ * 减少动效偏好：入场位移与 hover 抬升都属于「非必要动效」，
+ * 前庭功能障碍用户需要能关掉（WCAG 2.3.3 / ui-ux-pro-max 优先级 7）。
+ * 注意 `animation: none` 必须覆盖 `both` 填充模式，否则首帧的 `opacity: 0` 会残留成「卡片消失」。
+ */
+@media (prefers-reduced-motion: reduce) {
+  .iot-metric-card {
+    transition: none !important;
+    animation: none !important;
+  }
+
+  .iot-metric-card:hover {
+    box-shadow: none;
+    transform: none;
+  }
+}

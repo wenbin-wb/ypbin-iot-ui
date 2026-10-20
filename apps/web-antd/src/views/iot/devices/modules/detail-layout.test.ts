@@ -1,4 +1,6 @@
-import { createApp, h, nextTick } from 'vue';
+import { createApp, defineComponent, h, nextTick } from 'vue';
+
+import { i18n } from '@vben/locales';
 
 import {
   afterEach,
@@ -10,11 +12,13 @@ import {
   vi,
 } from 'vitest';
 
+import PanelErrorBoundary from '../../shared/panel-error-boundary.vue';
 import availabilitySource from './availability.vue?raw';
+import debugHistorySource from './debug-history-table.vue?raw';
 import alertSource from './detail-alert.vue?raw';
-import debugSource from './detail-debug.vue?raw';
 import Detail from './detail.vue';
 import detailSource from './detail.vue?raw';
+import basicCardSource from './overview-basic-card.vue?raw';
 import seriesSource from './series.vue?raw';
 import traceSource from './trace.vue?raw';
 
@@ -270,8 +274,10 @@ describe('概览卡片分区', () => {
       '最近在线',
       '备注',
     ]);
-    // 响应式列数：sm 1 列 / md 2 列 / xl 3 列（源码契约，antd 渲染不出断点对象）
-    expect(detailSource).toContain(':column="{ sm: 1, md: 2, xl: 3 }"');
+    // 响应式列数：sm 1 列 / md 2 列 / xl 3 列（源码契约，antd 渲染不出断点对象）。
+    // 批次 5 概览拆分后，基本信息 Descriptions 的宿主从 detail.vue 变为 overview-basic-card.vue
+    // ⇒ 断言指向新宿主（语义与选择器文本**未变**，只是文件位置变了）。
+    expect(basicCardSource).toContain(':column="{ sm: 1, md: 2, xl: 3 }"');
   });
 
   it('信息密集区域：两卡并排 + 表格横向滚动 + 表格最小宽度', async () => {
@@ -351,12 +357,81 @@ describe('概览卡片分区', () => {
   });
 });
 
+describe('概览页签渲染错误边界（P1-8 影子事故的第二道防线）', () => {
+  const Exploding = defineComponent({
+    name: 'ExplodingOverviewChild',
+    setup() {
+      return () => {
+        throw new Error('模拟概览渲染期异常：影子比对 RangeError 之类');
+      };
+    },
+  });
+
+  /** 还原真实语言包（防止本组用例注入的坏消息泄漏给其它用例）。 */
+  async function restoreMessages() {
+    const mod = (await import('#/locales/langs/zh-CN/page.json')) as {
+      default?: Record<string, unknown>;
+    };
+    i18n.global.mergeLocaleMessage('zh-CN', {
+      page: mod.default ?? mod,
+    } as never);
+    i18n.global.locale.value = 'zh-CN' as never;
+  }
+
+  afterEach(async () => {
+    await restoreMessages();
+  });
+
+  it('源码契约：概览页签由 PanelErrorBoundary 包裹，标题键是 overviewRenderFailed', () => {
+    // 四个页签（overview/debug/trace/alert）必须同一防线；此前只有后三个有
+    expect(detailSource).toContain(
+      'title-key="page.iot.device.overviewRenderFailed"',
+    );
+    expect(detailSource.match(/<PanelErrorBoundary/g)?.length ?? 0).toBe(4);
+  });
+
+  it('后代 render 抛错时概览边界用 Alert 展示错误，而不是留一片空白', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const app = createApp({
+      render: () =>
+        h(
+          PanelErrorBoundary,
+          { titleKey: 'page.iot.device.overviewRenderFailed' },
+          { default: () => h(Exploding) },
+        ),
+    });
+    app.mount(container);
+    mounted = { app };
+    await flush();
+
+    const html = container.innerHTML;
+    expect(html).toContain('设备概览渲染失败');
+    expect(html).toContain('模拟概览渲染期异常');
+  });
+
+  it('真机形态复现：概览子组件 i18n 消息编译失败 ⇒ 抽屉不许空白，必须显示「设备概览渲染失败」', async () => {
+    // 影子差异卡（ShadowDiff）是概览里的真实子组件，用它的标题键复现渲染期异常
+    i18n.global.mergeLocaleMessage('zh-CN', {
+      page: { iot: { shadow: { diffTitle: '{"a":1}' } } },
+    } as never);
+    i18n.global.locale.value = 'zh-CN' as never;
+
+    const container = await mountDetail();
+    const html = container.innerHTML;
+    // 关键：不是空白，而是可读的失败态（含完整错误）
+    expect(html).toContain('设备概览渲染失败');
+    expect(html).toContain('Message compilation error');
+  });
+});
+
 describe('其它信息密集页签：表格横向滚动保留', () => {
   it('消息跟踪/告警/在线调试的表格都有横向滚动配置', () => {
     expect(traceSource).toContain(':scroll="{ x: 1100, y: 420 }"');
     expect(
       alertSource.match(/:scroll="\{ x: \d+ \}"/g)?.length ?? 0,
     ).toBeGreaterThanOrEqual(2);
-    expect(debugSource).toContain(':scroll="{ x: 920 }"');
+    // 拆分批次 5-H：历史表格搬到 debug-history-table.vue，断言（与内容）原样保留，只换事实源文件
+    expect(debugHistorySource).toContain(':scroll="{ x: 920 }"');
   });
 });

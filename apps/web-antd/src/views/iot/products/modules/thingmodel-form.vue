@@ -319,22 +319,37 @@ function kindLabel(kind: ThingModelFormData['kind']) {
   return $t('page.iot.product.event');
 }
 
-async function submitService(data: ThingModelFormData, isUpdate: boolean) {
+/**
+ * 四个 `submitXxx` 统一返回 **boolean**：`false` = 表单校验未通过（请求未发出）。
+ *
+ * 为什么必须回传结果：vben 表单的 `validate()` 校验失败时**只返回 `{valid:false}`、不抛异常**，
+ * 原实现在这里静默 `return`，`onConfirm` 却无条件 `message.success` + 关窗 ⇒
+ * 用户看到「操作成功」但服务端根本没收到请求（物模型假成功）。调用方必须能区分
+ * 「校验没过」与「保存成功」。
+ */
+async function submitService(
+  data: ThingModelFormData,
+  isUpdate: boolean,
+): Promise<boolean> {
   const { valid } = await serviceFormApi.validate();
   if (!valid) {
-    return;
+    return false;
   }
   const values =
     await serviceFormApi.getValues<IotThingModelApi.ServiceSaveReq>();
   await (isUpdate
     ? updateService(data.productId, String(data.row?.id ?? ''), values)
     : createService(data.productId, values));
+  return true;
 }
 
-async function submitProperty(data: ThingModelFormData, isUpdate: boolean) {
+async function submitProperty(
+  data: ThingModelFormData,
+  isUpdate: boolean,
+): Promise<boolean> {
   const { valid } = await propertyFormApi.validate();
   if (!valid) {
-    return;
+    return false;
   }
   const values =
     await propertyFormApi.getValues<IotThingModelApi.PropertySaveReq>();
@@ -347,12 +362,16 @@ async function submitProperty(data: ThingModelFormData, isUpdate: boolean) {
         values,
       )
     : createProperty(data.productId, serviceId, values));
+  return true;
 }
 
-async function submitCommand(data: ThingModelFormData, isUpdate: boolean) {
+async function submitCommand(
+  data: ThingModelFormData,
+  isUpdate: boolean,
+): Promise<boolean> {
   const { valid } = await commandFormApi.validate();
   if (!valid) {
-    return;
+    return false;
   }
   const values =
     await commandFormApi.getValues<IotThingModelApi.CommandSaveReq>();
@@ -365,18 +384,23 @@ async function submitCommand(data: ThingModelFormData, isUpdate: boolean) {
         values,
       )
     : createCommand(data.productId, serviceId, values));
+  return true;
 }
 
-async function submitEvent(data: ThingModelFormData, isUpdate: boolean) {
+async function submitEvent(
+  data: ThingModelFormData,
+  isUpdate: boolean,
+): Promise<boolean> {
   const { valid } = await eventFormApi.validate();
   if (!valid) {
-    return;
+    return false;
   }
   const values = await eventFormApi.getValues<IotThingModelApi.EventSaveReq>();
   const serviceId = data.serviceId ?? '';
   await (isUpdate
     ? updateEvent(data.productId, serviceId, String(data.row?.id ?? ''), values)
     : createEvent(data.productId, serviceId, values));
+  return true;
 }
 
 const [Modal, modalApi] = useVbenModal<ThingModelFormData>({
@@ -391,21 +415,27 @@ const [Modal, modalApi] = useVbenModal<ThingModelFormData>({
     const isUpdate = !!data.row?.id;
     try {
       modalApi.setState({ confirmLoading: true });
+      let saved: boolean;
       if (data.kind === 'service') {
-        await submitService(data, isUpdate);
+        saved = await submitService(data, isUpdate);
       } else if (data.kind === 'property') {
-        await submitProperty(data, isUpdate);
+        saved = await submitProperty(data, isUpdate);
       } else if (data.kind === 'command') {
-        await submitCommand(data, isUpdate);
+        saved = await submitCommand(data, isUpdate);
       } else {
-        await submitEvent(data, isUpdate);
+        saved = await submitEvent(data, isUpdate);
+      }
+      // 校验未过：弹窗必须**保持打开**并保留用户输入，让用户改完再提交。
+      // 绝不能再提示「操作成功」——那会让用户误以为已保存（假成功，P0-2）。
+      if (!saved) {
+        return;
       }
       message.success($t('common.success'));
       modalApi.close();
       emit('reload');
     } catch {
-      // 接口失败提示由全局请求拦截器统一给出（这里只兜底避免未处理拒绝），
-      // 校验失败已在各 submit 内 `return`，不会走到本分支
+      // 接口失败提示由全局请求拦截器统一给出（这里只兜底避免未处理拒绝）；
+      // 校验失败已由各 submit* 以 `false` 返回，不会走到本分支。
     } finally {
       modalApi.setState({ confirmLoading: false });
     }

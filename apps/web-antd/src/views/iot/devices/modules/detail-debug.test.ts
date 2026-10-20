@@ -1,4 +1,3 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createApp,
   defineComponent,
@@ -11,8 +10,18 @@ import {
 import { registerAccessDirective } from '@vben/access';
 import { i18n } from '@vben/locales';
 
-import DetailDebug from './detail-debug.vue';
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
+
 import PanelErrorBoundary from '../../shared/panel-error-boundary.vue';
+import DetailDebug from './detail-debug.vue';
 
 /**
  * 「在线调试」页签（`detail-debug.vue`）的**运行时**组件级用例。
@@ -101,7 +110,10 @@ vi.mock('@vben/common-ui', () => ({
     };
     const Stub = defineComponent({
       name: 'DrawerStub',
-      setup: (_props, { slots }) => () => h('div', { class: 'drawer-stub' }, slots.default?.()),
+      setup:
+        (_props, { slots }) =>
+        () =>
+          h('div', { class: 'drawer-stub' }, slots.default?.()),
     });
     return [Stub, api];
   },
@@ -132,9 +144,8 @@ function bizFailure(code: number, message: string) {
  * 「口径只有一处」的实际意义：测试与 CI 门禁若各写一份遍历，两者对「叶子」的理解迟早漂移，
  * 于是出现「测试绿、CI 绿、线上红」。
  */
-const { collectLeafKeys } = await import(
-  '../../../../../../../scripts/check-i18n-message-compile.mjs'
-);
+const { collectLeafKeys } =
+  await import('../../../../../../../scripts/check-i18n-message-compile.mjs');
 
 /** 后端分页响应（`PageResult`，`total/page/pageSize` 都是字符串——后端 Long 序列化口径）。 */
 function page(items: unknown[], total = items.length) {
@@ -201,7 +212,7 @@ function stubApi(history: () => Promise<unknown>) {
 
 async function flush(times = 6) {
   for (let index = 0; index < times; index += 1) {
-    // eslint-disable-next-line no-await-in-loop
+     
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
   await nextTick();
@@ -220,9 +231,7 @@ function mountWith(
       h(
         component as never,
         props,
-        slot
-          ? { default: () => slot() as never }
-          : undefined,
+        slot ? { default: () => slot() as never } : undefined,
       ),
   });
   registerAccessDirective(app);
@@ -374,7 +383,8 @@ describe('detail-debug.vue 运行时（真实 i18n + 真实 antdv + 真实权限
     expect(html).toContain('失败');
     expect(html).toContain('成功');
     // 失败原因码给人话（`NO_SUBSCRIBER` → 「设备未连接(无订阅者)」）
-    expect(html).toContain('设备未连接(无订阅者)');
+    // 半角/全角括号都接受：文案口径归 Lead 统一（G7 把半角括号改成了全角）
+    expect(html).toMatch(/设备未连接[（(]无订阅者[）)]/);
     expect(html).not.toContain('暂无指令记录');
     // 失败态可重发（按钮文案就是「重发同一请求」）
     expect(html).toContain('重发同一请求');
@@ -558,7 +568,8 @@ describe('页签渲染错误边界（panel-error-boundary.vue）', () => {
     const container = document.createElement('div');
     document.body.append(container);
     const app = createApp({
-      render: () => h(PanelErrorBoundary, null, { default: () => h(Exploding) }),
+      render: () =>
+        h(PanelErrorBoundary, null, { default: () => h(Exploding) }),
     });
     app.config.errorHandler = (error) => {
       reported.push(error);
@@ -577,10 +588,8 @@ describe('页签渲染错误边界（panel-error-boundary.vue）', () => {
   });
 
   it('无错误时只渲染插槽内容（不吞掉正常渲染）', async () => {
-    const handle = mountWith(
-      PanelErrorBoundary,
-      {},
-      () => h('div', { class: 'ok-panel' }, 'NORMAL'),
+    const handle = mountWith(PanelErrorBoundary, {}, () =>
+      h('div', { class: 'ok-panel' }, 'NORMAL'),
     );
     mounted = handle;
     await flush(2);
@@ -689,5 +698,370 @@ describe('detail.vue 接线（第 5 个页签）+ 真机形态的空白事故复
     expect(html).toContain('在线调试页渲染失败');
     expect(html).toContain('Message compilation error');
     expect(html).toContain('Invalid token in placeholder');
+  });
+});
+
+describe('writeDesired 接线（P1-8：勾了必须真的发出去）', () => {
+  /** 物模型桩：一个服务 + 一个可写属性（属性设置是默认分支）。 */
+  function stubFormModel() {
+    mockGet.mockImplementation((url: string) => {
+      if (url.includes('/products/') && url.endsWith('/services')) {
+        return Promise.resolve([{ id: '7', serviceName: '默认服务' }]);
+      }
+      if (url.includes('/products/') && url.endsWith('/properties')) {
+        return Promise.resolve([
+          {
+            accessMode: 'RW',
+            dataType: 'int',
+            identifier: 'temperature',
+            propertyName: '温度',
+          },
+        ]);
+      }
+      if (url.includes('/products/') && url.endsWith('/commands')) {
+        return Promise.resolve([]);
+      }
+      // 设备命令历史
+      return Promise.resolve(page([]));
+    });
+  }
+
+  /** 在真实 antd Select 上选中属性（点开下拉 → 点选项），不经内部状态。 */
+  async function pickProperty(container: HTMLElement, label: string) {
+    const select = container.querySelector(
+      '[data-testid="debug-set-identifier-0"]',
+    );
+    expect(select, '未找到属性设置的点位下拉').toBeTruthy();
+    (
+      select?.querySelector('.ant-select-selector') as HTMLElement
+    )?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    await flush();
+    const option = [
+      ...document.querySelectorAll('.ant-select-item-option'),
+    ].find((element) => element.textContent?.includes(label)) as
+      | HTMLElement
+      | undefined;
+    expect(option, `下拉里没有可选属性 ${label}`).toBeTruthy();
+    option?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flush();
+  }
+
+  async function typeValue(container: HTMLElement, value: string) {
+    const input = container.querySelector(
+      '[data-testid="debug-set-value-0"]',
+    ) as HTMLInputElement | null;
+    expect(input, '未找到属性值输入框').toBeTruthy();
+    if (!input) {
+      throw new Error('未找到属性值输入框（属性设置表单未渲染）');
+    }
+    input.value = value;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await flush(2);
+  }
+
+  it('🔴 勾选「同时写影子期望值」⇒ 请求体带 writeDesired=true（不是假控件）', async () => {
+    stubFormModel();
+    mockPost.mockResolvedValue({ requestId: 'cmd-1', statusCode: 'sent' });
+    const handle = mountWith(DetailDebug, {
+      deviceId: '9300012',
+      productId: '9100001',
+    });
+    mounted = handle;
+    await flush();
+
+    await pickProperty(handle.container, '温度');
+    await typeValue(handle.container, '25.5');
+    // antd 的 Checkbox 把 attrs 透传到内部 <input>，data-testid 直接落在 input 上
+    const checkbox = handle.container.querySelector(
+      '[data-testid="debug-write-desired"]',
+    ) as HTMLInputElement | null;
+    expect(
+      checkbox,
+      '属性设置下必须渲染「同时写影子期望值」复选框',
+    ).toBeTruthy();
+    // expect 已断言存在（缺失即失败），用可选链点击避免非空断言
+    checkbox?.click();
+    await flush(2);
+
+    (
+      handle.container.querySelector(
+        '[data-testid="debug-send"]',
+      ) as HTMLButtonElement
+    )?.click();
+    await flush();
+
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    const [url, body] = mockPost.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(url, '下发路径漂移').toBe('/iot/devices/9300012/commands');
+    expect(body).toMatchObject({
+      identifier: 'temperature',
+      kind: 'property_set',
+      params: { value: 25.5 },
+      writeDesired: true,
+    });
+  });
+
+  it('未勾选 ⇒ 请求体不出现 writeDesired（不写用户没要求的期望值）', async () => {
+    stubFormModel();
+    mockPost.mockResolvedValue({ requestId: 'cmd-2', statusCode: 'sent' });
+    const handle = mountWith(DetailDebug, {
+      deviceId: '9300012',
+      productId: '9100001',
+    });
+    mounted = handle;
+    await flush();
+
+    await pickProperty(handle.container, '温度');
+    await typeValue(handle.container, '26');
+    (
+      handle.container.querySelector(
+        '[data-testid="debug-send"]',
+      ) as HTMLButtonElement
+    )?.click();
+    await flush();
+
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    const [, body] = mockPost.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(Object.hasOwn(body, 'writeDesired')).toBe(false);
+  });
+});
+
+/**
+ * 拆分批次 5-H（2026-10-20）新增安全网：本次把 900 行脚本拆成
+ * `use-debug-command` / `use-debug-history` / `use-debug-fanout` + 三个展示组件，
+ * 行为面必须有可运行的守门用例（只靠拆分前的旧用例，覆盖不到「拆分后接线是否还通」）。
+ *
+ * 守的是三件**拆分最容易掉的事**：
+ * 1. 多点位拆分：两行 ⇒ 真的发两条（每条只带一个标识），结果面板逐条可见、本批高亮生效；
+ * 2. 重发：点「重发同一请求」⇒ 打同一个 `requestId` 的 resend 端点（不新生成）；
+ * 3. 回执展开：可解析回执逐字段展示，不可解析必须**明确提示**而不是空白。
+ */
+describe('下发拆分 / 重发 / 回执展开（拆分后接线守门）', () => {
+  const ZH = {
+    addRow: '添加点位',
+    batchTag: '本批',
+    replyParsed: '回执字段',
+    replyUnparsable: '回执体不是合法 JSON 对象',
+    resend: '重发同一请求',
+  };
+
+  /** 可变历史桩：发完一批后让下一次查询返回新记录（模拟真实「新记录在最前」）。 */
+  let historyAfterSend: unknown[] = [];
+
+  /** 物模型桩（一个服务 + 一个 RW 属性 + 一个命令）。 */
+  function stubModel() {
+    historyAfterSend = [];
+    mockGet.mockImplementation((url: string) => {
+      if (url.includes('/products/') && url.endsWith('/services')) {
+        return Promise.resolve([{ id: '7', serviceName: '默认服务' }]);
+      }
+      if (url.includes('/products/') && url.endsWith('/properties')) {
+        return Promise.resolve([
+          {
+            accessMode: 'RW',
+            dataType: 'int',
+            identifier: 'temperature',
+            propertyName: '温度',
+          },
+        ]);
+      }
+      if (url.includes('/products/') && url.endsWith('/commands')) {
+        return Promise.resolve([
+          { commandName: '重启', identifier: 'reboot' },
+        ]);
+      }
+      if (url.includes('/commands') && url.includes('/devices/')) {
+        // 首次加载为空；下发成功后的重查返回该批记录（用于验证本批高亮）
+        const items = historyAfterSend;
+        historyAfterSend = [];
+        return Promise.resolve(page(items));
+      }
+      return Promise.resolve([]);
+    });
+  }
+
+  /** 在真实 antd Select 上选中属性（第 index 行）。 */
+  async function pickProperty(container: HTMLElement, index: number) {
+    const select = container.querySelector(
+      `[data-testid="debug-set-identifier-${index}"]`,
+    );
+    expect(select, `第 ${index} 行没有属性下拉`).toBeTruthy();
+    (
+      select?.querySelector('.ant-select-selector') as HTMLElement
+    )?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    await flush();
+    // 取最后一条匹配项：上一次打开的下拉可能还留在 DOM 里（antd 复用了浮层节点）
+    const option = [...document.querySelectorAll('.ant-select-item-option')]
+      .toReversed()
+      .find((element) => element.textContent?.includes('温度')) as
+      | HTMLElement
+      | undefined;
+    expect(option, '下拉里没有可选属性 温度').toBeTruthy();
+    option?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flush();
+  }
+
+  /** 填第 index 行的值。 */
+  async function typeValue(container: HTMLElement, index: number, value: string) {
+    const input = container.querySelector(
+      `[data-testid="debug-set-value-${index}"]`,
+    ) as HTMLInputElement | null;
+    expect(input, `第 ${index} 行没有值输入框`).toBeTruthy();
+    if (!input) {
+      throw new Error('缺少属性值输入框');
+    }
+    input.value = value;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await flush(2);
+  }
+
+  /** 按可见文本找按钮。 */
+  function buttonByText(container: ParentNode, text: string) {
+    return [...container.querySelectorAll('button')].find((button) =>
+      (button.textContent ?? '').includes(text),
+    );
+  }
+
+  it('属性设置两行 ⇒ 拆成两条独立指令（每条只带一个标识），结果逐条可见且本批高亮', async () => {
+    stubModel();
+    mockPost
+      .mockResolvedValueOnce({ requestId: 'cmd-a', statusCode: 'sent' })
+      .mockResolvedValueOnce({ requestId: 'cmd-b', statusCode: 'sent' });
+    const handle = mountWith(DetailDebug, {
+      deviceId: '9300012',
+      productId: '9100001',
+    });
+    mounted = handle;
+    await flush();
+
+    // 加第二行并分别选点位/填值
+    buttonByText(handle.container, ZH.addRow)?.click();
+    await flush();
+    await pickProperty(handle.container, 0);
+    await typeValue(handle.container, 0, '1');
+    await pickProperty(handle.container, 1);
+    await typeValue(handle.container, 1, '2');
+
+    // 下发成功后页面会重查历史（`resetAndLoad`）：这里预置「该批记录在下一次查询里返回」
+    historyAfterSend = [
+      { ...REAL_SUCCEEDED_ROW, requestId: 'cmd-a', id: 'x1' },
+      { ...REAL_SUCCEEDED_ROW, requestId: 'cmd-b', id: 'x2' },
+    ];
+    (
+      handle.container.querySelector(
+        '[data-testid="debug-send"]',
+      ) as HTMLButtonElement
+    )?.click();
+    await flush(12);
+
+    // ① 拆成两条：每次请求只带一个 identifier（后端单条只接一个）
+    expect(mockPost).toHaveBeenCalledTimes(2);
+    for (const call of mockPost.mock.calls) {
+      const [url, body] = call as [string, Record<string, unknown>];
+      expect(url, '下发路径漂移').toBe('/iot/devices/9300012/commands');
+      expect(body.identifier).toBe('temperature');
+      expect(body.kind).toBe('property_set');
+    }
+    // ② 结果面板逐条可见（两条都有 requestId 可复制）
+    expect(handle.container.textContent).toContain('cmd-a');
+    expect(handle.container.textContent).toContain('cmd-b');
+
+    // ③ 下发后重查历史：该批记录被高亮 + 「本批」标签
+    const html = handle.container.innerHTML;
+    expect(html).toContain('bg-primary/10');
+    expect(handle.container.textContent).toContain(ZH.batchTag);
+  });
+
+  it('失败记录可重发：重发打的是同一个 requestId 的 resend 端点（不新生成）', async () => {
+    stubModel();
+    mockGet.mockImplementation((url: string) => {
+      if (url.includes('/products/') && url.endsWith('/services')) {
+        return Promise.resolve([]);
+      }
+      if (url.includes('/commands') && url.includes('/devices/')) {
+        return Promise.resolve(page([REAL_FAILED_ROW]));
+      }
+      return Promise.resolve([]);
+    });
+    mockPost.mockResolvedValue({
+      requestId: REAL_FAILED_ROW.requestId,
+      statusCode: 'sent',
+    });
+    const handle = mountWith(DetailDebug, {
+      deviceId: '9300012',
+      productId: '9100001',
+    });
+    mounted = handle;
+    await flush(10);
+
+    // 失败行（failed 可重发）→ 点「重发同一请求」→ Popconfirm 确认
+    const resendButton = buttonByText(handle.container, ZH.resend);
+    expect(resendButton, '失败行没有「重发同一请求」按钮').toBeTruthy();
+    resendButton?.click();
+    await flush(6);
+    const popovers = [...document.querySelectorAll<HTMLElement>('.ant-popover')];
+    const visible = popovers.filter(
+      (item) => !item.classList.contains('ant-popover-hidden'),
+    );
+    const okButton = [...(visible.at(-1)?.querySelectorAll('button') ?? [])].find(
+      (button) => button.classList.contains('ant-btn-primary'),
+    );
+    expect(okButton, '重发缺少二次确认按钮').toBeTruthy();
+    okButton?.click();
+    await flush(10);
+
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    const [url] = mockPost.mock.calls[0] as [string];
+    expect(url).toBe(
+      `/iot/devices/9300012/commands/${REAL_FAILED_ROW.requestId}/resend`,
+    );
+  });
+
+  it('回执展开：可解析回执逐字段展示；不可解析必须明确提示（不得空白）', async () => {
+    stubModel();
+    const unparsable = {
+      ...REAL_SUCCEEDED_ROW,
+      id: 'y1',
+      replyPayload: 'not-json-reply',
+      requestId: 'cmd-unparsable',
+    };
+    mockGet.mockImplementation((url: string) => {
+      if (url.includes('/products/') && url.endsWith('/services')) {
+        return Promise.resolve([]);
+      }
+      if (url.includes('/commands') && url.includes('/devices/')) {
+        return Promise.resolve(page([REAL_SUCCEEDED_ROW, unparsable]));
+      }
+      return Promise.resolve([]);
+    });
+    const handle = mountWith(DetailDebug, {
+      deviceId: '9300012',
+      productId: '9100001',
+    });
+    mounted = handle;
+    await flush(10);
+
+    const expandIcons = [
+      ...handle.container.querySelectorAll('.ant-table-row-expand-icon'),
+    ];
+    expect(expandIcons.length, '历史表没有可展开行').toBeGreaterThan(0);
+    for (const icon of expandIcons) {
+      (icon as HTMLElement).click();
+    }
+    await flush(10);
+
+    const html = handle.container.innerHTML;
+    // 可解析：回执字段区渲染（code/message/data 来自真实回执 JSON）
+    expect(html).toContain(ZH.replyParsed);
+    expect(html).toContain('applied');
+    // 不可解析：明确提示，而不是把原文藏掉
+    expect(handle.container.textContent).toContain(ZH.replyUnparsable);
+    expect(html).toContain('not-json-reply');
   });
 });

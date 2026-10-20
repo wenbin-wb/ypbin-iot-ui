@@ -129,7 +129,14 @@ export namespace IotDeviceTraceApi {
 
   /** 查询条件。 */
   export interface Query {
-    /** 时间窗起点（ISO 字符串；不传则后端回落"当前时刻往前 1 小时"）。 */
+    /**
+     * 时间窗起点/终点。
+     *
+     * 格式**必须**是 `yyyy-MM-dd HH:mm:ss`（不带时区、不带 `T`/`Z`）：后端
+     * `DeviceTraceQuery.from/to` 是 `LocalDateTime` 且用 `@DateTimeFormat` 固定了该 pattern，
+     * 传 `Date.toISOString()`（带 `Z`）会被 Spring 直接判 400。
+     * 不传则后端回落"当前时刻往前 1 小时"。
+     */
     from?: string;
     to?: string;
     /** 阶段筛选。 */

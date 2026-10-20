@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import type { RefreshGuard } from '../shared/refresh-guard';
+
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { IotProductApi } from '#/api/iot';
 
@@ -18,6 +20,11 @@ import { extractErrorMessage } from '#/utils/error';
 import EmptyGuide from '../onboarding/modules/empty-guide.vue';
 import OnboardingGuide from '../onboarding/modules/guide.vue';
 import ListErrorAlert from '../shared/list-error-alert.vue';
+import {
+  createRefreshGuard,
+  QueryTimeoutError,
+  withQueryTimeout,
+} from '../shared/refresh-guard';
 import { useColumns, useGridFormSchema } from './data';
 import Detail from './modules/detail.vue';
 import Form from './modules/form.vue';
@@ -38,6 +45,15 @@ const [GuideDrawer, GuideDrawerApi] = useVbenDrawer();
  */
 const listError = ref('');
 
+/**
+ * 列表的「静默丢弃」守卫（见 shared/refresh-guard.ts）。
+ *
+ * vxe 在查询在途时会直接吞掉后续 `query`/`reload`（不报错、不转圈）：
+ * 用户点刷新/翻页撞上慢请求就是「点了没反应」；慢请求本身也没有客户端超时。
+ * 这里登记每个查询意图，被吞掉的那次在本周期结束后用最新筛选补发一次。
+ */
+let listGuard: RefreshGuard;
+
 const [Grid, gridApi] = useVbenVxeGrid({
   formOptions: {
     schema: useGridFormSchema(),
@@ -51,11 +67,21 @@ const [Grid, gridApi] = useVbenVxeGrid({
     proxyConfig: {
       ajax: {
         query: async ({ page }, formValues: IotProductApi.ProductQuery) => {
+          // 查询真的启动了 ⇒ 登记过的刷新意图已被执行（没被 vxe 丢弃）
+          listGuard.consumeIntent();
           try {
-            const result = await getProductPage({
-              page: page.currentPage,
-              pageSize: page.pageSize,
-              ...formValues,
+            const result = await withQueryTimeout(
+              getProductPage({
+                page: page.currentPage,
+                pageSize: page.pageSize,
+                ...formValues,
+              }),
+            ).catch((error: unknown) => {
+              // 客户端超时 ⇒ 换成用户能看懂的话（而不是永远转圈）
+              if (error instanceof QueryTimeoutError) {
+                throw new TypeError($t('page.iot.common.queryTimeout'));
+              }
+              throw error;
             });
             listError.value = '';
             // 后端 `PageResult.total` 是 `long` ⇒ 全局序列化成**字符串**（`"17"`），
@@ -68,6 +94,9 @@ const [Grid, gridApi] = useVbenVxeGrid({
               $t('page.iot.product.listLoadFailed'),
             );
             throw error;
+          } finally {
+            // 周期结束（成功/失败）⇒ 有被丢弃的意图就补发一次
+            listGuard.notifyCycleEnd();
           }
         },
       },
@@ -81,7 +110,28 @@ const [Grid, gridApi] = useVbenVxeGrid({
       zoom: true,
     },
   } as VxeTableGridOptions<IotProductApi.ProductResp>,
+  gridEvents: {
+    pageChange: () => listGuard.markIntent(),
+    toolbarButtonClick: ({ code }: { code?: string }) => {
+      if (code === 'reload' || code === 'query') {
+        listGuard.markIntent();
+      }
+    },
+  },
 });
+
+listGuard = createRefreshGuard({
+  isBusy: () => Boolean(gridApi.grid?.reactData?.tableLoading),
+  issue: () => {
+    void gridApi.query();
+  },
+  onTrailing: (active) => gridApi.setLoading(active),
+});
+
+/** 列表刷新入口（表单/详情/向导/删除发布后共用；走守卫覆盖「慢查询在途」窗口）。 */
+function reloadList() {
+  listGuard.request();
+}
 
 function onEdit(row: IotProductApi.ProductResp) {
   FormDrawerApi.setData(row).open();
@@ -96,7 +146,7 @@ function onDelete(row: IotProductApi.ProductResp) {
   deleteProduct(row.id)
     .then(() => {
       message.success($t('common.success'));
-      gridApi.query();
+      reloadList();
     })
     .catch(() => {});
 }
@@ -105,7 +155,7 @@ function onPublish(row: IotProductApi.ProductResp) {
   publishProduct(row.id)
     .then((version) => {
       message.success(`${$t('common.success')} ${version}`);
-      gridApi.query();
+      reloadList();
     })
     .catch(() => {});
 }
@@ -117,13 +167,15 @@ function openGuide() {
 </script>
 <template>
   <Page auto-content-height>
-    <FormDrawer @reload="gridApi.query()" />
-    <DetailDrawer @reload="gridApi.query()" />
+    <!-- 页面主标题：视觉上隐藏，供读屏/文档大纲使用（全站 0 个 h1 是审查 P3-5 指出的可访问性缺陷） -->
+    <h1 class="sr-only">{{ $t('page.iot.product.title') }}</h1>
+    <FormDrawer @reload="reloadList" />
+    <DetailDrawer @reload="reloadList" />
     <GuideDrawer
       :title="$t('page.iot.onboarding.title')"
       class="w-full max-w-[900px]"
     >
-      <OnboardingGuide @done="gridApi.query()" />
+      <OnboardingGuide @done="reloadList" />
     </GuideDrawer>
     <!--
       🔴 失败态**必须挂在表格之外**（不能只放 `#empty` 槽里）：

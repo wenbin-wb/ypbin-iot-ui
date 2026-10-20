@@ -9,6 +9,7 @@ import { Inbox } from '@vben/icons';
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 
 import { $t } from '#/locales';
+import { chartColor } from '#/utils/chart-tokens';
 
 defineOptions({ name: 'AnalyticsProductTop' });
 
@@ -60,8 +61,8 @@ function renderChart(items: IotDashboardApi.NameValue[]) {
             y: 0,
             y2: 0,
             colorStops: [
-              { offset: 0, color: 'rgba(0,102,245,0.45)' },
-              { offset: 1, color: '#0066f5' },
+              { color: chartColor('primary', 0.45), offset: 0 },
+              { color: chartColor('primary'), offset: 1 },
             ],
           },
         },
@@ -104,7 +105,17 @@ watch(topItems, renderChart, { deep: true, flush: 'post' });
 </script>
 
 <template>
-  <EchartsUI v-if="hasData" ref="chartRef" />
+  <!--
+    图表是纯 canvas，读屏拿不到任何信息；ECharts 的 aria 组件未在本项目注册
+    （`packages/effects/plugins/src/echarts/echarts.ts` 未 `echarts.use([AriaComponent])`），
+    所以在容器上给 `role="img"` + `aria-label`，让读屏至少能播报「这是一张什么图」。
+  -->
+  <EchartsUI
+    v-if="hasData"
+    ref="chartRef"
+    :aria-label="$t('page.dashboard.productTopTitle')"
+    role="img"
+  />
   <div
     v-else
     class="flex h-[300px] flex-col items-center justify-center gap-2 text-sm text-muted-foreground"

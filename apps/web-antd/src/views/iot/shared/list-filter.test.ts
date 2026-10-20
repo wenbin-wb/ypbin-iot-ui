@@ -20,7 +20,7 @@ import {
  * 保存幂等；分页字段不持久化；版本化 key 支持结构演进。
  */
 
-describe('filterStorageKey（版本化）', () => {
+describe('filterStorageKey（版本化 + 用户隔离）', () => {
   it('含页面名与版本', () => {
     expect(filterStorageKey('alert-instances', 1)).toBe(
       'ypbin-iot.filter.alert-instances.v1',
@@ -31,6 +31,65 @@ describe('filterStorageKey（版本化）', () => {
     expect(filterStorageKey('alert-instances', 2)).not.toBe(
       filterStorageKey('alert-instances', 1),
     );
+  });
+
+  it('作用域非空 ⇒ 追加用户维度（跨账号不串用筛选）', () => {
+    expect(filterStorageKey('alert-instances', 1, 'u42')).toBe(
+      'ypbin-iot.filter.alert-instances.v1.u42',
+    );
+    expect(filterStorageKey('alert-instances', 1, 'u42')).not.toBe(
+      filterStorageKey('alert-instances', 1, 'u43'),
+    );
+  });
+
+  it('作用域为空 ⇒ 保持旧 key 形态（无登录上下文时兼容）', () => {
+    expect(filterStorageKey('alert-instances', 1, '')).toBe(
+      'ypbin-iot.filter.alert-instances.v1',
+    );
+  });
+});
+
+describe('loadFilter / saveFilterIfChanged 按用户隔离', () => {
+  it('显式 scope：不同用户的筛选互不可见（不会把 A 的 deviceId 带进 B）', () => {
+    localStorage.clear();
+    expect(
+      saveFilterIfChanged('p', 1, { deviceId: 'dev-A' }, null, {
+        scope: 'u42',
+      }),
+    ).toBe(true);
+
+    // B 用户读不到 A 的筛选 ⇒ 回默认
+    expect(
+      loadFilter(
+        'p',
+        1,
+        { deviceId: 'string' },
+        { deviceId: '' },
+        {
+          scope: 'u43',
+        },
+      ),
+    ).toEqual({ deviceId: '' });
+    // A 用户自己仍能读回
+    expect(
+      loadFilter(
+        'p',
+        1,
+        { deviceId: 'string' },
+        { deviceId: '' },
+        {
+          scope: 'u42',
+        },
+      ),
+    ).toEqual({ deviceId: 'dev-A' });
+  });
+
+  it('无活动 pinia（单测上下文）⇒ 作用域解析失败退回旧 key，仍能读写', () => {
+    localStorage.clear();
+    expect(saveFilterIfChanged('p', 1, { state: 'FIRING' })).toBe(true);
+    expect(loadFilter('p', 1, { state: 'string' }, { state: '' })).toEqual({
+      state: 'FIRING',
+    });
   });
 });
 

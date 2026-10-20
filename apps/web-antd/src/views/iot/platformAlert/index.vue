@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import type { RefreshGuard } from '../shared/refresh-guard';
+
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { IotPlatformAlertApi } from '#/api/iot';
 
@@ -21,6 +23,11 @@ import {
   prettyJson,
 } from '../shared/display';
 import ListErrorAlert from '../shared/list-error-alert.vue';
+import {
+  createRefreshGuard,
+  QueryTimeoutError,
+  withQueryTimeout,
+} from '../shared/refresh-guard';
 import {
   platformAlertSeverityColor,
   platformAlertSeverityLabelKey,
@@ -47,6 +54,15 @@ const listError = ref('');
 
 const stateFilter = ref<string | undefined>();
 const severityFilter = ref<string | undefined>();
+
+/**
+ * 列表的「静默丢弃」守卫（见 shared/refresh-guard.ts）。
+ *
+ * 为什么需要：vxe 在查询在途时会直接吞掉后续 `query`/`reload`（不报错、不转圈），
+ * 用户在这个窗口点刷新/翻页/改筛选就是「点了没反应」；慢请求也没有客户端超时。
+ * 这里登记每个查询意图，被吞掉的那次在本周期结束后用**最新筛选**补发一次。
+ */
+let listGuard: RefreshGuard;
 
 const [Grid, gridApi] = useVbenVxeGrid({
   gridOptions: {
@@ -104,12 +120,22 @@ const [Grid, gridApi] = useVbenVxeGrid({
     proxyConfig: {
       ajax: {
         query: async ({ page }) => {
+          // 查询真的启动了 ⇒ 登记过的刷新意图已被执行，消费掉（没被 vxe 丢弃）
+          listGuard.consumeIntent();
           try {
-            const result = await getPlatformAlerts({
-              page: page.currentPage,
-              pageSize: page.pageSize,
-              state: stateFilter.value || undefined,
-              severity: severityFilter.value || undefined,
+            const result = await withQueryTimeout(
+              getPlatformAlerts({
+                page: page.currentPage,
+                pageSize: page.pageSize,
+                state: stateFilter.value || undefined,
+                severity: severityFilter.value || undefined,
+              }),
+            ).catch((error: unknown) => {
+              // 客户端超时 ⇒ 换成用户能看懂的话（而不是永远转圈/静默）
+              if (error instanceof QueryTimeoutError) {
+                throw new TypeError($t('page.iot.common.queryTimeout'));
+              }
+              throw error;
             });
             listError.value = '';
             // 后端计数是字符串（long 全局序列化），进 vxe 前转数
@@ -120,6 +146,9 @@ const [Grid, gridApi] = useVbenVxeGrid({
               $t('page.iot.platformAlert.loadFailed'),
             );
             throw error;
+          } finally {
+            // 一个查询周期结束（成功/失败都算）⇒ 若期间有被丢弃的意图，守卫会补发
+            listGuard.notifyCycleEnd();
           }
         },
       },
@@ -127,16 +156,43 @@ const [Grid, gridApi] = useVbenVxeGrid({
     rowConfig: { keyField: 'id' },
     toolbarConfig: { custom: true, export: false, refresh: true, zoom: true },
   } as VxeTableGridOptions<IotPlatformAlertApi.PlatformAlertResp>,
+  gridEvents: {
+    // 翻页与工具栏刷新由 vxe 自己发起 commitProxy，页面只能靠事件知道「这次意图可能被丢弃」
+    pageChange: () => listGuard.markIntent(),
+    toolbarButtonClick: ({ code }: { code?: string }) => {
+      if (code === 'reload' || code === 'query') {
+        listGuard.markIntent();
+      }
+    },
+  },
 });
 
-function reloadOnFilter() {
-  gridApi.query();
+listGuard = createRefreshGuard({
+  isBusy: () => Boolean(gridApi.grid?.reactData?.tableLoading),
+  issue: () => {
+    void gridApi.query();
+  },
+  onTrailing: (active) => gridApi.setLoading(active),
+});
+
+/**
+ * 筛选变化后刷新。
+ *
+ * 必须先回第 1 页：`query()` 不会重置 `tablePage.currentPage`（vxe 只有 `reload`/`initial` 重置），
+ * 原实现在第 3 页改筛选仍请求 page=3 ⇒ 结果只有 1 页时表格空白，
+ * 上方筛选条却显示「已筛选」，用户会误判「没有严重告警」。
+ */
+async function reloadOnFilter() {
+  await gridApi.grid?.setCurrentPage(1);
+  listGuard.request();
 }
 </script>
 
 <template>
   <!-- 架构对齐：补上 auto-content-height（此前高度链与其它页不一致） -->
   <Page auto-content-height>
+    <!-- 页面主标题：视觉上隐藏，供读屏/文档大纲使用（全站 0 个 h1 是审查 P3-5 指出的可访问性缺陷） -->
+    <h1 class="sr-only">{{ $t('page.iot.platformAlert.title') }}</h1>
     <template v-if="canView">
       <div class="mb-3 flex flex-wrap items-center gap-3">
         <div class="font-semibold">

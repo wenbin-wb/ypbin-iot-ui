@@ -17,6 +17,7 @@ import {
   Select,
   Spin,
   Table,
+  Tooltip,
 } from 'ant-design-vue';
 
 import { useVbenForm } from '#/adapter/form';
@@ -331,6 +332,23 @@ async function onRemove(memberId: string) {
   }
 }
 
+/**
+ * 批量移除按钮的**禁用原因**（空 = 可点）。
+ *
+ * 为什么要分离原因：禁用态如果只显示一个灰按钮，用户无法区分
+ * 「没勾选」还是「请求在途」，前者会去查权限、后者会以为界面卡死。
+ * 文案复用 shared/common 的 disabled* 键，不新增页面级文案。
+ */
+const batchRemoveDisabledReason = computed(() => {
+  if (batchRemoving.value) {
+    return $t('page.iot.common.disabledPending');
+  }
+  if (selectedMemberIds.value.length === 0) {
+    return $t('page.iot.common.disabledSelectFirst');
+  }
+  return '';
+});
+
 /** 空态引导：设备在设备台账创建，点过去即可（不改台账页本身的交互）。 */
 function onGoDevices() {
   void router.push({ path: '/iot/devices' });
@@ -358,25 +376,34 @@ defineExpose({ drawerApi });
         <Button @click="batchModalApi.open()">
           {{ $t('page.iot.group.memberBatchAdd') }}
         </Button>
-        <Popconfirm
-          :cancel-text="$t('common.cancel')"
-          :disabled="selectedMemberIds.length === 0 || batchRemoving"
-          :ok-text="$t('common.confirm')"
-          :title="
-            $t('page.iot.group.memberBatchRemoveConfirm', [
-              String(selectedMemberIds.length),
-            ])
-          "
-          @confirm="onBatchRemove"
-        >
-          <Button
-            danger
-            :disabled="selectedMemberIds.length === 0 || batchRemoving"
-            :loading="batchRemoving"
+        <!-- antd 的 disabled 按钮不触发 mouseenter ⇒ 原因提示挂在外层 span 上；
+             span 同时带 tabindex=0，键盘用户也能聚焦看到原因（无障碍要求）。 -->
+        <Tooltip :title="batchRemoveDisabledReason || undefined">
+          <span
+            class="inline-block"
+            :tabindex="batchRemoveDisabledReason ? 0 : undefined"
           >
-            {{ $t('page.iot.group.memberBatchRemove') }}
-          </Button>
-        </Popconfirm>
+            <Popconfirm
+              :cancel-text="$t('common.cancel')"
+              :disabled="selectedMemberIds.length === 0 || batchRemoving"
+              :ok-text="$t('common.confirm')"
+              :title="
+                $t('page.iot.group.memberBatchRemoveConfirm', [
+                  String(selectedMemberIds.length),
+                ])
+              "
+              @confirm="onBatchRemove"
+            >
+              <Button
+                danger
+                :disabled="selectedMemberIds.length === 0 || batchRemoving"
+                :loading="batchRemoving"
+              >
+                {{ $t('page.iot.group.memberBatchRemove') }}
+              </Button>
+            </Popconfirm>
+          </span>
+        </Tooltip>
       </div>
 
       <BatchModal

@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { RefreshGuard } from './refresh-guard';
+import type { RefreshGuard } from '../shared/refresh-guard';
 
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { IotAlertApi } from '#/api/iot';
@@ -9,35 +9,14 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { useAccess } from '@vben/access';
 import { Page, useVbenDrawer } from '@vben/common-ui';
-import { Download } from '@vben/icons';
 
-import {
-  Alert,
-  Button,
-  Empty,
-  message,
-  Space,
-  Tabs,
-  Tag,
-} from 'ant-design-vue';
-import dayjs from 'dayjs';
+import { Alert, Button, Empty, Tabs, Tag } from 'ant-design-vue';
 
 import { useVbenVxeGrid, VbenTableAction } from '#/adapter/vxe-table';
-import {
-  ackAlerts,
-  getAlertPage,
-  getAlertRulePage,
-  getAlertSummary,
-  getDeviceOptions,
-  setAlertRulesEnabled,
-  silenceAlerts,
-} from '#/api/iot';
-import { exportAlertsCsv } from '#/api/iot/alert';
-import { createTrailingDebounce } from '#/api/iot/realtime';
+import { getAlertPage, getAlertRulePage, getDeviceOptions } from '#/api/iot';
 import { $t } from '#/locales';
 import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
-import { downloadBlobSafe } from '#/utils/file';
 
 import { formatDateTime } from '../shared/display';
 import {
@@ -50,15 +29,16 @@ import {
   saveFilterIfChanged,
 } from '../shared/list-filter';
 import PanelErrorBoundary from '../shared/panel-error-boundary.vue';
-import { useIotRealtime } from '../shared/use-iot-realtime';
-import { detectRunawayGrowth, RUNAWAY_HEIGHT } from './alerts-layout';
-import { channelLabel } from './channel';
+import {
+  createRefreshGuard,
+  QueryTimeoutError,
+  withQueryTimeout,
+} from '../shared/refresh-guard';
+import { watchGridForRunawayHeight } from './alerts-layout';
+import { resolveBatchDisabledReason } from './batch-reasons';
 import {
   conditionText,
-  eventLabelKey,
   humanSeconds,
-  notifyStatusLabelKey,
-  reasonLabelKey,
   scopeLabelKey,
   scopeTargetText,
   severityColor,
@@ -69,20 +49,18 @@ import {
   useInstanceFormSchema,
   useRuleColumns,
 } from './data';
-import {
-  createSerialRunner,
-  isTenantContextError,
-  listSlotState,
-  resolveDeviceFilter,
-} from './list-state';
-import InstanceCurve from './modules/instance-curve.vue';
+import { listSlotState, resolveDeviceFilter } from './list-state';
+import InstanceExpand from './modules/instance-expand.vue';
+import InstanceStatus from './modules/instance-status.vue';
+import InstanceToolbar from './modules/instance-toolbar.vue';
 import NotifyRiskTag from './modules/notify-risk-tag.vue';
 import RuleForm from './modules/rule-form.vue';
-import {
-  createRefreshGuard,
-  QueryTimeoutError,
-  withQueryTimeout,
-} from './refresh-guard';
+import RuleToolbar from './modules/rule-toolbar.vue';
+import { useAlertExport } from './use-alert-export';
+import { useAlertInstanceActions } from './use-alert-instance-actions';
+import { useAlertRealtime } from './use-alert-realtime';
+import { useAlertRuleActions } from './use-alert-rule-actions';
+import { useAlertSummary } from './use-alert-summary';
 
 /**
  * 全局告警中心（用户口径 ⑥⑦：三处可达 + 空态引导 + 失败态原样展示后端 message）。
@@ -101,19 +79,20 @@ const canViewRule = computed(() => hasAccessByCodes(['iot:alert:rule-list']));
 
 const canSaveRule = computed(() => hasAccessByCodes(['iot:alert:rule-save']));
 
-/** alert 事件去抖窗口：一次批量确认/恢复会连发多条，合并成一次刷新。 */
-const REALTIME_ALERT_DEBOUNCE_MS = 500;
-
+/**
+ * 实时流接线（断线提示 / 鉴权失败常驻提示 / alert 事件去抖刷新）收在 composable 里：
+ * 页面只提供「刷新走哪条链路」，连接健康与文案留在 `use-alert-realtime`（拆分批次 5-D）。
+ */
 const {
-  error: realtimeError,
-  onEvent: onRealtimeEvent,
-  state: realtimeState,
-} = useIotRealtime();
-
-/** 断线/重连中才提示；首次 connecting 不闪提示。 */
-const realtimeDisconnected = computed(
-  () => realtimeState.value === 'reconnecting',
-);
+  realtimeAuthError,
+  realtimeDisconnected,
+  realtimeError,
+  realtimeUnavailable,
+  reLogin: onReLogin,
+} = useAlertRealtime(() => {
+  // 刷新只有一条路径：列表走守卫 request、摘要走串行化，避免实时事件另开一条刷新分支
+  void reloadAll();
+});
 
 const [RuleDrawer, RuleDrawerApi] = useVbenDrawer({
   connectedComponent: RuleForm,
@@ -167,35 +146,8 @@ async function resolvePresetDeviceName() {
   }
 }
 
-/** 顶部计数（**一次聚合查询**给出，不拿列表长度当计数）。 */
-const summary = ref<IotAlertApi.SummaryResp>();
-
-const summaryError = ref('');
-
-/**
- * 摘要请求串行化（后发覆盖前发）。
- *
- * 🔴 为什么只有它需要：`reloadSummary()` 不走 vxe，没有 vxe 那层在途守卫，
- * 而它会被「进页面」和「确认/静默后的 `reloadAll()`」两处触发 ⇒ 两次请求可以同时在途，
- * 最终值取决于谁最后**返回**（旧请求后到会把刚确认后的计数回退）。
- * 两张表格不用守：vxe 在 `tableLoading` 期间会直接丢弃再来的 query，天然至多一个在途。
- */
-const runSummaryQuery = createSerialRunner();
-
-async function reloadSummary() {
-  return runSummaryQuery(async () => {
-    try {
-      summary.value = await getAlertSummary();
-      summaryError.value = '';
-    } catch (error) {
-      summary.value = undefined;
-      summaryError.value = extractErrorMessage(
-        error,
-        $t('page.iot.alert.summaryLoadFailed'),
-      );
-    }
-  });
-}
+/** 顶部计数（**一次聚合查询**给出，不拿列表长度当计数）；串行化与失败文案见 composable。 */
+const { reload: reloadSummary, summary, summaryError } = useAlertSummary();
 
 // ---------------------------------------------------------------- 告警列表
 
@@ -203,11 +155,8 @@ const listError = ref('');
 
 const selectedIds = ref<string[]>([]);
 
-/** 导出请求在途：按钮 loading + 防重复点击。 */
-const exportLoading = ref(false);
-
 /**
- * 实例表的「静默丢弃」守卫（见 refresh-guard.ts）。
+ * 实例表的「静默丢弃」守卫（见 shared/refresh-guard.ts）。
  *
  * 生命周期：`useVbenVxeGrid` 返回的 api 先就位，再创建守卫；网格组件真正
  * 挂载/查询发生在 setup 之后，闭包拿到的引用必然已赋值。
@@ -300,6 +249,11 @@ const [InstanceGrid, instanceGridApi] = useVbenVxeGrid({
     },
   } as VxeTableGridOptions<IotAlertApi.InstanceResp>,
   gridEvents: {
+    // 🔴 勾选事件**必须**走 gridEvents：`useVbenVxeGrid` 返回的 Grid 包装组件没有
+    // `defineEmits`，模板上的 checkbox-change 模板监听会作为 fallthrough attr 落到根 div，
+    // 而 vxe 的 `checkbox-change` 只绑在内层 `<VxeGrid v-on="events">`（自定义事件不冒泡）
+    // ⇒ 模板监听永远收不到、`selectedIds` 恒空、批量按钮恒禁用（P0-1）。
+    checkboxChange: onCheckboxChange,
     // 真实事件信号：页签刷新按钮、分页翻页都由 vxe 自己发起 commitProxy，
     // 页面要能知道「这次意图可能被丢弃」只能靠这些事件登记。
     // （vben 表单的提交/重置走适配层 `api.reload`，不会触发 vxe 的 form-* 事件；
@@ -335,89 +289,46 @@ async function reloadAll() {
 }
 
 /**
- * SSE `alert` 事件 → 去抖刷新**列表 + 摘要**。
- *
- * 去抖原因：一次批量确认/静默/恢复会向同一租户连发多条 alert，逐条刷新会把
- * `/alerts/page` 与 `/alerts/summary` 打成请求风暴；500ms 内合并为一次，
- * 语义仍是「最终一致」。刷新走既有 `reloadAll()`，不改丢弃/重发语义。
+ * 告警实例处置动作（单条/批量确认与静默）：调 API → 播报生效条数 → 清勾选 → 整页刷新，
+ * 整条链路由 `use-alert-instance-actions` 单点维护。
  */
-const refreshOnRealtimeAlert = createTrailingDebounce(() => {
-  void reloadAll();
-}, REALTIME_ALERT_DEBOUNCE_MS);
+const {
+  ack: onAck,
+  batchAck: onBatchAck,
+  batchAckPending,
+  batchSilence: onBatchSilence,
+  batchSilencePending,
+  silence: onSilence,
+} = useAlertInstanceActions({ reloadAll, selectedIds });
 
-onRealtimeEvent('alert', () => {
-  refreshOnRealtimeAlert();
-});
+/** 批量按钮禁用原因：同一条优先级规则（在途 > 未勾选）收在 `./batch-reasons`，三处按钮共用。 */
+const batchAckDisabledReason = computed(() =>
+  resolveBatchDisabledReason(batchAckPending.value, selectedIds.value.length),
+);
+
+const batchSilenceDisabledReason = computed(() =>
+  resolveBatchDisabledReason(
+    batchSilencePending.value,
+    selectedIds.value.length,
+  ),
+);
 
 /**
- * 导出当前筛选条件下的告警实例 CSV。
+ * 导出当前筛选条件下的告警实例 CSV（防重 + 伪文件识别 + 失败原样提示，见 `use-alert-export`）。
  *
- * 参数 = 搜索表单当前值 + `resolveDeviceFilter` 合并后的 URL 设备过滤（与列表查询同一规则），
- * 否则「从设备台账带 ?deviceId= 进来」时，导出结果会比屏幕上看到的列表多。
- * 文件名带日期；`downloadBlobSafe` 处理「HTTP 200 但响应体是业务失败 JSON」的伪文件。
+ * 表单值与 URL 设备过滤都以 getter 注入：导出参数必须与列表查询同源（页面持有这两处事实）。
  */
-async function onExportCsv() {
-  if (exportLoading.value) {
-    return;
-  }
-  exportLoading.value = true;
-  try {
-    const formValues = (instanceGridApi.formApi?.form?.values ??
-      {}) as IotAlertApi.InstanceQuery;
-    const blob = await exportAlertsCsv({
-      ...formValues,
-      deviceId: resolveDeviceFilter(
-        formValues.deviceId,
-        presetDeviceId.value || undefined,
-      ),
-    });
-    const downloaded = await downloadBlobSafe(
-      blob,
-      `${$t('page.iot.alert.exportName')}_${dayjs().format('YYYYMMDD')}.csv`,
-      $t('page.iot.alert.exportFailed'),
-    );
-    if (downloaded) {
-      message.success($t('common.success'));
-    }
-  } catch (error) {
-    message.error(
-      extractErrorMessage(error, $t('page.iot.alert.exportFailed')),
-    );
-  } finally {
-    exportLoading.value = false;
-  }
-}
-
-async function onAck(ids: string[]) {
-  try {
-    const count = await ackAlerts(ids);
-    message.success($t('page.iot.alert.ackDone', [count]));
-    selectedIds.value = [];
-    await reloadAll();
-    return true;
-  } catch {
-    // 失败提示由全局请求拦截器统一展示；这里只兜底避免未处理拒绝
-    return false;
-  }
-}
-
-async function onSilence(ids: string[], minutes = 60) {
-  try {
-    const count = await silenceAlerts(ids, minutes);
-    message.success($t('page.iot.alert.silenceDone', [count, minutes]));
-    selectedIds.value = [];
-    await reloadAll();
-    return true;
-  } catch {
-    return false;
-  }
-}
+const { exportLoading, onExportCsv } = useAlertExport({
+  getFormValues: () =>
+    (instanceGridApi.formApi?.form?.values ?? {}) as IotAlertApi.InstanceQuery,
+  getPresetDeviceId: () => presetDeviceId.value,
+});
 
 // ---------------------------------------------------------------- 告警规则
 
 const ruleError = ref('');
 
-/** 规则表的「静默丢弃」守卫（与实例表同构，见 refresh-guard.ts）。 */
+/** 规则表的「静默丢弃」守卫（与实例表同构，见 shared/refresh-guard.ts）。 */
 let ruleGuard: RefreshGuard;
 
 const [RuleGrid, ruleGridApi] = useVbenVxeGrid({
@@ -461,6 +372,8 @@ const [RuleGrid, ruleGridApi] = useVbenVxeGrid({
     toolbarConfig: { custom: true, export: false, refresh: true, zoom: true },
   } as VxeTableGridOptions<IotAlertApi.RuleResp>,
   gridEvents: {
+    // 与实例表同理：模板上直接写的 checkbox-change 监听收不到，规则批量启停会恒禁用（P0-1 第二处）
+    checkboxChange: onRuleCheckboxChange,
     pageChange: () => ruleGuard.markIntent(),
     toolbarButtonClick: ({ code }: { code?: string }) => {
       if (code === 'reload' || code === 'query') {
@@ -489,21 +402,26 @@ function onRuleCheckboxChange({
   selectedRuleIds.value = records.map((item) => item.id);
 }
 
-async function onToggleRule(ids: string[], enabled: boolean) {
-  try {
-    const count = await setAlertRulesEnabled(ids, enabled);
-    message.success(
-      enabled
-        ? $t('page.iot.alert.rule.enableDone', [count])
-        : $t('page.iot.alert.rule.disableDone', [count]),
-    );
-    selectedRuleIds.value = [];
-    ruleGuard.request();
-    return true;
-  } catch {
-    return false;
-  }
-}
+/**
+ * 规则启停动作（单条/批量启用、停用）：与实例处置同构的「调 API → 播报生效条数 → 清勾选 →
+ * 刷新」链路，由 `use-alert-rule-actions` 单点维护；二次确认仍由模板 Popconfirm 负责。
+ */
+const {
+  batchToggleRule: onBatchToggleRule,
+  ruleTogglePending,
+  toggleRule: onToggleRule,
+} = useAlertRuleActions({
+  requestReload: () => ruleGuard.request(),
+  selectedRuleIds,
+});
+
+/** 批量按钮禁用原因（与实例表同口径：在途 > 未勾选；规则收在 `./batch-reasons`）。 */
+const ruleBatchDisabledReason = computed(() =>
+  resolveBatchDisabledReason(
+    ruleTogglePending.value,
+    selectedRuleIds.value.length,
+  ),
+);
 
 /** 关闭「按设备过滤」提示：清本地过滤 + **把 URL 上的 deviceId 也去掉**（否则刷新后过滤会回来）。 */
 function onClearDeviceFilter() {
@@ -517,73 +435,7 @@ function onClearDeviceFilter() {
   instanceGuard.request();
 }
 
-/**
- * 表格高度看门狗（防「自增长」兜底，见 alerts-layout.ts）：
- * 若 vxe 的 ResizeObserver 自反馈在某个浏览器/未来改动下复燃，这里会在
- * 连续 N 次「异常高 + 严格递增」采样后把表格回退到固定上限（具名常量可配），
- * 而不是让页面无限长高。正常（确定高度链）情况下只做廉价高度采样，稳定即收工。
- */
-function watchGridForRunawayHeight(
-  api: {
-    grid: { $el?: HTMLElement };
-    setGridOptions: (options: { maxHeight?: number }) => void;
-  },
-  label: string,
-) {
-  const samples: number[] = [];
-  let stopped = false;
-  let stableStreak = 0;
-  const stop = () => {
-    stopped = true;
-    window.clearInterval(timer);
-  };
-  const timer = window.setInterval(() => {
-    const el = api.grid?.$el as HTMLElement | undefined;
-    if (!el) {
-      return;
-    }
-    const heightPx = el.offsetHeight;
-    const thresholdPx = window.innerHeight + RUNAWAY_HEIGHT.excessPx;
-    samples.push(heightPx);
-    if (samples.length > RUNAWAY_HEIGHT.requiredConsecutive + 2) {
-      samples.shift();
-    }
-    if (
-      detectRunawayGrowth(samples, {
-        thresholdPx,
-        requiredConsecutive: RUNAWAY_HEIGHT.requiredConsecutive,
-      })
-    ) {
-      stop();
-      const capPx = Math.max(
-        0,
-        window.innerHeight - RUNAWAY_HEIGHT.excessPx * 2,
-      );
-      api.setGridOptions({ maxHeight: capPx });
-      console.warn(
-        `[iot/alerts] ${label} 表格高度出现持续自增长，已回退到固定上限 ${capPx}px（请把复现步骤反馈给开发）`,
-      );
-      return;
-    }
-    const prev = samples[samples.length - 2];
-    if (
-      prev !== undefined &&
-      Math.abs(heightPx - prev) <= RUNAWAY_HEIGHT.stableDeltaPx
-    ) {
-      stableStreak += 1;
-      if (stableStreak >= 4) {
-        stop();
-      }
-    } else {
-      stableStreak = 0;
-    }
-  }, RUNAWAY_HEIGHT.intervalMs);
-  return () => {
-    if (!stopped) {
-      stop();
-    }
-  };
-}
+/** 高度看门狗（纯 DOM 采样，实现在 `./alerts-layout`，与判据/常量同文件）见 {@link watchGridForRunawayHeight}。 */
 
 let stopHeightWatch: (() => void) | undefined;
 
@@ -599,7 +451,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  refreshOnRealtimeAlert.cancel();
+  // 实时事件去抖的取消在 `useAlertRealtime` 内部（onUnmounted），这里只剩表格相关清理
   stopHeightWatch?.();
   instanceGuard?.dispose();
   ruleGuard?.dispose();
@@ -618,6 +470,33 @@ onUnmounted(() => {
     `ALERTS_LAYOUT.requiredDeepRules` 与 `alerts-layout.test.ts` 看守这些标记。
   -->
   <Page auto-content-height>
+    <!--
+      页面主标题：视觉上标题由页头/菜单承担，这里给读屏用的唯一 <h1>
+      （全站此前 0 个 h1 ⇒ 读屏「按 H 跳标题」在长表格页完全失效）。
+    -->
+    <h1 class="sr-only">{{ $t('page.iot.alert.title') }}</h1>
+    <!--
+      实时流鉴权失败必须常驻可见（P1-1）：
+      `unauthorized`（401，会话可能过期）给「重新登录」入口；`forbidden`（403）只说明无权限
+      —— 两者都不由客户端自动登出，避免「登出 → 重订阅 → 再 401」的循环。
+    -->
+    <Alert
+      v-if="realtimeUnavailable"
+      class="mb-2"
+      show-icon
+      type="warning"
+      :message="
+        realtimeAuthError === 'forbidden'
+          ? $t('page.iot.realtime.forbidden')
+          : $t('page.iot.realtime.authFailed')
+      "
+    >
+      <template v-if="realtimeAuthError === 'unauthorized'" #action>
+        <Button size="small" type="primary" @click="onReLogin">
+          {{ $t('authentication.loginAgainTitle') }}
+        </Button>
+      </template>
+    </Alert>
     <PanelErrorBoundary title-key="page.iot.alert.renderFailed">
       <Tabs v-model:active-key="activeTab" :animated="false" class="h-full">
         <!-- ===== 告警列表 ===== -->
@@ -626,122 +505,35 @@ onUnmounted(() => {
           key="list"
           :tab="$t('page.iot.alert.tabList')"
         >
-          <!-- 可关闭：否则用户无法在界面上解除「从设备台账带过来的设备过滤」（只能离开页面重进） -->
-          <Alert
-            v-if="presetDeviceId"
-            class="mb-2"
-            closable
-            :message="$t('page.iot.alert.fromDeviceEntry', [presetDeviceLabel])"
-            show-icon
-            type="info"
-            @close="onClearDeviceFilter"
+          <!-- 状态区（入口提示/摘要/断线/失败/租户引导）是只读展示 + 一个关闭动作，见子组件 -->
+          <InstanceStatus
+            :list-error="listError"
+            :preset-device-id="presetDeviceId"
+            :preset-device-label="presetDeviceLabel"
+            :realtime-disconnected="realtimeDisconnected"
+            :realtime-error="realtimeError"
+            :summary="summary"
+            :summary-error="summaryError"
+            @clear-device-filter="onClearDeviceFilter"
           />
-          <Alert
-            v-if="summaryError"
-            class="mb-2"
-            :description="summaryError"
-            :message="$t('page.iot.alert.summaryLoadFailed')"
-            show-icon
-            type="error"
-          />
-          <div v-else-if="summary" class="mb-2 text-sm">
-            <Space>
-              <Tag color="error">
-                {{
-                  $t('page.iot.alert.summaryActive', [
-                    toBackendNumber(summary.activeCount),
-                  ])
-                }}
-              </Tag>
-              <Tag color="warning">
-                {{
-                  $t('page.iot.alert.summaryCritical', [
-                    toBackendNumber(summary.criticalCount),
-                  ])
-                }}
-              </Tag>
-              <Tag color="processing">
-                {{
-                  $t('page.iot.alert.summaryAcked', [
-                    toBackendNumber(summary.ackedCount),
-                  ])
-                }}
-              </Tag>
-              <Tag color="success">
-                {{
-                  $t('page.iot.alert.summaryResolved24h', [
-                    toBackendNumber(summary.resolvedLast24h),
-                  ])
-                }}
-              </Tag>
-            </Space>
-          </div>
-
           <!--
-          🔴 失败态**必须挂在表格之外**（不能只放 `#empty` 槽里）：真实 vxe 只在表体无行时才渲染该槽
-          ⇒ 「已有数据后刷新失败」时槽不渲染、失败提示会消失、页面继续展示过期数据。
-        -->
-          <!--
-            实时流断线必须可见（不阻塞页面）：标题 + 最近错误原因都在，
-            避免用户以为页面数据仍是实时的。
+            勾选事件必须走 `gridEvents.checkboxChange`（见 script 里的接线注释）：
+            模板上直接写的 checkbox-change 监听在本包装组件上收不到（P0-1）。
           -->
-          <Alert
-            v-if="realtimeDisconnected"
-            class="mb-2"
-            :description="
-              $t('page.iot.realtime.disconnectedHint', [realtimeError || '-'])
-            "
-            :message="$t('page.iot.realtime.disconnected')"
-            show-icon
-            type="warning"
-          />
-          <Alert
-            v-if="listError"
-            class="mb-2"
-            :description="listError"
-            :message="$t('page.iot.alert.listLoadFailed')"
-            show-icon
-            type="error"
-          />
-          <!-- 失败若是「没有租户上下文」⇒ 给一条能照着做的引导（不弹原始码、不只是报错） -->
-          <Alert
-            v-if="isTenantContextError(listError)"
-            class="mb-2"
-            :message="$t('page.iot.alert.noTenantHint')"
-            show-icon
-            type="warning"
-          />
-          <InstanceGrid
-            class="flex-1 min-h-0"
-            @checkbox-change="onCheckboxChange"
-          >
+          <InstanceGrid class="flex-1 min-h-0">
             <template #toolbar-tools>
-              <Space wrap>
-                <!-- 导出当前筛选结果（服务端全量，不是当前页）；权限沿用列表读权限 -->
-                <Button
-                  v-access:code="['iot:alert:list']"
-                  data-testid="export-csv"
-                  :loading="exportLoading"
-                  @click="onExportCsv"
-                >
-                  <template #icon><Download /></template>
-                  {{ $t('page.iot.alert.exportCsv') }}
-                </Button>
-                <Button
-                  v-if="canAck"
-                  :disabled="selectedIds.length === 0"
-                  @click="onAck(selectedIds)"
-                >
-                  {{ $t('page.iot.alert.batchAck') }}
-                </Button>
-                <Button
-                  v-if="canAck"
-                  :disabled="selectedIds.length === 0"
-                  @click="onSilence(selectedIds, 60)"
-                >
-                  {{ $t('page.iot.alert.batchSilence') }}
-                </Button>
-              </Space>
+              <InstanceToolbar
+                :batch-ack-disabled-reason="batchAckDisabledReason"
+                :batch-ack-pending="batchAckPending"
+                :batch-silence-disabled-reason="batchSilenceDisabledReason"
+                :batch-silence-pending="batchSilencePending"
+                :can-ack="canAck"
+                :export-loading="exportLoading"
+                :selected-count="selectedIds.length"
+                @batch-ack="onBatchAck"
+                @batch-silence="onBatchSilence"
+                @export="onExportCsv"
+              />
             </template>
 
             <!-- 空态引导：说明「为什么是空的 + 下一步点哪里」，而不是一张空白表格 -->
@@ -778,106 +570,9 @@ onUnmounted(() => {
               <span v-else>{{ row.ruleName ?? '-' }}</span>
             </template>
 
-            <!-- 展开行：触发值 / 阈值 / 时间线 / 投递记录 / 该点位近期曲线缩略 -->
+            <!-- 展开行：触发值 / 阈值 / 时间线 / 投递记录 / 该点位近期曲线缩略（见子组件） -->
             <template #expand="{ row }">
-              <div
-                class="grid grid-cols-1 gap-4 p-2 text-sm sm:grid-cols-2 md:grid-cols-3"
-              >
-                <div class="space-y-1">
-                  <div>
-                    <span class="text-muted-foreground">
-                      {{ $t('page.iot.alert.triggerValue') }}:
-                    </span>
-                    <span class="font-medium">{{
-                      row.triggerValue ?? '-'
-                    }}</span>
-                  </div>
-                  <div>
-                    <span class="text-muted-foreground">
-                      {{ $t('page.iot.alert.threshold') }}:
-                    </span>
-                    <span class="font-medium">{{
-                      row.thresholdSnapshot ?? '-'
-                    }}</span>
-                  </div>
-                  <div>
-                    <span class="text-muted-foreground">
-                      {{ $t('page.iot.alert.stateField') }}:
-                    </span>
-                    <Tag :color="stateColor(row.state)">
-                      {{ $t(stateLabelKey(row.state)) }}
-                    </Tag>
-                  </div>
-                </div>
-                <div class="space-y-1">
-                  <div>
-                    {{ $t('page.iot.alert.startTs') }}:
-                    {{ formatDateTime(row.startTs) }}
-                  </div>
-                  <div>
-                    {{ $t('page.iot.alert.firingTs') }}:
-                    {{ formatDateTime(row.firingTs) }}
-                  </div>
-                  <div>
-                    {{ $t('page.iot.alert.resolvedTs') }}:
-                    {{ formatDateTime(row.resolvedTs) }}
-                  </div>
-                  <div v-if="row.reason">
-                    {{ $t('page.iot.alert.reasonField') }}:
-                    {{ $t(reasonLabelKey(row.reason)) }}
-                  </div>
-                  <div v-if="row.silenceUntil">
-                    {{ $t('page.iot.alert.silenceUntil') }}:
-                    {{ formatDateTime(row.silenceUntil) }}
-                  </div>
-                </div>
-                <div>
-                  <div class="mb-1 text-muted-foreground">
-                    {{ $t('page.iot.alert.curve.title') }}
-                  </div>
-                  <InstanceCurve
-                    :device-id="row.deviceId"
-                    :property-id="row.propertyId"
-                    :threshold-snapshot="row.thresholdSnapshot"
-                  />
-                </div>
-              </div>
-              <div class="p-2 text-sm">
-                <div class="mb-1 text-muted-foreground">
-                  {{ $t('page.iot.alert.notify.title') }}
-                  ({{ row.notifyCount ?? 0 }})
-                </div>
-                <div
-                  v-if="(row.notifications?.length ?? 0) === 0"
-                  class="text-xs text-muted-foreground"
-                >
-                  {{ $t('page.iot.alert.notify.none') }}
-                </div>
-                <table v-else class="w-full text-xs">
-                  <thead>
-                    <tr class="text-left text-muted-foreground">
-                      <th>{{ $t('page.iot.alert.notify.channel') }}</th>
-                      <th>{{ $t('page.iot.alert.notify.target') }}</th>
-                      <th>{{ $t('page.iot.alert.notify.event') }}</th>
-                      <th>{{ $t('page.iot.alert.notify.status') }}</th>
-                      <th>{{ $t('page.iot.alert.notify.attempt') }}</th>
-                      <th>{{ $t('page.iot.alert.notify.error') }}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="row2 in row.notifications" :key="row2.id">
-                      <td>{{ channelLabel(row2.channel) }}</td>
-                      <td>{{ row2.target || '-' }}</td>
-                      <td>{{ $t(eventLabelKey(row2.event)) }}</td>
-                      <td>{{ $t(notifyStatusLabelKey(row2.notifyStatus)) }}</td>
-                      <td>{{ row2.attempt ?? 0 }}</td>
-                      <td class="break-all text-red-600">
-                        {{ row2.lastError || '-' }}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+              <InstanceExpand :row="row" />
             </template>
 
             <template #action="{ row }">
@@ -921,34 +616,16 @@ onUnmounted(() => {
             show-icon
             type="error"
           />
-          <RuleGrid
-            class="flex-1 min-h-0"
-            @checkbox-change="onRuleCheckboxChange"
-          >
+          <RuleGrid class="flex-1 min-h-0">
             <template #toolbar-tools>
-              <Space wrap>
-                <Button
-                  v-if="canSaveRule"
-                  :disabled="selectedRuleIds.length === 0"
-                  @click="onToggleRule(selectedRuleIds, true)"
-                >
-                  {{ $t('page.iot.alert.rule.batchEnable') }}
-                </Button>
-                <Button
-                  v-if="canSaveRule"
-                  :disabled="selectedRuleIds.length === 0"
-                  @click="onToggleRule(selectedRuleIds, false)"
-                >
-                  {{ $t('page.iot.alert.rule.batchDisable') }}
-                </Button>
-                <Button
-                  v-if="canSaveRule"
-                  type="primary"
-                  @click="RuleDrawerApi.setData({}).open()"
-                >
-                  {{ $t('page.iot.alert.rule.createTitle') }}
-                </Button>
-              </Space>
+              <RuleToolbar
+                :can-save-rule="canSaveRule"
+                :disabled-reason="ruleBatchDisabledReason"
+                :selected-count="selectedRuleIds.length"
+                :toggle-pending="ruleTogglePending"
+                @create="RuleDrawerApi.setData({}).open()"
+                @toggle="onBatchToggleRule"
+              />
             </template>
 
             <template #empty>

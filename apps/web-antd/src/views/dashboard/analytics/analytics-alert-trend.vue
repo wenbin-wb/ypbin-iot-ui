@@ -9,6 +9,7 @@ import { Inbox } from '@vben/icons';
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 
 import { $t } from '#/locales';
+import { chartColor } from '#/utils/chart-tokens';
 
 defineOptions({ name: 'AnalyticsAlertTrend' });
 
@@ -20,23 +21,25 @@ const props = defineProps<{
 const chartRef = ref<EchartsUIType>();
 const { renderEcharts } = useEcharts(chartRef);
 
-/** 与告警中心的级别语义同色：严重红 / 警告黄 / 提示蓝（图例文案也复用告警 i18n）。 */
+/**
+ * 与告警中心的级别语义同色：严重=destructive / 警告=warning / 提示=primary
+ * （图例文案也复用告警 i18n）。
+ *
+ * 只保留「字段 + 文案键」，**颜色在渲染时按 token 解析**（canvas 不认 CSS 变量，
+ * 见 `shared/chart-tokens.ts` 头注释）：这样切主题/暗色时柱色自动跟随，不再写死 hex。
+ */
 const SERIES = [
   {
-    color: '#f2547b',
     field: 'critical',
     labelKey: 'page.iot.alert.severity.critical',
+    token: 'destructive',
   },
   {
-    color: '#f0b429',
     field: 'warning',
     labelKey: 'page.iot.alert.severity.warning',
+    token: 'warning',
   },
-  {
-    color: '#0066f5',
-    field: 'info',
-    labelKey: 'page.iot.alert.severity.info',
-  },
+  { field: 'info', labelKey: 'page.iot.alert.severity.info', token: 'primary' },
 ] as const;
 
 /** 空数据时不渲染画布，改为友好空态：空数组会让图表区看起来像坏掉的白块。 */
@@ -83,7 +86,7 @@ function renderChart(points: IotDashboardApi.AlertTrendPoint[]) {
     series: SERIES.map((item) => ({
       barMaxWidth: 18,
       data: points.map((point) => point[item.field]),
-      itemStyle: { color: item.color },
+      itemStyle: { color: chartColor(item.token) },
       name: $t(item.labelKey),
       stack: 'alert',
       type: 'bar',
@@ -99,7 +102,17 @@ watch(() => props.points, renderChart, { deep: true, flush: 'post' });
 </script>
 
 <template>
-  <EchartsUI v-if="hasData" ref="chartRef" />
+  <!--
+    图表是纯 canvas，读屏拿不到任何信息；ECharts 的 aria 组件未在本项目注册
+    （`packages/effects/plugins/src/echarts/echarts.ts` 未 `echarts.use([AriaComponent])`），
+    所以在容器上给 `role="img"` + `aria-label`，让读屏至少能播报「这是一张什么图」。
+  -->
+  <EchartsUI
+    v-if="hasData"
+    ref="chartRef"
+    :aria-label="$t('page.dashboard.alertTrend')"
+    role="img"
+  />
   <div
     v-else
     class="flex h-[300px] flex-col items-center justify-center gap-2 text-sm text-muted-foreground"

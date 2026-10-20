@@ -63,10 +63,25 @@ export interface BatchResultSummary {
 export function summarizeBatchResults(
   items: IotCommandApi.CommandBatchItemResult[],
 ): BatchResultSummary {
+  return summarizeStates(items.map((item) => resolveBatchItemState(item)));
+}
+
+/**
+ * 从**展示行**重算汇总（单台重发后就地更新一行，顶部计数必须跟着变）。
+ *
+ * 🔴 为什么需要它：重发只改一台的状态，若顶部汇总仍用首次下发的后端计数，
+ * 就会出现「表里写着已送达、上面还写着未送达 N 台」的自相矛盾。
+ * 汇总口径与 {@link summarizeBatchResults} 完全一致（同一个内部实现），不会漂移。
+ */
+export function summarizeBatchRows(rows: BatchResultRow[]): BatchResultSummary {
+  return summarizeStates(rows.map((row) => row.state));
+}
+
+/** 三态汇总的唯一实现（{@link summarizeBatchResults} / {@link summarizeBatchRows} 共用）。 */
+function summarizeStates(states: BatchItemState[]): BatchResultSummary {
   let accepted = 0;
   let delivered = 0;
-  for (const item of items) {
-    const state = resolveBatchItemState(item);
+  for (const state of states) {
     if (state === 'rejected') {
       continue;
     }
@@ -75,7 +90,7 @@ export function summarizeBatchResults(
       delivered += 1;
     }
   }
-  const total = items.length;
+  const total = states.length;
   const rejected = total - accepted;
   return {
     accepted,
@@ -86,6 +101,18 @@ export function summarizeBatchResults(
     rejected,
     total,
   };
+}
+
+/**
+ * 结果行是否可重发。
+ *
+ * 🔴 为什么不复用 {@link canResendBatchItem}：它读的是后端条目里的 `accepted/ok`，
+ * 而展示行 `BatchResultRow` **没有 `ok` 字段**（只有三态 `state`）⇒ 直接喂进去会把
+ * 「已送达」也判成「已提交未送达」，页面上给已成功的行挂一个「重发同一请求」按钮（会重复下发）。
+ * 展示行的判据必须走它自己的 `state`。
+ */
+export function canResendBatchRow(row: BatchResultRow): boolean {
+  return row.state === 'accepted-not-delivered' && row.requestId !== '';
 }
 
 /**

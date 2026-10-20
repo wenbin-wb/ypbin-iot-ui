@@ -16,14 +16,20 @@ import {
   WorkbenchTodo,
   WorkbenchTrends,
 } from '@vben/common-ui';
-import { preferences } from '@vben/preferences';
+import { preferences, usePreferences } from '@vben/preferences';
 import { useUserStore } from '@vben/stores';
 
-import { Empty, Spin, Tag, Tooltip } from 'ant-design-vue';
+import { Alert, Button, Empty, Spin, Tag, Tooltip } from 'ant-design-vue';
 
 import { $t } from '#/locales';
 
 import HelpDrawer from '../../iot/shared/help-drawer.vue';
+import ListErrorAlert from '../../iot/shared/list-error-alert.vue';
+import {
+  brandTextColor,
+  METRIC_VISUALS,
+  metricTextColor,
+} from '../shared/metric-visuals';
 import NoviceGuideCard from '../shared/novice-guide-card.vue';
 import { useDashboardRealtime } from '../shared/use-dashboard-realtime';
 import { useIotOverview } from '../shared/use-iot-overview';
@@ -31,14 +37,17 @@ import { useWorkbenchTrends } from './use-workbench-trends';
 
 const userStore = useUserStore();
 const router = useRouter();
+const { isDark } = usePreferences();
 
-// 运行总览（真实接口缺位时演示数据兜底，页面上以徽标标注）
-const { load, loading, overview, usingDemo } = useIotOverview();
+// 运行总览：notice 必须接 —— 失败要常驻错误态 + 重试，演示兜底要常驻标注（见 04 §P0-1）
+const { load, loading, notice, overview, usingDemo } = useIotOverview();
 
-// SSE 实时刷新：latest/device-status/alert 去抖后重拉总览；断线状态用于可见提示
-const { error: realtimeError, state: realtimeState } = useDashboardRealtime(
-  () => void load(),
-);
+// SSE 实时刷新：latest/device-status/alert 去抖后重拉总览；断线/鉴权失败都要可见提示
+const {
+  authError,
+  error: realtimeError,
+  state: realtimeState,
+} = useDashboardRealtime(() => void load());
 
 // 术语词典抽屉：与工作台/接入向导共用同一份内容（view 层只负责打开）
 const [HelpDrawerContainer, helpDrawerApi] = useVbenDrawer({
@@ -52,18 +61,20 @@ function openHelp() {
 // 最近告警动态流
 const { trendItems } = useWorkbenchTrends(overview);
 
-// ---- 统一视觉（与分析页同一套语言）----
-const BRAND_GRAD =
-  'linear-gradient(135deg, hsl(var(--primary)), hsl(245 82% 67%))';
+// ---- 统一视觉（与分析页同一份常量，见 shared/metric-visuals.ts）----
+/** 页头三个关键计数的文字色（亮/暗各一档，均 ≥4.5:1；不是渐变裁切字）。 */
+const headerCountColor = computed(() => brandTextColor(isDark.value));
 
 // ---- IoT 今日概览指标 ----
 interface MetricCard {
-  key: string;
+  key: 'alert' | 'device' | 'message' | 'online';
   label: string;
   value: string;
   icon: string;
   grad: string;
   glow: string;
+  /** 数值文字色（亮/暗按主题切换，各自对卡片底色 ≥4.5:1）。 */
+  textColor: string;
 }
 
 const metricCards = computed<MetricCard[]>(() => {
@@ -74,35 +85,46 @@ const metricCards = computed<MetricCard[]>(() => {
       label: $t('page.dashboard.deviceTotal'),
       value: d ? d.deviceTotal.toLocaleString() : '—',
       icon: 'i-lucide-cpu',
-      grad: 'linear-gradient(135deg, hsl(var(--primary)), hsl(245 82% 67%))',
-      glow: 'hsl(var(--primary) / 30%)',
+      ...METRIC_VISUALS.device,
+      textColor: metricTextColor('device', isDark.value),
     },
     {
       key: 'online',
       label: $t('page.dashboard.onlineRate'),
       value: d ? `${d.onlineRate}%` : '—',
       icon: 'i-lucide-wifi',
-      grad: 'linear-gradient(135deg, hsl(161 90% 43%), hsl(199 89% 48%))',
-      glow: 'hsl(161 90% 43% / 30%)',
+      ...METRIC_VISUALS.online,
+      textColor: metricTextColor('online', isDark.value),
     },
     {
       key: 'message',
       label: $t('page.dashboard.messageToday'),
       value: d ? formatCompact(d.messageToday) : '—',
       icon: 'i-lucide-radio-tower',
-      grad: 'linear-gradient(135deg, hsl(199 89% 48%), hsl(161 90% 43%))',
-      glow: 'hsl(199 89% 48% / 30%)',
+      ...METRIC_VISUALS.message,
+      textColor: metricTextColor('message', isDark.value),
     },
     {
       key: 'alert',
       label: $t('page.dashboard.alertPending'),
       value: d ? String(d.alertPending) : '—',
       icon: 'i-lucide-triangle-alert',
-      grad: 'linear-gradient(135deg, hsl(32 95% 44%), hsl(16 90% 50%))',
-      glow: 'hsl(32 95% 44% / 30%)',
+      ...METRIC_VISUALS.alert,
+      textColor: metricTextColor('alert', isDark.value),
     },
   ];
 });
+
+/**
+ * 实时鉴权失败时的「重新登录」。
+ *
+ * 动态 import：`#/api/request` 会拉起 axios + Pinia store + 埋点，
+ * 只有用户点这一下才需要，页面首屏与单测都不该为它付加载成本。
+ */
+async function onRelogin() {
+  const { handleSessionExpired } = await import('#/api/request');
+  await handleSessionExpired();
+}
 
 function formatCompact(n: number) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
@@ -110,40 +132,56 @@ function formatCompact(n: number) {
   return String(n);
 }
 
+/**
+ * 模块卡片的图标底色（**只是分类标识，不承载状态语义**）。
+ *
+ * 用语义 token 而非 hex 的两个理由：① 切主题色/暗色时色块自动跟随；② 不再散落硬编码色值。
+ * 6 个取值按「主色三档 + 成功/警告/危险」分布，保证相邻卡片颜色不同。
+ * 这里是 DOM 内联样式，CSS 变量可直接用 —— 图表 canvas 不行，见 `shared/chart-tokens.ts`。
+ */
+const CARD_TINTS = [
+  'hsl(var(--primary))',
+  'hsl(var(--primary-600))',
+  'hsl(var(--success))',
+  'hsl(var(--warning))',
+  'hsl(var(--destructive))',
+  'hsl(var(--primary-400))',
+] as const;
+
 // ---- 快捷导航（IoT 模块，路径与后端菜单一致）----
 const quickNavItems: WorkbenchQuickNavItem[] = [
   {
-    color: '#0066f5',
+    color: CARD_TINTS[0],
     icon: 'carbon:iot-platform',
     title: $t('page.iot.device.title'),
     url: '/iot/devices',
   },
   {
-    color: '#7c7cf0',
+    color: CARD_TINTS[1],
     icon: 'carbon:product',
     title: $t('page.iot.product.title'),
     url: '/iot/products',
   },
   {
-    color: '#f2547b',
+    color: CARD_TINTS[2],
     icon: 'carbon:warning',
     title: $t('page.iot.alert.title'),
     url: '/iot/alerts',
   },
   {
-    color: '#0ec9a3',
+    color: CARD_TINTS[3],
     icon: 'carbon:group',
     title: $t('page.iot.group.title'),
     url: '/iot/groups',
   },
   {
-    color: '#f0b429',
+    color: CARD_TINTS[4],
     icon: 'carbon:flow',
     title: $t('page.iot.onboarding.title'),
     url: '/iot/onboarding',
   },
   {
-    color: '#5a6cf0',
+    color: CARD_TINTS[5],
     icon: 'carbon:tool-box',
     title: $t('page.iot.maintenance.shortTitle'),
     url: '/iot/maintenance',
@@ -151,14 +189,8 @@ const quickNavItems: WorkbenchQuickNavItem[] = [
 ];
 
 // ---- 平台能力卡片（IoT 功能入口）----
-const PROJECT_COLORS = [
-  '#0066f5',
-  '#7c7cf0',
-  '#0ec9a3',
-  '#f0b429',
-  '#f2547b',
-  '#5a6cf0',
-];
+/** 与快捷导航同一套色（同一模块在两个区域颜色一致，用户不用记两套）。 */
+const PROJECT_COLORS = CARD_TINTS;
 
 const projectItems = computed<WorkbenchProjectItem[]>(() => [
   {
@@ -351,6 +383,49 @@ function onProjectClick(item: WorkbenchProjectItem) {
 
 <template>
   <div class="p-5">
+    <!--
+      页面主标题：视觉上标题是下面的问候语，但问候语挂在 WorkbenchHeader 的插槽里
+      （基座组件内部是普通文本节点，塞 <h1> 会跟它自己的排版打架）。
+      这里给一个读屏可见、视觉隐藏的 <h1> —— 目标只是让「按 H 跳标题」能定位到本页，
+      不改变任何视觉（全站此前 0 个 h1，读屏用户没有任何页面主题锚点）。
+    -->
+    <h1 class="sr-only">{{ $t('page.dashboard.workspace') }}</h1>
+
+    <!--
+      常驻提示（不再藏 hover tooltip）：
+      ① 总览失败 ⇒ 错误态 + 重试；② 演示兜底 ⇒ 明确标注「非真实指标」；
+      ③ 实时鉴权失败 ⇒ 单独提示（重连解决不了 token 过期），unauthorized 给「重新登录」。
+    -->
+    <ListErrorAlert
+      v-if="notice"
+      class="mb-3"
+      :error="notice.error"
+      :retry-text="$t('page.dashboard.retry')"
+      :title="notice.title"
+      :type="notice.type"
+      @retry="() => void load()"
+    />
+    <Alert
+      v-if="authError === 'forbidden'"
+      class="mb-3"
+      :message="$t('page.iot.realtime.forbidden')"
+      show-icon
+      type="error"
+    />
+    <Alert
+      v-if="authError === 'unauthorized'"
+      class="mb-3"
+      :message="$t('page.iot.realtime.authFailed')"
+      show-icon
+      type="error"
+    >
+      <template #action>
+        <Button danger size="small" @click="onRelogin">
+          {{ $t('common.login') }}
+        </Button>
+      </template>
+    </Alert>
+
     <Alert
       v-if="realtimeState === 'reconnecting'"
       class="mb-3"
@@ -366,7 +441,8 @@ function onProjectClick(item: WorkbenchProjectItem) {
         <span class="inline-flex items-center gap-2">
           {{ welcomeTitle }}
           <Tooltip v-if="usingDemo" :title="$t('page.dashboard.demoReason')">
-            <Tag color="orange" class="!mr-0 cursor-help">
+            <!-- tabindex=0：让键盘用户也能把焦点停在徽标上读到原因（原先只有鼠标 hover） -->
+            <Tag class="!mr-0 cursor-help" color="orange" tabindex="0">
               {{ $t('page.dashboard.demoBadge') }}
             </Tag>
           </Tooltip>
@@ -399,11 +475,7 @@ function onProjectClick(item: WorkbenchProjectItem) {
             }}</span>
             <span
               class="text-2xl font-bold tabular-nums leading-none"
-              :style="{
-                background: BRAND_GRAD,
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-              }"
+              :style="{ color: headerCountColor }"
             >
               {{ overview ? overview.deviceTotal.toLocaleString() : '—' }}
             </span>
@@ -414,11 +486,7 @@ function onProjectClick(item: WorkbenchProjectItem) {
             }}</span>
             <span
               class="text-2xl font-bold tabular-nums leading-none"
-              :style="{
-                background: BRAND_GRAD,
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-              }"
+              :style="{ color: headerCountColor }"
             >
               {{ overview ? overview.deviceOnline.toLocaleString() : '—' }}
             </span>
@@ -429,11 +497,7 @@ function onProjectClick(item: WorkbenchProjectItem) {
             }}</span>
             <span
               class="text-2xl font-bold tabular-nums leading-none"
-              :style="{
-                background: BRAND_GRAD,
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-              }"
+              :style="{ color: headerCountColor }"
             >
               {{ overview ? overview.alertPending : '—' }}
             </span>
@@ -447,7 +511,7 @@ function onProjectClick(item: WorkbenchProjectItem) {
       <div
         v-for="(m, i) in metricCards"
         :key="m.key"
-        class="metric-card group relative overflow-hidden rounded-xl border border-border/80 bg-card p-4"
+        class="iot-metric-card group relative overflow-hidden rounded-xl border border-border/80 bg-card p-4"
         :style="{ '--glow': m.glow, animationDelay: `${i * 60}ms` }"
       >
         <span
@@ -465,11 +529,7 @@ function onProjectClick(item: WorkbenchProjectItem) {
             <p class="truncate text-xs text-muted-foreground">{{ m.label }}</p>
             <p
               class="truncate text-2xl font-bold tabular-nums leading-tight tracking-tight"
-              :style="{
-                background: m.grad,
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-              }"
+              :style="{ color: m.textColor }"
             >
               {{ m.value }}
             </p>
@@ -549,31 +609,9 @@ function onProjectClick(item: WorkbenchProjectItem) {
 </template>
 
 <style scoped>
-.metric-card {
-  transition:
-    transform 0.25s ease,
-    border-color 0.25s ease,
-    box-shadow 0.25s ease;
-  animation: metric-in 0.4s ease-out both;
-}
-
-.metric-card:hover {
-  border-color: hsl(var(--primary) / 40%);
-  box-shadow:
-    0 8px 24px hsl(var(--foreground) / 8%),
-    0 0 24px var(--glow);
-  transform: translateY(-2px);
-}
-
-@keyframes metric-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
+/*
+ * 指标卡样式（.iot-metric-card / 入场动画 / prefers-reduced-motion）已抽到
+ * shared/metric-visuals.css，由 shared/metric-visuals.ts 引入 —— 两页共用一份，
+ * 避免「一页改了动效、另一页没改」。本页不再需要页面级指标卡样式。
+ */
 </style>

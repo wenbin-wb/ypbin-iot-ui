@@ -398,6 +398,35 @@ describe('products/modules/detail.vue 补充分支（元素表独立性 / TSL / 
     );
   });
 
+  it('★ 概览页「导出 TSL」复用 TSL 子组件的导出逻辑（force-render + ref 暴露，不是两份实现）', async () => {
+    apiMock.exportTsl.mockResolvedValue({
+      profile: { productKey: 'pk-overview' },
+    });
+    // happy-dom 不实现 ObjectURL；本用例只关心「概览入口是否真的复用同一份导出逻辑」
+    const urlAny = URL as unknown as Record<string, unknown>;
+    const originalCreate = urlAny.createObjectURL;
+    const originalRevoke = urlAny.revokeObjectURL;
+    urlAny.createObjectURL = vi.fn(() => 'blob:stub');
+    urlAny.revokeObjectURL = vi.fn();
+
+    try {
+      const container = await openDetail();
+      // 默认停在概览页签 → 直接点概览页的「导出 TSL」（TSL 页签此时未激活）
+      clickButton(container, '导出 TSL');
+      await flush();
+
+      expect(apiMock.exportTsl).toHaveBeenCalledWith('9100001');
+      // 子组件（force-render）里的文本框被回填 ⇒ 概览入口与 TSL 页签共用同一状态/逻辑
+      const textarea = container.querySelector(
+        'textarea',
+      ) as HTMLTextAreaElement;
+      expect(textarea.value).toContain('"productKey": "pk-overview"');
+    } finally {
+      urlAny.createObjectURL = originalCreate;
+      urlAny.revokeObjectURL = originalRevoke;
+    }
+  });
+
   it('★ 导出 TSL：拉取文档并回填文本框（页面可核对），不只是下载', async () => {
     apiMock.exportTsl.mockResolvedValue({ profile: { productKey: 'pk-1' } });
     // happy-dom 不实现 ObjectURL；本用例只关心「文档是否回填到页面」，故给下载打桩
@@ -423,6 +452,30 @@ describe('products/modules/detail.vue 补充分支（元素表独立性 / TSL / 
       urlAny.createObjectURL = originalCreate;
       urlAny.revokeObjectURL = originalRevoke;
     }
+  });
+
+  it('★ 抽屉重新打开：TSL 子组件状态被重置（抽屉不销毁组件时不残留上一个产品的文本）', async () => {
+    const container = await openDetail();
+    clickTab(container, 'TSL 导入导出');
+    await flush();
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    textarea.value = '{"stale": true}';
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    await flush();
+    expect(textarea.value).toBe('{"stale": true}');
+
+    // 模拟关闭后重新打开同一抽屉：vben Drawer 默认 destroyOnClose=false ⇒ 子组件不重建，
+    // TSL 文本必须由宿主在 onOpenChange 里显式 reset（拆分 TSL 页签后新增的职责）
+    const opened = drawerCalls.find(
+      (options) => typeof options?.onOpenChange === 'function',
+    );
+    expect(opened, '未捕获抽屉 onOpenChange').toBeTruthy();
+    await opened?.onOpenChange?.(false);
+    await opened?.onOpenChange?.(true);
+    await flush();
+
+    const reopened = container.querySelector('textarea') as HTMLTextAreaElement;
+    expect(reopened.value).toBe('');
   });
 
   it('★ 切换服务：只重查该服务下的三张表，不重查服务列表（不扇出整个产品）', async () => {

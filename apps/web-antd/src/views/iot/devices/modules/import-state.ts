@@ -13,8 +13,12 @@
  *    也不把 `running` 之外的状态渲染成进度条。
  */
 
+import type { ListState } from '../../shared/list-state';
+
 import { DEVICE_IMPORT_FRONTEND_LIMITS } from '#/api/iot';
 import { $t } from '#/locales';
+
+import { resolveListState } from '../../shared/list-state';
 
 /**
  * 批次状态码（与后端 `DeviceImportStatus` 对齐的**具名常量**）。
@@ -36,32 +40,21 @@ export const IMPORT_ROW_RESULT = {
 } as const;
 
 /** 批次列表 / 明细表格的加载态（三分：加载中、失败、空）。 */
-export type ImportListState = 'empty' | 'error' | 'loading' | 'ready';
+export type ImportListState = ListState;
 
 /**
  * 判定列表该显示哪种状态。
  *
- * 🔴 顺序是有意的：**失败优先于空**。先判 error 再判空，页面才不会在请求失败时
- * 显示「还没有数据，去创建吧」——那是本仓设备台账页已经踩过的假空态。
- *
- * @param loading 是否正在加载
- * @param errorMessage 加载失败原因（非空即失败）
- * @param itemCount 已拿到的条目数
- * @returns 列表状态
+ * 判据已收口到 `../../shared/list-state`（`resolveListState`）：本函数只保留原导出名与
+ * 位置参数签名，行为零漂移。顺序仍是「loading > error > empty/ready」——
+ * **失败优先于空**（请求失败时页面绝不能声称「还没有数据」），由公共用例守门。
  */
 export function resolveImportListState(
   loading: boolean,
   errorMessage: string,
   itemCount: number,
 ): ImportListState {
-  if (loading) {
-    return 'loading';
-  }
-  if (errorMessage) {
-    // 失败**优先于空**：请求失败时页面绝不能声称「没有数据」
-    return 'error';
-  }
-  return itemCount > 0 ? 'ready' : 'empty';
+  return resolveListState({ errorMessage, itemCount, loading });
 }
 
 /** 前端校验失败结论：只带 i18n key 与参数，文案由 {@link resolveImportFileCheckMessage} 解析。 */
@@ -250,6 +243,13 @@ export function hasFailedRows(
  * 为什么要二次排序：分页返回的顺序若因后端改动而漂移，用户会看到「刚传的批次夹在中间」
  * 这种无法解释的列表。按 id 倒序（雪花 id 单调）是稳定且与业务无关的判据。
  *
+ * 🔴 **不得用 `Number(id)` 比较**：批次 id 是雪花 ID（19 位，远超 `Number.MAX_SAFE_INTEGER`），
+ * 相邻两个 id 转 number 后可能相等 ⇒ 比较结果为 0、顺序退化成入参顺序，
+ * 历史批次看起来就是乱的（精度丢失）。雪花 ID 是定长单调递增的十进制串，
+ * 所以「先比长度、再比字典序」与数值序完全等价，且全程无损。
+ *
+ * 非纯数字 id（老数据/异常形态）按同一规则退化排序：仍确定性、不抛异常。
+ *
  * @param batches 批次列表
  * @returns 新数组（最近在前），不改动入参
  */
@@ -257,11 +257,82 @@ export function sortBatchesByRecent<T extends { id?: number | string }>(
   batches: T[],
 ): T[] {
   return [...batches].toSorted((left, right) => {
-    const leftId = Number(left.id ?? 0);
-    const rightId = Number(right.id ?? 0);
-    if (!Number.isFinite(leftId) || !Number.isFinite(rightId)) {
+    // 统一成字符串：number 形态的老数据也走同一口径（不在这里做精度转换）
+    const leftId =
+      left.id === undefined || left.id === null ? '' : String(left.id);
+    const rightId =
+      right.id === undefined || right.id === null ? '' : String(right.id);
+    // 降序（最近/更大在前）：长度优先（定长 id 下等价于数值大小），再字典序
+    if (leftId.length !== rightId.length) {
+      return rightId.length - leftId.length;
+    }
+    if (leftId === rightId) {
       return 0;
     }
-    return rightId - leftId;
+    return leftId < rightId ? 1 : -1;
   });
+}
+
+// ---------------------------------------------------------------- 分页
+
+/**
+ * 批次列表分页大小（后端 `GET /devices/import` 支持 `page`/`pageSize`）。
+ *
+ * 与抽屉高度匹配：一屏能看到最近 20 个批次，需要更早的历史批次用「查看全部批次」翻页。
+ */
+export const BATCH_PAGE_SIZE = 20;
+
+/** 批次明细分页大小（后端 `GET /devices/import/{batchId}` 支持 `page`/`pageSize`）。 */
+export const DETAIL_ROWS_PAGE_SIZE = 20;
+
+/**
+ * 批次明细「当前页已无数据」时应改查的页码（0 = 不用改）。
+ *
+ * 🔴 为什么需要：明细页码是页面本地状态（不再恒写死 1），数据会被后续导入/删除改变，
+ * 用户停在旧页翻页时就可能落在一张空页上——空页**不等于**「这一批没有明细」，
+ * 必须自动回到第 1 页并明确告知（`page.iot.device.import.detailPageReset`），
+ * 否则用户会以为失败行被清空了。
+ *
+ * @param itemsCount 本次返回的明细行数
+ * @param page       本次请求的页码（1-based）
+ * @returns 需要改查的页码；`0` 表示保持原页
+ */
+export function resolveDetailPageAfterEmpty(
+  itemsCount: number,
+  page: number,
+): number {
+  if (itemsCount > 0 || page <= 1) {
+    return 0;
+  }
+  return 1;
+}
+
+/**
+ * 批次列表「翻到越界页」时应改查的页码（0 = 不用改）。
+ *
+ * 批次可能被清理、或总数变少；此时后端对越界页返回空数组。空列表不能画成
+ * 「还没有导入过」——自动退到仍有数据的最后一页（全部清空则回第 1 页）。
+ *
+ * @param itemsCount 本次返回的批次数
+ * @param total      后端返回的总批次数
+ * @param page       本次请求的页码（1-based）
+ * @param pageSize   每页条数
+ * @returns 需要改查的页码；`0` 表示保持原页（只在**回退**时返回，避免来回震荡）
+ */
+export function resolveBatchPageAfterEmpty(
+  itemsCount: number,
+  total: number,
+  page: number,
+  pageSize: number,
+): number {
+  if (itemsCount > 0 || page <= 1) {
+    return 0;
+  }
+  const count = Math.max(Math.trunc(total), 0);
+  if (count === 0) {
+    return 1;
+  }
+  const size = Math.max(Math.trunc(pageSize), 1);
+  const lastPage = Math.max(Math.ceil(count / size), 1);
+  return lastPage < page ? lastPage : 0;
 }

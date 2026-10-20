@@ -4,6 +4,8 @@ import type { BoardSeriesPoints } from './board-utils';
 
 import type { IotSeriesApi } from '#/api/iot';
 
+import { chartColor, chartSeriesColorAt } from '#/utils/chart-tokens';
+
 import { toBoardNumeric } from './board-utils';
 
 /** 图表配置类型取自 renderEcharts 的入参（echarts 不是本应用的直接依赖，不能直接 import 它的类型）。 */
@@ -21,28 +23,23 @@ type BoardChartOption = Parameters<
  * 2. 折线用时间轴 + [ts, value] 对，非数值点为 null（断点），与历史曲线同一口径；
  * 3. 多序列折线一序列一点位，颜色固定调色板取模（同一份配置每次渲染颜色稳定，不用随机色）。
  */
-const LINE_COLOR = '#0066f5';
+/**
+ * 单序列折线色（渲染时从语义 token 解析；取不到则 undefined，交给 ECharts 默认色板）。
+ * 为什么不是常量字符串：canvas 不认 CSS 变量，且写死 hex 切主题/暗色不跟随
+ * （见 `shared/chart-tokens.ts` 头注释）。
+ */
+function lineColor(): string | undefined {
+  return chartColor('primary');
+}
 
-/** 多序列折线调色板（12 色，与 IOT_BOARD_MAX_SERIES 对齐；同一序列每次渲染颜色一致）。 */
-export const BOARD_SERIES_COLORS = [
-  '#0066f5',
-  '#00a870',
-  '#ed7b2f',
-  '#e34d59',
-  '#5c5cff',
-  '#0fb5ae',
-  '#b25e09',
-  '#d54941',
-  '#7d5bff',
-  '#0594fa',
-  '#c9353f',
-  '#8b5cf6',
-];
-
-/** 取第 index 条序列的颜色（越界按调色板长度取模，绝不返回 undefined）。 */
-export function seriesColorAt(index: number): string {
-  const safe = Number.isFinite(index) ? Math.abs(Math.trunc(index)) : 0;
-  return BOARD_SERIES_COLORS[safe % BOARD_SERIES_COLORS.length] as string;
+/**
+ * 取第 index 条序列的颜色（越界按调色板长度取模，同一序列每次渲染颜色稳定）。
+ *
+ * 调色板由语义 token 组成（`shared/chart-tokens.ts` 的 `chartSeriesPalette`），
+ * 与 `IOT_BOARD_MAX_SERIES = 12` 对齐；无 CSS 变量环境（单测）返回 undefined。
+ */
+export function seriesColorAt(index: number): string | undefined {
+  return chartSeriesColorAt(index);
 }
 
 /**
@@ -179,8 +176,8 @@ export function buildBoardLineOption(
           Number(point.ts),
           toBoardNumeric(point.value),
         ]),
-        itemStyle: { color: LINE_COLOR },
-        lineStyle: { color: LINE_COLOR, width: 2 },
+        itemStyle: { color: lineColor() },
+        lineStyle: { color: lineColor(), width: 2 },
         name,
         showSymbol: points.length <= 60,
         smooth: false,

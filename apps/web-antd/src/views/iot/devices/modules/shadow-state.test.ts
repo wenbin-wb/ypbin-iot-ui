@@ -192,6 +192,24 @@ describe('shadowDiffRows（四态 + 排序，纯函数）', () => {
     expect(shadowValueEquals('-0', '0')).toBe(true);
   });
 
+  it('🔴 指数/位数有界：极端上报值不得触发补零崩溃（RangeError/OOM），退回原串比较', () => {
+    // reported 来自设备 MQTT 原始读数，完全不可信：`1e-999999999` 若照常补零，
+    // `'0'.repeat(999999999)` 会抛 RangeError: Invalid string length，整个概览页签崩掉。
+    expect(() => shadowValueEquals('1e-999999999', 1)).not.toThrow();
+    expect(shadowValueEquals('1e-999999999', 1)).toBe(false);
+    expect(() => shadowValueEquals('1e999999999', 1)).not.toThrow();
+    expect(shadowValueEquals('1e999999999', 1)).toBe(false);
+    // 指数刚好在边界内仍要能正常归一化（不能因为加守卫把正常值判成不可解析）
+    expect(shadowValueEquals('1e-9', 0.000000001)).toBe(true);
+    expect(shadowValueEquals('1e300', `1${'0'.repeat(300)}`)).toBe(true);
+    // 超长数字串（补零/切分都会分配巨串）同样退回原串比较，不抛异常
+    const longDigits = `0.${'1'.repeat(2000)}`;
+    expect(() => shadowValueEquals(longDigits, 0)).not.toThrow();
+    expect(shadowValueEquals(longDigits, 0)).toBe(false);
+    // 同一个超长串与自身比较仍等价（原串口径）
+    expect(shadowValueEquals(longDigits, longDigits)).toBe(true);
+  });
+
   it('🔴 对象/数组区分类型并递归比较（空对象 ≠ 空数组，与后端 Map/List 一致）', () => {
     expect(shadowValueEquals({}, [])).toBe(false);
     expect(shadowValueEquals({ a: 1 }, { a: '1' })).toBe(true);

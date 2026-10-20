@@ -53,6 +53,8 @@ const activeKey = ref<'ledger' | 'overview' | 'topology'>('ledger');
 
 <template>
   <Page auto-content-height>
+    <!-- 页面主标题：视觉上隐藏，供读屏/文档大纲使用（全站 0 个 h1 是审查 P3-5 指出的可访问性缺陷） -->
+    <h1 class="sr-only">{{ $t('page.iot.ledger.pageTitle') }}</h1>
     <!--
       ⚠️ 两个子组件都是 `h-full` 高度链的消费者（vxe 表格没有确定高度就不渲染行），
       因此 `<Tabs>` 必须把高度**透传**给内容区，不能只靠 TabPane 默认布局。

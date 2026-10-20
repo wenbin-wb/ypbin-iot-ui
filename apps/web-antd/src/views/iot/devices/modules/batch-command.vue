@@ -51,7 +51,7 @@ import {
   buildBatchResultCsv,
   buildBatchResultCsvRows,
   buildBatchResultRows,
-  canResendBatchItem,
+  canResendBatchRow,
   collectServiceParams,
   countUnsupportedDevices,
   normalizeBatchDeviceIds,
@@ -60,6 +60,7 @@ import {
   parseCommandParamDefs,
   parseParamsObject,
   summarizeBatchResults,
+  summarizeBatchRows,
 } from './batch-command-state';
 
 /**
@@ -272,6 +273,11 @@ function buildTemplate():
   }
   if (kind.value === 'property_set') {
     template.params = { value: parseBatchValue(valueText.value) };
+    // 勾选「同时写影子期望值」才发这个字段：后端只在 property_set 下发成功（sent）后
+    // 把 {identifier: value} 合并进影子 desired；不勾选就不写（不制造用户没要求的期望值）。
+    if (writeDesired.value) {
+      template.writeDesired = true;
+    }
   } else if (kind.value === 'service_call') {
     if (serviceParamDefs.value.length > 0) {
       const collected = collectServiceParams(
@@ -432,6 +438,10 @@ async function onResend(row: BatchResultRow) {
           }
         : item,
     );
+    // 顶部汇总按**更新后的逐台结果**重算：否则会出现「表里已送达、上面还写着未送达 N 台」。
+    // 后端首次响应里的汇总计数已不再对应当前逐台结果 ⇒ 同时清掉「计数不一致」提示。
+    resultSummary.value = summarizeBatchRows(resultRows.value);
+    countMismatch.value = false;
   } catch (error) {
     message.error(
       extractErrorMessage(
@@ -702,7 +712,7 @@ defineExpose({ drawerApi });
             >
               <span class="w-40 text-sm">
                 {{ def.name }}
-                <span v-if="def.required" class="text-red-500">*</span>
+                <span v-if="def.required" class="text-destructive-text">*</span>
                 <span v-if="def.unit" class="text-xs text-muted-foreground">
                   （{{ def.unit }}）
                 </span>
@@ -773,7 +783,10 @@ defineExpose({ drawerApi });
         </div>
         <!-- writeDesired 只对属性设置有效（其它类型后端显式拒绝，故只在属性设置时出现） -->
         <div v-if="kind === 'property_set'" class="flex flex-col gap-1">
-          <Checkbox v-model:checked="writeDesired">
+          <Checkbox
+            v-model:checked="writeDesired"
+            data-testid="batch-command-write-desired"
+          >
             {{ $t('page.iot.device.batchCommand.writeDesired') }}
           </Checkbox>
           <span class="text-xs text-muted-foreground">
@@ -923,7 +936,7 @@ defineExpose({ drawerApi });
               </template>
               <template v-else-if="column.key === 'action'">
                 <Popconfirm
-                  v-if="canResendBatchItem(asRow(record))"
+                  v-if="canResendBatchRow(asRow(record))"
                   :title="
                     $t('page.iot.debug.resendConfirm', [record.requestId])
                   "

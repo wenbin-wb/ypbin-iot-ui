@@ -3,13 +3,16 @@ import { describe, expect, it } from 'vitest';
 import {
   checkOpenApiKeyForm,
   isOpenApiKeyEnabled,
+  isValidIpWhitelistEntry,
   normalizeOpenApiKeyForm,
   OPEN_API_ALLOWED_SCOPES,
+  openApiKeyIpWhitelistKind,
   openApiKeyStatusColor,
   openApiKeyStatusLabelKey,
   openApiKeyUsageKind,
   openApiKeyUsageLabel,
   openApiKeyUsagePercent,
+  parseIpWhitelist,
   resolveOpenApiKeyListState,
 } from './open-api-key-state';
 
@@ -144,5 +147,73 @@ describe('usage helpers', () => {
     expect(openApiKeyUsageKind('abc', 100)).toBe('unknown');
     expect(openApiKeyUsagePercent('abc', 100)).toBe(0);
     expect(openApiKeyUsageLabel('abc')).toBe('-');
+  });
+});
+
+describe('parseIpWhitelist（与后端 IpWhitelist 同口径）', () => {
+  it('空输入 ⇒ 不限来源（normalized 缺席，不传该字段）', () => {
+    expect(parseIpWhitelist('')).toEqual({});
+    expect(parseIpWhitelist('   ')).toEqual({});
+    expect(parseIpWhitelist(undefined)).toEqual({});
+    expect(parseIpWhitelist(null)).toEqual({});
+    // 只有分隔符/空白也视为未配置
+    expect(parseIpWhitelist(' , \n , ')).toEqual({});
+  });
+
+  it('ipv4 / ipv4 CIDR / ipv6 / ipv6 CIDR 都接受并归一化（trim + 去重）', () => {
+    expect(parseIpWhitelist(' 192.168.1.10 , 10.0.0.0/8 ')).toEqual({
+      normalized: '192.168.1.10,10.0.0.0/8',
+    });
+    expect(parseIpWhitelist('2001:db8::1,2001:db8::/32')).toEqual({
+      normalized: '2001:db8::1,2001:db8::/32',
+    });
+    // 重复条目只保留首次出现（后端 normalizeIpWhitelist 同样去重）
+    expect(parseIpWhitelist('10.0.0.1,10.0.0.1')).toEqual({
+      normalized: '10.0.0.1',
+    });
+  });
+
+  it('逗号与换行都算分隔符（任务口径：逗号/换行分隔）', () => {
+    expect(parseIpWhitelist('10.0.0.1\r\n10.0.0.2\n192.168.0.0/16')).toEqual({
+      normalized: '10.0.0.1,10.0.0.2,192.168.0.0/16',
+    });
+  });
+
+  it('非法条目 ⇒ 返回该条目本身（前端先拦住，别等到建 Key 才 400）', () => {
+    expect(parseIpWhitelist('10.0.0.1,not-an-ip')).toEqual({
+      invalidEntry: 'not-an-ip',
+    });
+    // 域名不做 DNS 解析，直接判非法（与后端「仅接受字面量地址」一致）
+    expect(parseIpWhitelist('example.com')).toEqual({
+      invalidEntry: 'example.com',
+    });
+    // 掩码越界：IPv4 不能超过 /32，IPv6 不能超过 /128
+    expect(parseIpWhitelist('10.0.0.0/33')).toEqual({
+      invalidEntry: '10.0.0.0/33',
+    });
+    expect(parseIpWhitelist('2001:db8::/129')).toEqual({
+      invalidEntry: '2001:db8::/129',
+    });
+    expect(parseIpWhitelist('10.0.0.0/abc')).toEqual({
+      invalidEntry: '10.0.0.0/abc',
+    });
+  });
+
+  it('ipv4 段越界 / ipv6 分组非法 / :: 压缩过量都拒绝', () => {
+    expect(isValidIpWhitelistEntry('256.1.1.1')).toBe(false);
+    expect(isValidIpWhitelistEntry('1.2.3')).toBe(false);
+    expect(isValidIpWhitelistEntry('gggg::1')).toBe(false);
+    expect(isValidIpWhitelistEntry('1:2:3:4:5:6:7:8:9')).toBe(false);
+    expect(isValidIpWhitelistEntry('1:2:3:4:5:6:7::')).toBe(true);
+    expect(isValidIpWhitelistEntry('::1')).toBe(true);
+    expect(isValidIpWhitelistEntry('::ffff:192.168.1.10')).toBe(true);
+  });
+
+  it('停掉 IP 白名单展示态：未返回字段 ≠ 不限来源（不假播报）', () => {
+    // 后端 ListItemResp 当前不返回 ipWhitelist ⇒ unknown（显示 -）
+    expect(openApiKeyIpWhitelistKind(undefined)).toBe('unknown');
+    expect(openApiKeyIpWhitelistKind(null)).toBe('unknown');
+    expect(openApiKeyIpWhitelistKind('')).toBe('unlimited');
+    expect(openApiKeyIpWhitelistKind('10.0.0.0/8')).toBe('configured');
   });
 });

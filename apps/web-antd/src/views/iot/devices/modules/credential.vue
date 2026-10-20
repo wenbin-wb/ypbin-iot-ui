@@ -57,6 +57,15 @@ const errorMessage = ref('');
 const credential = ref<IotCredentialApi.CredentialResp>();
 const connection = ref<IotCredentialApi.ConnectionResp>();
 
+/**
+ * 签发/重签请求在途。
+ *
+ * 🔴 为什么必须防连点：后端虽带 `@Idempotent`（5s 窗口），但**重置签发**每成功一次就换一次口令，
+ * 且旧口令随即失效。快速连点会在「界面显示口令 A、库里生效口令 B」的窗口里把现场设备踢下线。
+ * 因此按钮 loading + disabled，且 `issue()` 首行短路重复调用。
+ */
+const issuing = ref(false);
+
 const state = computed(() =>
   resolveCredentialState(loading.value, errorMessage.value, credential.value),
 );
@@ -95,6 +104,11 @@ async function load() {
 }
 
 async function issue() {
+  // 在途短路：等价于按钮 disabled，但程序化调用（含 Popconfirm 快速双击）也被兜住
+  if (issuing.value) {
+    return;
+  }
+  issuing.value = true;
   try {
     issuedResult.value = await issueDeviceCredential(String(props.deviceId));
     issuedOpen.value = true;
@@ -104,6 +118,8 @@ async function issue() {
     message.error(
       extractErrorMessage(error, $t('page.iot.credential.issueFailed')),
     );
+  } finally {
+    issuing.value = false;
   }
 }
 
@@ -161,17 +177,31 @@ onMounted(() => {
           v-if="state === 'none' && canIssue"
           size="small"
           type="primary"
+          :loading="issuing"
           @click="issue"
         >
           {{ $t('page.iot.credential.issue') }}
         </Button>
-        <Button
+        <!--
+          🔴 重置签发是**破坏性动作**：旧口令立即失效，现场设备会掉线并需重新配网。
+          首次签发（state='none'）没有旧口令可失效 ⇒ 不弹确认；重签必须 Popconfirm 讲清后果。
+        -->
+        <Popconfirm
           v-if="canReissue(state) && canIssue"
-          size="small"
-          @click="issue"
+          :cancel-text="$t('page.iot.credential.cancel')"
+          :ok-text="$t('page.iot.credential.reissue')"
+          :title="$t('page.iot.credential.reissueConfirm')"
+          @confirm="issue"
         >
-          {{ $t('page.iot.credential.reissue') }}
-        </Button>
+          <Button
+            data-testid="credential-reissue"
+            :disabled="issuing"
+            :loading="issuing"
+            size="small"
+          >
+            {{ $t('page.iot.credential.reissue') }}
+          </Button>
+        </Popconfirm>
         <Popconfirm
           v-if="state === 'issued' && canRevoke"
           :title="$t('page.iot.credential.revokeConfirm')"

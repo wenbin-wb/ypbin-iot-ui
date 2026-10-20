@@ -3,6 +3,7 @@ import { computed } from 'vue';
 
 import { useVbenDrawer } from '@vben/common-ui';
 import { BookOpenText } from '@vben/icons';
+import { preferences } from '@vben/preferences';
 
 import { Alert } from 'ant-design-vue';
 
@@ -80,9 +81,25 @@ const TERMS: HelpTerm[] = [
   },
 ];
 
-/** 两个行首标签（含全角冒号）：预计算避免模板里出现超过 80 列的整行。 */
-const whatLabel = computed(() => `${$t('page.iot.help.whatLabel')}：`);
-const whenLabel = computed(() => `${$t('page.iot.help.whenLabel')}：`);
+/**
+ * 标签后的分隔符必须**跟着语言走**。
+ *
+ * 原先硬编码全角 `：`，中文渲染「是什么：」正常，但切到 en-US 会变成
+ * `What it is：`（英文 + 中式全角冒号 + 全角间距）——这类「运行期拼接」不在
+ * i18n 键存在性/文案编译门禁的检查范围内，是典型门禁盲区。
+ * 不新增 i18n 键（避免动 locales）：中文族用全角冒号，其余用半角冒号 + 空格。
+ */
+const labelSeparator = computed(() =>
+  preferences.app.locale.startsWith('zh') ? '：' : ': ',
+);
+
+/** 两个行首标签（含分隔符）：预计算避免模板里出现超过 80 列的整行。 */
+const whatLabel = computed(
+  () => `${$t('page.iot.help.whatLabel')}${labelSeparator.value}`,
+);
+const whenLabel = computed(
+  () => `${$t('page.iot.help.whenLabel')}${labelSeparator.value}`,
+);
 
 const [Drawer, drawerApi] = useVbenDrawer({
   async onOpenChange(isOpen: boolean) {

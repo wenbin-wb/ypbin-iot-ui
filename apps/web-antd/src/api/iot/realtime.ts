@@ -8,13 +8,22 @@
  * - `event: latest`        `data: { deviceId, propertyId, value, quality, ts }`
  * - `event: device-status` `data: { deviceId, status }`（单台启停）/ `{ deviceIds, status }`
  *   （批量启停）/ `{ deviceIds }`（批量删除；同时兼容 `deletedIds` 别名）
- * - `event: alert`         `data: { ...发布点上下文 }`（前端只把它当「告警发生变化」的刷新信号）
- * - 心跳是 `:hb` 这类注释行（无 data ⇒ 不派发事件）
+ * - `event: alert`         `data: { action, instanceIds, ruleIds, count, minutes }`
+ *   （`IotRealtimeService.AlertEvent`，2026-10-20 核实；前端只把它当「告警发生变化」的刷新信号）
+ * - 心跳是 `:hb` 这类注释行（无 data ⇒ 不派发事件），后端每 15s 发一次
  *
  * 连接策略：
  * - 断线指数退避自动重连（默认 1s→2s→…→上限 30s，带 ±20% 抖动）；
- * - `401/403` 不重连（token/权限不会靠重试变好，重试只会打爆日志）；
- * - `dispose()` 中止在途 fetch 并清掉重连定时器，之后不再有任何网络动作；
+ * - `401/403` 不重连也不自动登出：状态置 `unauthorized` 并回调 `onAuthError(status)`。
+ *   为什么不在客户端直接登出：登出会触发页面重订阅 → 新流再次 401 的循环，
+ *   且 403 是「该角色无实时权限」而非会话过期，登出并不能解决问题。页面据此给出
+ *   可见提示 + 「重新登录」入口（401）或权限说明（403）。
+ * - 心跳看门狗：超过 `heartbeatTimeoutMs`（默认 45s = 3 × 后端 15s 心跳）**没有任何字节**
+ *   （心跳注释也算）即中止当前流并按既有退避重连——半开连接（休眠/代理静默丢包）时
+ *   `reader.read()` 永不返回，没有看门狗就会永远停在「实时」假活状态；
+ * - 建连超时：`connectTimeoutMs`（默认 15s）内没拿到响应头即中止并退避重连，
+ *   避免网络黑洞时永远停在 `connecting`；
+ * - `dispose()` 中止在途 fetch、清掉重连定时器与看门狗，之后不再有任何网络动作；
  * - 连接失败通过 `onError` + `onStateChange('reconnecting')` 暴露，
  *   调用方（composable / 页面）**必须**把它变成用户可见提示，不得静默。
  */
@@ -31,12 +40,25 @@ export const IOT_REALTIME_EVENTS = [
 
 export type IotRealtimeEventName = (typeof IOT_REALTIME_EVENTS)[number];
 
-/** 连接状态：closed=未连接/disposed，connecting=首连中，live=流已打开，reconnecting=断线等待/重连中。 */
+/**
+ * 连接状态。
+ *
+ * - `closed`：未连接 / 已 disposed；
+ * - `connecting`：首连中；
+ * - `live`：流已打开；
+ * - `reconnecting`：断线等待或重连中；
+ * - `unauthorized`：鉴权失败（401/403）。**不再自动重连**（重试不会让 token/权限变好），
+ *   也不自动登出；由页面渲染可见提示并在 401 时提供「重新登录」入口。
+ */
 export type RealtimeConnectionState =
   | 'closed'
   | 'connecting'
   | 'live'
-  | 'reconnecting';
+  | 'reconnecting'
+  | 'unauthorized';
+
+/** 鉴权失败状态码：401=会话过期/未登录，403=已登录但无该端点权限。 */
+export type RealtimeAuthStatus = 401 | 403;
 
 /** `latest` 事件：一条点位最新值（`deviceId` 为后端 Long 的字符串形态）。 */
 export interface IotRealtimeLatestPayload {
@@ -68,10 +90,32 @@ export interface IotRealtimeDeviceStatusPayload {
 }
 
 /**
- * `alert` 事件：后端发布点不同，可能只带单个 `deviceId`、也可能带 `deviceIds` 列表，
- * 甚至不带设备上下文 ⇒ 类型保持宽松，由 `alertTouchesDevice()` 统一判定。
+ * `alert` 事件：**告警状态变化信号**，不是告警实例快照。
+ *
+ * 后端契约（`IotRealtimeService.AlertEvent`，2026-10-20 对照后端源码更正）：
+ * `action` ∈ `ack`（确认）/ `silence`（静默）/ `resolve`（收口），
+ * `instanceIds` 为涉及的告警实例 id（收口时为 `null`），
+ * `ruleIds` 为涉及的规则 id（确认/静默时为 `null`），
+ * `count` 为本次生效条数，`minutes` 仅静默动作有值。
+ *
+ * 关键事实：**该事件不带 deviceId/deviceIds**，因此严格意义上的「按设备精确刷新」
+ * 在该事件上做不到；前端只把它当「告警列表/规则/摘要需要刷新」的信号（保守刷新）。
+ * 类型仍保留宽松的 `deviceId/deviceIds` 与索引签名：既兼容历史负载/并行开发期的别名，
+ * 也避免后端将来加字段时前端整条流失效——宽松不等于把不确定当确定，消费方必须按
+ * {@link alertTouchesDevice} 的保守规则处理。
  */
 export interface IotRealtimeAlertPayload {
+  /** 动作：ack / silence / resolve。 */
+  action?: null | string;
+  /** 本次生效条数。 */
+  count?: null | number;
+  /** 涉及的告警实例 id（收口时为 null）。 */
+  instanceIds?: Array<null | number | string> | null;
+  /** 静默分钟数（仅 silence 动作有值）。 */
+  minutes?: null | number;
+  /** 涉及的规则 id（确认/静默时为 null）。 */
+  ruleIds?: Array<null | number | string> | null;
+  /** 历史/别名兼容字段（当前后端不发送，见上方契约说明）。 */
   deviceId?: null | number | string;
   deviceIds?: Array<null | number | string> | null;
   [key: string]: unknown;
@@ -369,12 +413,57 @@ export function createTrailingDebounce(
   return debounced;
 }
 
+// ==================== 心跳 / 建连超时 ====================
+
+/**
+ * 心跳看门狗判定阈值（默认 45s）。
+ *
+ * 为什么是 45s：后端心跳间隔 15s（`ypbin.sse.heartbeat-interval-seconds`），3 个心跳周期内
+ * 一个字节都没收到，即可判定连接已半开（休眠/NAT 空闲超时/代理静默丢弃），而不是偶发抖动。
+ */
+export const DEFAULT_REALTIME_HEARTBEAT_TIMEOUT_MS = 45_000;
+
+/** 建连超时（默认 15s）：超过这个时间没拿到响应头，视为网络黑洞，中止后走退避重连。 */
+export const DEFAULT_REALTIME_CONNECT_TIMEOUT_MS = 15_000;
+
+/** 看门狗检查间隔（默认 5s）：只做廉价时间比较，不必每个心跳周期都查。 */
+export const REALTIME_HEARTBEAT_CHECK_INTERVAL_MS = 5000;
+
+/** 超时原因：`connect-timeout`=建连超时，`heartbeat-timeout`=心跳/空闲超时。 */
+export type IotRealtimeTimeoutReason = 'connect-timeout' | 'heartbeat-timeout';
+
+/**
+ * 实时流超时错误。
+ *
+ * 为什么带结构化 `reason`：API 层不引 i18n（`api/**` 零 `$t` 约定），但页面需要把
+ * 「心跳超时」翻译成用户能懂的话（`page.iot.realtime.heartbeatTimeout`）；
+ * 用 `instanceof + reason` 让 UI 层映射文案，而不是让页面去 `includes` 英文错误串。
+ */
+export class IotRealtimeTimeoutError extends Error {
+  readonly reason: IotRealtimeTimeoutReason;
+
+  constructor(reason: IotRealtimeTimeoutReason) {
+    super(`realtime stream ${reason}`);
+    this.name = 'IotRealtimeTimeoutError';
+    this.reason = reason;
+  }
+}
+
 // ==================== 客户端 ====================
 
 export interface IotRealtimeClientOptions {
   backoff?: RealtimeBackoffOptions;
+  /** 建连超时（默认 {@link DEFAULT_REALTIME_CONNECT_TIMEOUT_MS}）；`<=0` 表示关闭。 */
+  connectTimeoutMs?: number;
   /** 测试/特殊部署可注入 fetch；默认用全局 fetch。 */
   fetchImpl?: typeof fetch;
+  /** 心跳/空闲超时（默认 {@link DEFAULT_REALTIME_HEARTBEAT_TIMEOUT_MS}）；`<=0` 表示关闭看门狗。 */
+  heartbeatTimeoutMs?: number;
+  /**
+   * 鉴权失败（401/403）回调：回调时连接状态已是 `unauthorized`、且**不会**自动重连。
+   * 客户端刻意不自动登出（见模块头注释），由调用方决定展示什么、是否引导重新登录。
+   */
+  onAuthError?: (status: RealtimeAuthStatus) => void;
   onError?: (error: Error) => void;
   onEvent?: (event: IotRealtimeEventName, payload: unknown) => void;
   /** 单帧 JSON 解析失败：只 warn/上报，**不断开流**（一帧坏数据不代表连接坏了）。 */
@@ -391,7 +480,8 @@ function toError(value: unknown): Error {
 /**
  * SSE 客户端：`connect()` 后保持「断线 → 退避 → 重连」循环，直到 `dispose()`。
  *
- * 不自动重连的失败：`401/403`（鉴权/权限问题重试无意义，且会在日志里刷屏）。
+ * 不自动重连的失败：`401/403`（鉴权/权限问题重试无意义，且会在日志里刷屏）——
+ * 状态置 `unauthorized`、回调 `onAuthError`，**不自动登出**（避免登出/重订阅循环）。
  */
 export class IotRealtimeClient {
   get connectionState(): RealtimeConnectionState {
@@ -401,6 +491,12 @@ export class IotRealtimeClient {
   private abortController?: AbortController;
 
   private disposed = false;
+
+  /** 心跳看门狗定时器（仅 live 期间存在）。 */
+  private heartbeatWatchdog?: ReturnType<typeof setInterval>;
+
+  /** 最后一次收到任意字节（含心跳注释）的时刻；看门狗据此判定半开连接。 */
+  private lastActivityAt = 0;
 
   private readonly options: IotRealtimeClientOptions;
 
@@ -414,21 +510,34 @@ export class IotRealtimeClient {
     this.options = options;
   }
 
-  /** 幂等：connecting/live 时重复调用不创建第二条连接。 */
+  /**
+   * 幂等：connecting/live/reconnecting 时重复调用不会创建第二条流。
+   *
+   * `reconnecting` 必须一起守住：该状态下已排好重连定时器，再 `connect()` 会立刻
+   * 起第二条流并覆盖 `abortController`（第一条失去中止句柄 ⇒ dispose 也杀不掉，泄漏连接）。
+   * `unauthorized` 允许显式 `connect()`：鉴权失败后不自动重试，但页面/调用方在重新登录后
+   * 可以主动重连（仍然只建一条流，因为 `run()` 会先覆盖 `abortController` 并置 connecting）。
+   */
   connect(): void {
-    if (this.disposed || this.state === 'connecting' || this.state === 'live') {
+    if (
+      this.disposed ||
+      this.state === 'connecting' ||
+      this.state === 'live' ||
+      this.state === 'reconnecting'
+    ) {
       return;
     }
     void this.run();
   }
 
-  /** 关闭连接与重连定时器；再次 `connect()` 不会生效（需新建实例）。 */
+  /** 关闭连接、重连定时器与心跳看门狗；再次 `connect()` 不会生效（需新建实例）。 */
   dispose(): void {
     if (this.disposed) {
       return;
     }
     this.disposed = true;
     this.clearReconnectTimer();
+    this.stopHeartbeatWatchdog();
     const controller = this.abortController;
     this.abortController = undefined;
     controller?.abort();
@@ -472,6 +581,11 @@ export class IotRealtimeClient {
     this.options.onEvent?.(event, payload);
   }
 
+  /** 收到任意字节（含心跳注释）即刷新活动时间；看门狗只看「多久没动静」。 */
+  private markActivity(): void {
+    this.lastActivityAt = Date.now();
+  }
+
   private async readStream(body: ReadableStream<Uint8Array>): Promise<void> {
     const reader = body.getReader();
     const decoder = new TextDecoder();
@@ -482,6 +596,8 @@ export class IotRealtimeClient {
         if (done) {
           break;
         }
+        // 收到任意字节都算「活着」：心跳是一行注释，解析器不派发事件，但看门狗必须知道它到了
+        this.markActivity();
         parser.feed(decoder.decode(value, { stream: true }));
       }
       // 冲刷多字节字符残片；未以空行结束的帧按 SSE 规范丢弃
@@ -508,17 +624,44 @@ export class IotRealtimeClient {
     this.abortController = controller;
     this.setState(this.reconnectAttempt > 0 ? 'reconnecting' : 'connecting');
     const fetchImpl = this.options.fetchImpl ?? fetch;
+    const connectTimeoutMs =
+      this.options.connectTimeoutMs ?? DEFAULT_REALTIME_CONNECT_TIMEOUT_MS;
+    let connectTimer: ReturnType<typeof setTimeout> | undefined;
+    let connectTimedOut = false;
+    const clearConnectTimer = () => {
+      if (connectTimer !== undefined) {
+        clearTimeout(connectTimer);
+        connectTimer = undefined;
+      }
+    };
+    if (connectTimeoutMs > 0) {
+      // 建连超时只覆盖「等响应头」这一段：拿到响应后立即清表，不能误伤长连接的事件流
+      connectTimer = setTimeout(() => {
+        connectTimer = undefined;
+        connectTimedOut = true;
+        controller.abort();
+      }, connectTimeoutMs);
+    }
     try {
       const response = await fetchImpl(this.resolveUrl(), {
         headers: this.buildHeaders(),
         method: 'GET',
         signal: controller.signal,
       });
+      clearConnectTimer();
       if (response.status === 401 || response.status === 403) {
+        // 401=会话过期，403=无实时端点权限：两者都不自动重连、也不自动登出，
+        // 交给页面渲染可见提示（并在 401 时提供「重新登录」入口）。
+        const status: RealtimeAuthStatus = response.status;
         this.options.onError?.(
-          new Error(`realtime stream unauthorized (HTTP ${response.status})`),
+          new Error(
+            status === 401
+              ? 'realtime stream unauthorized (HTTP 401)'
+              : 'realtime stream forbidden (HTTP 403)',
+          ),
         );
-        this.setState('closed');
+        this.setState('unauthorized');
+        this.options.onAuthError?.(status);
         return;
       }
       if (!response.ok) {
@@ -530,18 +673,34 @@ export class IotRealtimeClient {
       this.setState('live');
       // 成功建立了连接 ⇒ 退避重新从 base 起算（长时间稳定后的偶发断线不背历史次数）
       this.reconnectAttempt = 0;
+      this.startHeartbeatWatchdog(controller);
       await this.readStream(response.body);
+      this.stopHeartbeatWatchdog();
       if (!this.disposed) {
         // 服务端正常关流（部署/网关超时）：仍按断线处理，自动重连
         this.scheduleReconnect();
       }
     } catch (error) {
-      if (this.disposed || controller.signal.aborted) {
+      this.stopHeartbeatWatchdog();
+      if (this.disposed) {
+        return;
+      }
+      if (controller.signal.aborted) {
+        if (connectTimedOut) {
+          // 建连超时是我们自己 abort 的：必须上报 + 继续退避，不能像 dispose 一样静默
+          this.options.onError?.(
+            new IotRealtimeTimeoutError('connect-timeout'),
+          );
+          this.scheduleReconnect();
+        }
+        // 心跳超时的重连已由看门狗排好；dispose 则不需要任何后续动作
         return;
       }
       this.options.onError?.(toError(error));
       this.scheduleReconnect();
     } finally {
+      clearConnectTimer();
+      this.stopHeartbeatWatchdog();
       if (this.abortController === controller) {
         this.abortController = undefined;
       }
@@ -570,5 +729,41 @@ export class IotRealtimeClient {
     }
     this.state = next;
     this.options.onStateChange?.(next);
+  }
+
+  /**
+   * 启动心跳看门狗（仅 live 期间）。
+   *
+   * 用固定间隔轮询 `lastActivityAt` 而不是给每次 read 单独设超时：`reader.read()` 在
+   * TCP 半开时既不 resolve 也不 reject，只能靠外部定时器发现「长时间没有任何字节」。
+   * 超时后先停表再 abort，避免 abort 触发的 catch 里重复上报/重复排重连。
+   */
+  private startHeartbeatWatchdog(controller: AbortController): void {
+    this.stopHeartbeatWatchdog();
+    const timeoutMs =
+      this.options.heartbeatTimeoutMs ?? DEFAULT_REALTIME_HEARTBEAT_TIMEOUT_MS;
+    // <=0 显式关闭看门狗（特殊部署/测试需要完全静止的流）
+    if (timeoutMs <= 0) {
+      return;
+    }
+    this.markActivity();
+    this.heartbeatWatchdog = setInterval(() => {
+      if (Date.now() - this.lastActivityAt < timeoutMs) {
+        return;
+      }
+      this.stopHeartbeatWatchdog();
+      this.options.onError?.(new IotRealtimeTimeoutError('heartbeat-timeout'));
+      controller.abort();
+      // abort 让 readStream 以 AbortError 退出；catch 见到 aborted 会静默返回，
+      // 所以这里必须显式排重连（否则半开连接 abort 后就再也不连了）。
+      this.scheduleReconnect();
+    }, REALTIME_HEARTBEAT_CHECK_INTERVAL_MS);
+  }
+
+  private stopHeartbeatWatchdog(): void {
+    if (this.heartbeatWatchdog !== undefined) {
+      clearInterval(this.heartbeatWatchdog);
+      this.heartbeatWatchdog = undefined;
+    }
   }
 }

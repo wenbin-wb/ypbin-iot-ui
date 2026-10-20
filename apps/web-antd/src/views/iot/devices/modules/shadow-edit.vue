@@ -173,7 +173,7 @@ async function applyFromReported() {
         :rows="10"
         :placeholder="$t('page.iot.shadow.desiredPlaceholder')"
       />
-      <div v-if="!parse.ok" class="text-xs text-red-500">
+      <div v-if="!parse.ok" class="text-xs text-destructive-text">
         {{ resolveDesiredParseMessage(parse) }}
       </div>
       <div class="text-xs text-muted-foreground">

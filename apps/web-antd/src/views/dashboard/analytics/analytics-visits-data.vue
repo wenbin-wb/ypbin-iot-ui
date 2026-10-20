@@ -9,6 +9,7 @@ import { Inbox } from '@vben/icons';
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 
 import { $t } from '#/locales';
+import { chartSeriesPalette } from '#/utils/chart-tokens';
 
 import { protocolLabel } from '../../iot/shared/display';
 
@@ -25,15 +26,6 @@ const { renderEcharts } = useEcharts(chartRef);
 /** 空数据时不渲染画布，改为友好空态：空数组会让图表区看起来像坏掉的白块。 */
 const hasData = computed(() => props.items.length > 0);
 
-const PALETTE = [
-  '#0066f5',
-  '#7c7cf0',
-  '#0ec9a3',
-  '#f0b429',
-  '#f2547b',
-  '#5a6cf0',
-];
-
 /**
  * 必须在挂载后渲染：useEcharts 内部 isActiveRef 要 onMounted 才为 true，
  * setup 期（watch immediate）调用 renderEcharts 会被静默丢弃且不重试。
@@ -42,8 +34,10 @@ function renderChart(items: IotDashboardApi.NameValue[]) {
   if (items.length === 0) {
     return;
   }
+  // 分类色板在渲染时按语义 token 解析（全取不到时传空数组，让 ECharts 用自带色板）
+  const palette = chartSeriesPalette();
   renderEcharts({
-    color: PALETTE,
+    color: palette,
     legend: {
       bottom: '2%',
       left: 'center',
@@ -94,7 +88,17 @@ watch(() => props.items, renderChart, { deep: true, flush: 'post' });
 </script>
 
 <template>
-  <EchartsUI v-if="hasData" ref="chartRef" />
+  <!--
+    图表是纯 canvas，读屏拿不到任何信息；ECharts 的 aria 组件未在本项目注册
+    （`packages/effects/plugins/src/echarts/echarts.ts` 未 `echarts.use([AriaComponent])`），
+    所以在容器上给 `role="img"` + `aria-label`，让读屏至少能播报「这是一张什么图」。
+  -->
+  <EchartsUI
+    v-if="hasData"
+    ref="chartRef"
+    :aria-label="$t('page.dashboard.protocolTitle')"
+    role="img"
+  />
   <div
     v-else
     class="flex h-[300px] flex-col items-center justify-center gap-2 text-sm text-muted-foreground"

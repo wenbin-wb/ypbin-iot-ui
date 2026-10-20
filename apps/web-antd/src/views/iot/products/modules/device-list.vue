@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import type { RefreshGuard } from '../../shared/refresh-guard';
+
 import type {
   VxeTableGridColumns,
   VxeTableGridOptions,
@@ -20,6 +22,11 @@ import {
   protocolLabel,
 } from '../../shared/display';
 import ListErrorAlert from '../../shared/list-error-alert.vue';
+import {
+  createRefreshGuard,
+  QueryTimeoutError,
+  withQueryTimeout,
+} from '../../shared/refresh-guard';
 
 /**
  * 产品详情「设备」页签：按 `productId` 服务端分页列出该产品的设备。
@@ -37,6 +44,14 @@ const props = defineProps<{ productId: string }>();
 
 /** 列表加载失败原因（空 = 本次成功）。 */
 const listError = ref('');
+
+/**
+ * 列表的「静默丢弃」守卫（见 shared/refresh-guard.ts）。
+ *
+ * 内嵌列表同样会被 vxe 的在途守卫吞掉翻页/刷新：用户在产品详情里点下一页时若正有慢查询，
+ * 表现就是「点了没反应」；这里登记意图并在本周期结束补发，同时给查询加客户端超时。
+ */
+let listGuard: RefreshGuard;
 
 function useColumns(): VxeTableGridColumns {
   return [
@@ -103,11 +118,20 @@ const [Grid, gridApi] = useVbenVxeGrid({
     proxyConfig: {
       ajax: {
         query: async ({ page }) => {
+          // 查询真的启动了 ⇒ 登记过的刷新意图已被执行（没被 vxe 丢弃）
+          listGuard.consumeIntent();
           try {
-            const result = await getDevicePage({
-              page: page.currentPage,
-              pageSize: page.pageSize,
-              productId: props.productId,
+            const result = await withQueryTimeout(
+              getDevicePage({
+                page: page.currentPage,
+                pageSize: page.pageSize,
+                productId: props.productId,
+              }),
+            ).catch((error: unknown) => {
+              if (error instanceof QueryTimeoutError) {
+                throw new TypeError($t('page.iot.common.queryTimeout'));
+              }
+              throw error;
             });
             listError.value = '';
             // 后端 total 是 Long → 字符串；vxe 分页要算页数 ⇒ 进表格前显式转数。
@@ -119,6 +143,9 @@ const [Grid, gridApi] = useVbenVxeGrid({
               $t('page.iot.device.listLoadFailed'),
             );
             throw error;
+          } finally {
+            // 周期结束（成功/失败）⇒ 有被丢弃的意图就补发一次
+            listGuard.notifyCycleEnd();
           }
         },
       },
@@ -126,6 +153,22 @@ const [Grid, gridApi] = useVbenVxeGrid({
     rowConfig: { keyField: 'id' },
     toolbarConfig: { custom: true, export: false, refresh: true, zoom: true },
   } as VxeTableGridOptions<IotDeviceApi.DeviceResp>,
+  gridEvents: {
+    pageChange: () => listGuard.markIntent(),
+    toolbarButtonClick: ({ code }: { code?: string }) => {
+      if (code === 'reload' || code === 'query') {
+        listGuard.markIntent();
+      }
+    },
+  },
+});
+
+listGuard = createRefreshGuard({
+  isBusy: () => Boolean(gridApi.grid?.reactData?.tableLoading),
+  issue: () => {
+    void gridApi.query();
+  },
+  onTrailing: (active) => gridApi.setLoading(active),
 });
 
 /** 宿主切换产品（同一组件复用）时按新产品重查。 */
@@ -133,14 +176,14 @@ watch(
   () => props.productId,
   () => {
     if (props.productId) {
-      gridApi.query();
+      listGuard.request();
     }
   },
 );
 
 /** 供宿主（产品详情）在需要时主动刷新设备页签。 */
 function reload() {
-  gridApi.query();
+  listGuard.request();
 }
 
 defineExpose({ reload });

@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import type { RefreshGuard } from '../../shared/refresh-guard';
+
 import type {
   VxeTableGridColumns,
   VxeTableGridOptions,
@@ -18,6 +20,11 @@ import { extractErrorMessage } from '#/utils/error';
 import CopyText from '../../shared/copy-text.vue';
 import { formatDateTime } from '../../shared/display';
 import ListErrorAlert from '../../shared/list-error-alert.vue';
+import {
+  createRefreshGuard,
+  QueryTimeoutError,
+  withQueryTimeout,
+} from '../../shared/refresh-guard';
 import {
   assignableColor,
   assignableLabelKey,
@@ -192,6 +199,15 @@ function tenantNameState(
   return tenantNamesLoaded.value ? 'unknown' : 'loading';
 }
 
+/**
+ * 列表的「静默丢弃」守卫（见 shared/refresh-guard.ts）。
+ *
+ * 台账是平台管理员判断「哪些租户接进来了」的唯一入口：工具栏刷新/搜索/暂停接入后的刷新
+ * 若撞上 vxe 的在途查询守卫会被直接吞掉（页面无反馈、数据还是旧的）；
+ * 登记意图后在本周期结束补发一次，并给查询加客户端超时。
+ */
+let listGuard: RefreshGuard;
+
 const [Grid, gridApi] = useVbenVxeGrid({
   gridOptions: {
     columns: useColumns(),
@@ -202,8 +218,17 @@ const [Grid, gridApi] = useVbenVxeGrid({
     proxyConfig: {
       ajax: {
         query: async () => {
+          // 查询真的启动了 ⇒ 登记过的刷新意图已被执行（没被 vxe 丢弃）
+          listGuard.consumeIntent();
           try {
-            const rows = await getTenantLedgerList();
+            const rows = await withQueryTimeout(getTenantLedgerList()).catch(
+              (error: unknown) => {
+                if (error instanceof QueryTimeoutError) {
+                  throw new TypeError($t('page.iot.common.queryTimeout'));
+                }
+                throw error;
+              },
+            );
             // 租户名是展示增强（内部自捕获 + 可见提示），不把台账列表一起拖失败。
             await resolveTenantNames(rows);
             listError.value = '';
@@ -220,6 +245,9 @@ const [Grid, gridApi] = useVbenVxeGrid({
               $t('page.iot.ledger.listLoadFailed'),
             );
             throw error;
+          } finally {
+            // 周期结束（成功/失败）⇒ 有被丢弃的意图就补发一次
+            listGuard.notifyCycleEnd();
           }
         },
       },
@@ -228,11 +256,31 @@ const [Grid, gridApi] = useVbenVxeGrid({
     rowConfig: { keyField: 'tenantId' },
     toolbarConfig: { custom: true, export: false, refresh: true, zoom: true },
   } as VxeTableGridOptions<IotLedgerApi.LedgerResp>,
+  gridEvents: {
+    toolbarButtonClick: ({ code }: { code?: string }) => {
+      if (code === 'reload' || code === 'query') {
+        listGuard.markIntent();
+      }
+    },
+  },
 });
+
+listGuard = createRefreshGuard({
+  isBusy: () => Boolean(gridApi.grid?.reactData?.tableLoading),
+  issue: () => {
+    void gridApi.query();
+  },
+  onTrailing: (active) => gridApi.setLoading(active),
+});
+
+/** 列表刷新入口（搜索/暂停接入/工具栏共用；走守卫覆盖「慢查询在途」窗口）。 */
+function reloadList() {
+  listGuard.request();
+}
 
 /** 搜索框回车/点搜索：重新走 query（过滤仍在前端做，不新增后端参数）。 */
 function onTenantSearch() {
-  gridApi.query();
+  reloadList();
 }
 
 /** `allowClear` 清空时立即恢复全量，不必再按一次搜索。 */
@@ -240,7 +288,7 @@ function onTenantKeywordChange(event: Event) {
   const value = (event.target as HTMLInputElement | null)?.value ?? '';
   if (value === '') {
     tenantKeyword.value = '';
-    gridApi.query();
+    reloadList();
   }
 }
 
@@ -275,7 +323,7 @@ function onToggleAssignable(row: IotLedgerApi.LedgerResp, assignable: boolean) {
       message.success(
         detail ? `${$t('common.success')} · ${detail}` : $t('common.success'),
       );
-      gridApi.query();
+      reloadList();
     })
     .catch(() => {
       // 失败提示由 `requestClient` 的全局响应拦截器统一弹出（见 `#/api/request`），
@@ -375,10 +423,7 @@ function onToggleAssignable(row: IotLedgerApi.LedgerResp, assignable: boolean) {
             />
             <!-- 本页没有 create 类页面级写操作，故用**读**权限码门禁刷新按钮；
                写操作（暂停/恢复接入）在行内，用 `iot:ledger:update`。 -->
-            <Button
-              v-access:code="['iot:ledger:list']"
-              @click="gridApi.query()"
-            >
+            <Button v-access:code="['iot:ledger:list']" @click="reloadList">
               {{ $t('common.refresh') }}
             </Button>
           </div>

@@ -1,3 +1,7 @@
+import type { ListState } from '../shared/list-state';
+
+import { resolveListState } from '../shared/list-state';
+
 /**
  * 平台告警列表的**纯逻辑**（状态/级别的 label 与颜色、列表态判定）。
  */
@@ -58,19 +62,13 @@ export function platformAlertSeverityColor(severity?: string): string {
   return severity === 'CRITICAL' ? 'error' : 'default';
 }
 
-/** 列表展示态（错误优先于空）。 */
-export type PlatformAlertListState = 'empty' | 'error' | 'loading' | 'ready';
+/** 列表展示态（错误优先于空；判据收口到 shared/list-state）。 */
+export type PlatformAlertListState = ListState;
 
 export function resolvePlatformAlertListState(
   loading: boolean,
   errorMessage: string,
   itemCount: number,
 ): PlatformAlertListState {
-  if (loading) {
-    return 'loading';
-  }
-  if (errorMessage) {
-    return 'error';
-  }
-  return itemCount > 0 ? 'ready' : 'empty';
+  return resolveListState({ errorMessage, itemCount, loading });
 }

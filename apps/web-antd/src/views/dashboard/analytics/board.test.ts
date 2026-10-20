@@ -4,8 +4,6 @@ import type { IotSeriesApi } from '#/api/iot';
 
 import { createApp, h, nextTick } from 'vue';
 
-import { i18n } from '@vben/locales';
-
 import {
   afterEach,
   beforeAll,
@@ -223,51 +221,10 @@ beforeAll(async () => {
   const { setupI18n } = await import('#/locales');
   const app = createApp({ render: () => null });
   await setupI18n(app, { defaultLocale: 'zh-CN' });
-  // 新键的事实源是**已提交进本仓**的 page.json（上面 setupI18n 已加载）。
-  // 🔴 曾经这里按仓规去读仓外的 temp/i18n-requests-frontend-board-v2.json 并预置，
-  // 结果 CI 检出里没有该目录 ⇒ ENOENT 把「校验与构建」打红（本地有、CI 没有，属"本机假绿"）。
-  // 现在改为：**仓外文件只是可选加速**——存在就合（保持本地改文案即可见），不存在就跳过，
-  // 此时断言依赖的仍是随包发布的真实语言包。
-  const { existsSync, readFileSync } = await import('node:fs');
-  const { dirname, join, resolve } = await import('node:path');
-  const { fileURLToPath } = await import('node:url');
-  const requestFile = 'i18n-requests-frontend-board-v2.json';
-  let workspaceRoot = dirname(fileURLToPath(import.meta.url));
-  let found = join(workspaceRoot, 'temp', requestFile);
-  for (;;) {
-    if (existsSync(found)) {
-      break;
-    }
-    const parent = resolve(workspaceRoot, '..');
-    if (parent === workspaceRoot) {
-      found = '';
-      break;
-    }
-    workspaceRoot = parent;
-    found = join(workspaceRoot, 'temp', requestFile);
-  }
-  if (found === '') {
-    return;
-  }
-  const i18nRequest = JSON.parse(readFileSync(found, 'utf8')) as Record<
-    string,
-    Record<string, string>
-  >;
-  for (const [locale, entries] of Object.entries(i18nRequest)) {
-    const messages: Record<string, any> = {};
-    for (const [key, value] of Object.entries(
-      entries as Record<string, string>,
-    )) {
-      const parts = key.split('.');
-      let node = messages;
-      for (const part of parts.slice(0, -1)) {
-        node[part] ??= {};
-        node = node[part];
-      }
-      node[parts.at(-1) as string] = value;
-    }
-    i18n.global.mergeLocaleMessage(locale, messages);
-  }
+  // i18n 的**唯一事实源**是已提交的 `page.json`（上面 setupI18n 已加载）。
+  // 这里曾读取仓外 `temp/i18n-requests-frontend-board-v2.json` 并 merge 覆盖语言包：
+  // 本地有该文件、CI 检出没有 ⇒ 同一份代码本地绿/CI 红（2026-10-20 PR #118 实测）。
+  // 已移除：测试断言改为 `$t(key)` 读真实语言包，任何文案变更都必须随 page.json 一起提交。
 });
 
 const BASE_TS = 1_790_400_000_000;
@@ -1180,12 +1137,22 @@ describe('看板抽屉：后端共享持久化 / 本地草稿 / 排序', () => {
       bizFailure(50_000, '平台看板查询炸了'),
     );
     const container = await mountBoardDrawer();
-    expect(container.textContent).toContain('车间温度');
-    // 如实标注「本地草稿（未同步到平台）」，而不是只有内部状态
-    expect(container.textContent).toContain(
-      '当前为本地草稿（未同步到平台）：平台读取失败或尚未配置，本页展示并保存的都是本机草稿。',
+    // CI（较慢的 runner / 并行 worker）上 onOpenChange 里的 getBoard 失败回调可能比一次 flush
+    // 更晚落定：本地草稿先渲染、远端失败原因后到 ⇒ 用 waitFor 等「草稿提示」出现，
+    // 避免把「时序差一帧」误报成功能缺陷（2026-10-20 PR #118 CI 实测踩到）。
+    await vi.waitFor(
+      () => {
+        expect(container.textContent).toContain('车间温度');
+        // 如实标注「本地草稿（未同步到平台）」，而不是只有内部状态。
+        // 断言读**已提交语言包**的值（不在测试里维护第二份中文副本）：
+        // 此前硬编码旧文案 + 叠加仓外 temp/i18n-requests 覆盖，导致本地绿、CI 红。
+        expect(container.textContent).toContain(
+          $t('page.iot.board.localDraftNotice'),
+        );
+        expect(container.textContent).toContain('平台看板查询炸了');
+      },
+      { timeout: 3000 },
     );
-    expect(container.textContent).toContain('平台看板查询炸了');
   });
 
   it('小屏（390px）：抽屉与表格卡都用「不横向溢出」的结构（无固定宽表、卡片化兜底）', async () => {

@@ -14,6 +14,7 @@ import {
   Tag,
   Tooltip,
 } from 'ant-design-vue';
+import dayjs from 'dayjs';
 
 import { getDeviceTrace } from '#/api/iot';
 import { $t } from '#/locales';
@@ -121,20 +122,31 @@ const outcomeOptions = computed(() =>
 );
 
 /**
+ * 后端 `DeviceTraceQuery.from/to` 接受的**唯一**格式。
+ *
+ * 🔴 为什么不能用 `Date#toISOString()`：后端字段是 `LocalDateTime`，Spring 默认的
+ * `ISO_LOCAL_DATE_TIME` 不接受尾随 `Z` ⇒ 带 `Z` 的串稳定 400，整条「消息跟踪」能力
+ * 不可用（2026-10-20 审查 P0-3）。后端已补 `@DateTimeFormat(pattern="yyyy-MM-dd HH:mm:ss")`
+ * （与 availability/maintenance 同口径），前端必须按同一 pattern 传；两侧任一侧偏移都会 400。
+ */
+const TRACE_TIME_FORMAT = 'YYYY-MM-DD HH:mm:ss';
+
+/**
  * 拉取时间线。
  *
  * 时间窗由前端按"当前时刻往前 N 小时"算好再传——让**服务端**决定窗口会更一致，
  * 但轮询刷新时前端必须能表达"我关心的是最近 N 小时"，否则每次刷新窗口都会漂移。
+ * 时间窗按 {@link TRACE_TIME_FORMAT} 格式化（本机时区，与后端 LocalDateTime 同口径）。
  */
 async function load() {
   loading.value = true;
   errorMessage.value = '';
   try {
-    const now = new Date();
-    const from = new Date(now.getTime() - windowHours.value * 60 * 60 * 1000);
+    const now = dayjs();
+    const from = now.subtract(windowHours.value, 'hour');
     resp.value = await getDeviceTrace(props.deviceId, {
-      from: from.toISOString(),
-      to: now.toISOString(),
+      from: from.format(TRACE_TIME_FORMAT),
+      to: now.format(TRACE_TIME_FORMAT),
       ...(stageFilter.value ? { stage: stageFilter.value } : {}),
       ...(outcomeFilter.value ? { outcome: outcomeFilter.value } : {}),
     });
@@ -256,7 +268,10 @@ onMounted(load);
               <span>{{ formatDateTime(record.occurredAt) }}</span>
             </Tooltip>
             <!-- 重发会就地覆写时间戳 ⇒ 必须提示，否则用户以为"10:03 那次"还是原来那次 -->
-            <span v-if="needsRetryHint(record)" class="text-xs text-orange-500">
+            <span
+              v-if="needsRetryHint(record)"
+              class="text-xs text-warning-text"
+            >
               {{
                 $t('page.iot.device.trace.retryHint', {
                   n: record.retryCount ?? 0,
@@ -306,14 +321,14 @@ onMounted(load);
               }}
             </span>
             <!-- 🔴 只认 persistedAt：为空显示占位符，绝不用其它时间列冒充落库时刻 -->
-            <span class="text-gray-500">
+            <span class="text-muted-foreground">
               {{
                 $t('page.iot.device.trace.persistedAt', {
                   time: formatDateTime(record.persistedAt),
                 })
               }}
             </span>
-            <span v-if="record.discardReason" class="text-red-500">
+            <span v-if="record.discardReason" class="text-destructive-text">
               {{
                 $t('page.iot.device.trace.discardReason', {
                   reason: record.discardReason,
@@ -321,7 +336,10 @@ onMounted(load);
               }}
             </span>
             <!-- 🔴 原样显示后端截断后的明细（含 ,...(+N) 后缀），前端不再加工 -->
-            <span v-if="record.discardDetail" class="break-all text-gray-500">
+            <span
+              v-if="record.discardDetail"
+              class="break-all text-muted-foreground"
+            >
               {{
                 $t('page.iot.device.trace.discardDetail', {
                   detail: formatDiscardDetail(record.discardDetail),
@@ -329,7 +347,7 @@ onMounted(load);
               }}
             </span>
           </div>
-          <span v-else class="text-xs text-gray-400">
+          <span v-else class="text-xs text-muted-foreground">
             {{ $t('page.iot.device.trace.batchNotApplicable') }}
           </span>
         </template>
@@ -344,7 +362,7 @@ onMounted(load);
       >
         <template #default="{ record }">
           <!-- 即使没有建议也必须显示原始错误码：它是用户排障的依据 -->
-          <span :class="needsAttention(record) ? 'text-red-500' : ''">
+          <span :class="needsAttention(record) ? 'text-destructive-text' : ''">
             {{ record.errorCode || '-' }}
           </span>
         </template>
@@ -358,7 +376,7 @@ onMounted(load);
                 {{ action }}
               </li>
             </ul>
-            <span class="text-xs text-gray-400">{{
+            <span class="text-xs text-muted-foreground">{{
               record.advice.ruleId
             }}</span>
           </div>
@@ -375,11 +393,11 @@ onMounted(load);
                 {{ $t(actionKey) }}
               </li>
             </ul>
-            <span class="text-xs text-gray-400">
+            <span class="text-xs text-muted-foreground">
               {{ record.derivedAdvice.ruleId }}
             </span>
           </div>
-          <span v-else class="text-xs text-gray-400">
+          <span v-else class="text-xs text-muted-foreground">
             <!-- 没有建议时也要显示，且要说明"原始错误码见左列"——不是静默空白 -->
             {{ $t('page.iot.device.trace.noAdvice') }}
           </span>

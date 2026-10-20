@@ -105,7 +105,7 @@ const meets = computed(() => data.value?.meetsTarget === true);
             :label="$t('page.iot.availability.effectiveWindow')"
           >
             {{ human(data.effectiveWindowSeconds) }}
-            <span class="text-gray-400">
+            <span class="text-muted-foreground">
               （{{ $t('page.iot.availability.window') }}：{{
                 human(data.windowSeconds)
               }}）
@@ -115,7 +115,7 @@ const meets = computed(() => data.value?.meetsTarget === true);
             :label="$t('page.iot.availability.maintenanceSeconds')"
           >
             {{ human(data.maintenanceSeconds) }}
-            <span class="text-gray-400">
+            <span class="text-muted-foreground">
               （{{ $t('page.iot.availability.outageInMaintenance') }}：{{
                 human(data.outageInMaintenanceSeconds)
               }}）
@@ -126,7 +126,7 @@ const meets = computed(() => data.value?.meetsTarget === true);
           </DescriptionsItem>
           <DescriptionsItem :label="$t('page.iot.availability.longestOutage')">
             {{ human(data.longestOutageSeconds) }}
-            <span class="text-gray-400">
+            <span class="text-muted-foreground">
               （{{ $t('page.iot.availability.outageCount') }}：{{
                 data.outageCount
               }}）

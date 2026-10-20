@@ -13,6 +13,7 @@ import {
   buildBatchResultCsvRows,
   buildBatchResultRows,
   canResendBatchItem,
+  canResendBatchRow,
   collectServiceParams,
   countUnsupportedDevices,
   normalizeBatchDeviceIds,
@@ -22,6 +23,7 @@ import {
   parseParamsObject,
   resolveBatchItemState,
   summarizeBatchResults,
+  summarizeBatchRows,
 } from './batch-command-state';
 
 /**
@@ -175,6 +177,87 @@ describe('结果汇总（部分失败绝不显示成整体成功）', () => {
         summary,
       ),
     ).toBe(false);
+  });
+});
+
+describe('canResendBatchRow（展示行可重发判据）', () => {
+  it('🔴 已送达行不得给重发按钮（BatchResultRow 没有 ok，误用 canResendBatchItem 会重复下发）', () => {
+    const rows = buildBatchResultRows(
+      [
+        item({ deviceId: '1' }),
+        item({ deviceId: '2', ok: false, requestId: 'r2' }),
+        item({ accepted: false, code: 'X', deviceId: '3' }),
+      ],
+      (deviceId) => ({ code: deviceId }),
+    );
+    expect(rows.map((row) => canResendBatchRow(row))).toEqual([
+      false,
+      true,
+      false,
+    ]);
+    // 自证「误用」的后果：同一个已送达行喂给条目判据会被判成可重发
+    expect(canResendBatchItem(rows[0] as never)).toBe(true);
+  });
+
+  it('「已提交未送达」但没有 requestId ⇒ 不可重发（没有目标请求）', () => {
+    const [row] = buildBatchResultRows(
+      [item({ deviceId: '1', ok: false, requestId: '' })],
+      (deviceId) => ({ code: deviceId }),
+    );
+    if (!row) {
+      throw new Error('buildBatchResultRows 未产出结果行');
+    }
+    expect(canResendBatchRow(row)).toBe(false);
+  });
+});
+
+describe('summarizeBatchRows（单台重发后按展示行重算汇总）', () => {
+  it('与 summarizeBatchResults 同口径：同一批数据从行算与从条目算结果一致', () => {
+    const items = [
+      item({ deviceId: '1' }),
+      item({ deviceId: '2', errorCode: 'NO_SUBSCRIBER', ok: false }),
+      item({ accepted: false, code: 'DEVICE_DISABLED', deviceId: '3' }),
+    ];
+    const rows = buildBatchResultRows(items, (deviceId) => ({
+      code: deviceId,
+    }));
+    expect(summarizeBatchRows(rows)).toStrictEqual(
+      summarizeBatchResults(items),
+    );
+  });
+
+  it('🔴 某台从「已提交未送达」变「已送达」⇒ 汇总跟着变（顶部与结果表不矛盾）', () => {
+    const rows = buildBatchResultRows(
+      [
+        item({ deviceId: '1' }),
+        item({ deviceId: '2', ok: false, requestId: 'r2' }),
+      ],
+      (deviceId) => ({ code: deviceId }),
+    );
+    expect(summarizeBatchRows(rows)).toMatchObject({
+      allDelivered: false,
+      delivered: 1,
+      notDelivered: 1,
+    });
+
+    const afterResend = rows.map((row) =>
+      row.deviceId === '2'
+        ? {
+            ...row,
+            accepted: true,
+            errorCode: '',
+            requestId: 'r2',
+            state: 'delivered' as const,
+            statusCode: 'sent',
+          }
+        : row,
+    );
+    expect(summarizeBatchRows(afterResend)).toMatchObject({
+      allDelivered: true,
+      delivered: 2,
+      notDelivered: 0,
+      partial: false,
+    });
   });
 });
 

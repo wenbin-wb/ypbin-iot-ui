@@ -1,22 +1,73 @@
-import { createApp } from 'vue';
+import { createApp, h, nextTick } from 'vue';
 
 import { i18n } from '@vben/locales';
 
-import { beforeAll, describe, expect, it } from 'vitest';
+import { message } from 'ant-design-vue';
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
 import {
+  BATCH_PAGE_SIZE,
   batchStatusColor,
   batchStatusLabelKey,
   checkImportFile,
+  DETAIL_ROWS_PAGE_SIZE,
   formatFileSize,
   hasFailedRows,
   IMPORT_BATCH_STATUS,
   IMPORT_ROW_RESULT,
+  resolveBatchPageAfterEmpty,
+  resolveDetailPageAfterEmpty,
   resolveImportFileCheckMessage,
   resolveImportListState,
   rowResultLabelKey,
   sortBatchesByRecent,
 } from './import-state';
+import ImportPanel from './import.vue';
+
+/**
+ * 分页接线用例需要替换网络层（`#/api/iot` 用**部分 mock**，保留常量导出）。
+ *
+ * 为什么必须有组件级用例：P1-10 的两个缺陷（明细 `current` 恒写死 1、批次列表只取第 1 页）
+ * 都是**纯接线错误**——纯函数层无从暴露；而 `@row-click` 在 ant-design-vue 4.2.6 里
+ * **不是事件**（Table 没有该 emit），行选择此前是死的，同样只有挂真实组件才能发现。
+ */
+const { mockApi } = vi.hoisted(() => ({
+  mockApi: {
+    downloadDeviceImportFailedCsv: vi.fn(),
+    downloadDeviceImportTemplate: vi.fn(),
+    getDeviceImportBatchDetail: vi.fn(),
+    getDeviceImportBatchPage: vi.fn(),
+    importDevicesCsv: vi.fn(),
+  },
+}));
+
+vi.mock('#/api/iot', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    downloadDeviceImportFailedCsv: (...args: unknown[]) =>
+      mockApi.downloadDeviceImportFailedCsv(...args),
+    downloadDeviceImportTemplate: (...args: unknown[]) =>
+      mockApi.downloadDeviceImportTemplate(...args),
+    getDeviceImportBatchDetail: (...args: unknown[]) =>
+      mockApi.getDeviceImportBatchDetail(...args),
+    getDeviceImportBatchPage: (...args: unknown[]) =>
+      mockApi.getDeviceImportBatchPage(...args),
+    importDevicesCsv: (...args: unknown[]) => mockApi.importDevicesCsv(...args),
+  };
+});
+
+vi.mock('#/utils/file', () => ({
+  downloadBlobSafe: vi.fn(),
+}));
 
 /** 真实 i18n：只初始化一次（`$t` 就是 `i18n.global.t`）。 */
 beforeAll(async () => {
@@ -287,5 +338,318 @@ describe('sortBatchesByRecent（最近在前）', () => {
   it('id 非法/缺失时不抛异常（保持相对顺序，不制造无法解释的列表）', () => {
     const sorted = sortBatchesByRecent([{ id: undefined }, { id: '2' }]);
     expect(sorted).toHaveLength(2);
+  });
+
+  it('🔴 雪花 ID 相邻两值：不得用 Number() 比较（19 位超出安全整数会精度丢失）', () => {
+    // 先自证这条用例有杀伤力：这两个相邻 id 转 number 后**相等**，
+    // 旧实现（rightId-leftId）返回 0 ⇒ 顺序取决于入参顺序。
+    const smaller = '1830000000000000001';
+    const larger = '1830000000000000002';
+    expect(Number(smaller) === Number(larger)).toBe(true);
+
+    // 新实现必须把更大的放前面，且与入参顺序无关
+    expect(
+      sortBatchesByRecent([{ id: smaller }, { id: larger }]).map(
+        (item) => item.id,
+      ),
+    ).toStrictEqual([larger, smaller]);
+    expect(
+      sortBatchesByRecent([{ id: larger }, { id: smaller }]).map(
+        (item) => item.id,
+      ),
+    ).toStrictEqual([larger, smaller]);
+  });
+});
+
+// ====================================================================
+// 分页纯逻辑（P1-10）
+// ====================================================================
+
+describe('分页常量与越界兜底（P1-10）', () => {
+  it('分页大小是具名常量（禁止再在组件里写死 20）', () => {
+    expect(BATCH_PAGE_SIZE).toBe(20);
+    expect(DETAIL_ROWS_PAGE_SIZE).toBe(20);
+  });
+
+  it('明细：第 1 页为空 ⇒ 不修正；非第 1 页为空 ⇒ 回第 1 页（空页 ≠ 没明细）', () => {
+    expect(resolveDetailPageAfterEmpty(0, 1)).toBe(0);
+    expect(resolveDetailPageAfterEmpty(20, 2)).toBe(0);
+    expect(resolveDetailPageAfterEmpty(0, 2)).toBe(1);
+    expect(resolveDetailPageAfterEmpty(0, 5)).toBe(1);
+  });
+
+  it('批次列表：越界页回退到仍有数据的最后一页（只回退、不前进，避免来回震荡）', () => {
+    // 45 个批次、每页 20 ⇒ 最后一页是 3
+    expect(resolveBatchPageAfterEmpty(0, 45, 5, BATCH_PAGE_SIZE)).toBe(3);
+    // 当前页就是最后一页且为空 ⇒ 不来回跳（返回 0）
+    expect(resolveBatchPageAfterEmpty(0, 45, 3, BATCH_PAGE_SIZE)).toBe(0);
+    // 全部批次都没了 ⇒ 回第 1 页
+    expect(resolveBatchPageAfterEmpty(0, 0, 4, BATCH_PAGE_SIZE)).toBe(1);
+    // 有数据 / 第 1 页 ⇒ 不修正
+    expect(resolveBatchPageAfterEmpty(20, 45, 2, BATCH_PAGE_SIZE)).toBe(0);
+    expect(resolveBatchPageAfterEmpty(0, 45, 1, BATCH_PAGE_SIZE)).toBe(0);
+  });
+});
+
+// ====================================================================
+// import.vue 分页接线（挂载用例：真实 antd + 真实 i18n）
+// ====================================================================
+
+/** 造一批批次记录（id 递增，createTime 递增）。 */
+function makeBatches(page: number, size = BATCH_PAGE_SIZE) {
+  return Array.from({ length: size }, (_, index) => {
+    const seq = (page - 1) * size + index + 1;
+    const padded = String(seq).padStart(3, '0');
+    return {
+      batchStatus: 'success',
+      createTime: `2026-10-20 10:00:${padded.slice(-2)}`,
+      failedRows: 0,
+      fileName: `devices-${seq}.csv`,
+      id: `1830000000000000${padded}`,
+      successRows: 10,
+      totalRows: 10,
+    };
+  });
+}
+
+/** 造一批明细行。 */
+function makeRows(page: number, size = DETAIL_ROWS_PAGE_SIZE) {
+  return Array.from({ length: size }, (_, index) => ({
+    errorCode: null,
+    errorMessage: null,
+    id: `row-${page}-${index + 1}`,
+    rowNo: (page - 1) * size + index + 1,
+    rowResult: 'success',
+  }));
+}
+
+function stubDefaultPagination() {
+  mockApi.getDeviceImportBatchPage.mockImplementation(
+    (page: number, pageSize: number) =>
+      Promise.resolve({
+        items: makeBatches(page, pageSize),
+        page,
+        pageSize,
+        total: '45',
+      }),
+  );
+  mockApi.getDeviceImportBatchDetail.mockImplementation(
+    (batchId: string, query: { page?: number; pageSize?: number } = {}) =>
+      Promise.resolve({
+        batch: { id: batchId, fileName: 'devices.csv' },
+        rows: {
+          items: makeRows(query.page ?? 1, query.pageSize),
+          page: query.page ?? 1,
+          pageSize: query.pageSize,
+          total: '45',
+        },
+      }),
+  );
+}
+
+let mounted: undefined | { app: { unmount: () => void } };
+
+afterEach(() => {
+  mounted?.app.unmount();
+  mounted = undefined;
+  document.body.innerHTML = '';
+  vi.restoreAllMocks();
+});
+
+async function flush() {
+  for (let index = 0; index < 8; index += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  await nextTick();
+}
+
+async function mountImport() {
+  const container = document.createElement('div');
+  document.body.append(container);
+  const app = createApp({ render: () => h(ImportPanel as never) });
+  app.mount(container);
+  mounted = { app };
+  await flush();
+  return container;
+}
+
+/**
+ * 表格按 antd 外层容器区分：第 1 个 `.ant-table-wrapper` = 批次列表，第 2 个 = 明细。
+ *
+ * ⚠️ 不能用 `container.querySelectorAll('table')` 的下标：带 `scroll.y` 的 antd Table 会把
+ * 表头与表体拆成**两张 table**（固定表头），下标会错位到只有表头的那张。
+ */
+function tableWrapperAt(container: HTMLElement, index: number) {
+  return container.querySelectorAll('.ant-table-wrapper')[index] as
+    | HTMLElement
+    | undefined;
+}
+
+function tableRows(container: HTMLElement, index: number) {
+  return [
+    ...(tableWrapperAt(container, index)?.querySelectorAll(
+      '.ant-table-tbody tr.ant-table-row',
+    ) ?? []),
+  ].map((element) => element as HTMLElement);
+}
+
+function paginationAt(container: HTMLElement, index: number) {
+  return tableWrapperAt(container, index)?.querySelector('.ant-pagination') as
+    | HTMLElement
+    | undefined;
+}
+
+/** 点分页器上的某一页（antd 的 li 自带 click 处理）。 */
+async function clickPage(
+  container: HTMLElement,
+  paginationIndex: number,
+  page: number,
+) {
+  const item = paginationAt(container, paginationIndex)?.querySelector(
+    `.ant-pagination-item-${page}`,
+  ) as HTMLElement | undefined;
+  expect(item, `分页器 ${paginationIndex} 上没有第 ${page} 页`).toBeTruthy();
+  item?.click();
+  await flush();
+}
+
+describe('import.vue 分页接线（P1-10：页码与请求一致、历史批次可达）', () => {
+  beforeEach(() => {
+    for (const fn of Object.values(mockApi)) {
+      fn.mockReset();
+    }
+    stubDefaultPagination();
+  });
+
+  it('初始加载：批次列表按 (page=1, BATCH_PAGE_SIZE) 拉取，并显示总批次数', async () => {
+    const container = await mountImport();
+
+    expect(mockApi.getDeviceImportBatchPage).toHaveBeenCalledWith(
+      1,
+      BATCH_PAGE_SIZE,
+    );
+    expect(container.textContent).toContain(
+      i18n.global.t('page.iot.device.import.batchListTotal', ['45']),
+    );
+  });
+
+  it('🔴 历史批次可达：点「查看全部批次」→ 翻到第 2 页 ⇒ 请求 page=2', async () => {
+    const container = await mountImport();
+    const allBatches = container.querySelector(
+      '[data-testid="import-all-batches"]',
+    ) as HTMLElement | null;
+    expect(allBatches, '超过一页时必须给出「查看全部批次」入口').toBeTruthy();
+    allBatches?.click();
+    await flush();
+
+    await clickPage(container, 0, 2);
+    expect(mockApi.getDeviceImportBatchPage).toHaveBeenLastCalledWith(
+      2,
+      BATCH_PAGE_SIZE,
+    );
+    // 页码状态跟随请求（否则分页器会显示第 1 页而数据是第 2 页）
+    expect(
+      paginationAt(container, 0)
+        ?.querySelector('.ant-pagination-item-active')
+        ?.textContent?.trim(),
+    ).toBe('2');
+  });
+
+  it('🔴 行选择可用（customRow 而非不存在的 @row-click）：点历史批次即加载其明细', async () => {
+    const container = await mountImport();
+    const rows = tableRows(container, 0);
+    expect(rows.length).toBeGreaterThan(0);
+    const secondRowBatchId = '1830000000000000019';
+    rows[1]?.click();
+    await flush();
+
+    expect(mockApi.getDeviceImportBatchDetail).toHaveBeenCalledTimes(1);
+    const [calledId, query] = mockApi.getDeviceImportBatchDetail.mock
+      .calls[0] as [string, { page: number; pageSize: number }];
+    expect(String(calledId), '点哪一行就加载哪个批次的明细').toBe(
+      secondRowBatchId,
+    );
+    expect(query).toMatchObject({ page: 1, pageSize: DETAIL_ROWS_PAGE_SIZE });
+  });
+
+  it('🔴 明细翻页：请求 page 与分页器 current 一致（此前 current 恒写死 1）', async () => {
+    const container = await mountImport();
+    tableRows(container, 0)[0]?.click();
+    await flush();
+    expect(mockApi.getDeviceImportBatchDetail).toHaveBeenCalledTimes(1);
+
+    await clickPage(container, 1, 2);
+
+    expect(mockApi.getDeviceImportBatchDetail).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({ page: 2, pageSize: DETAIL_ROWS_PAGE_SIZE }),
+    );
+    expect(
+      paginationAt(container, 1)
+        ?.querySelector('.ant-pagination-item-active')
+        ?.textContent?.trim(),
+      '分页器必须跟到第 2 页（current 不能写死 1）',
+    ).toBe('2');
+  });
+
+  it('🔴 切批次重置页码：从第 2 页切到另一个批次 ⇒ 请求回到 page=1', async () => {
+    const container = await mountImport();
+    const rows = tableRows(container, 0);
+    rows[0]?.click();
+    await flush();
+    await clickPage(container, 1, 2);
+    expect(
+      (
+        mockApi.getDeviceImportBatchDetail.mock.calls.at(-1)?.[1] as {
+          page?: number;
+        }
+      )?.page,
+    ).toBe(2);
+
+    rows[1]?.click();
+    await flush();
+    expect(
+      (
+        mockApi.getDeviceImportBatchDetail.mock.calls.at(-1)?.[1] as {
+          page?: number;
+        }
+      )?.page,
+      '切批次必须从第 1 页开始看',
+    ).toBe(1);
+  });
+
+  it('🔴 明细页越界（第 2 页已无数据）：自动回第 1 页并给出可见提示', async () => {
+    const infoSpy = vi
+      .spyOn(message, 'info')
+      .mockImplementation(() => ({}) as any);
+    // 第 2 页返回空（数据变少/筛选变化），但总数仍 > 0
+    mockApi.getDeviceImportBatchDetail.mockImplementation(
+      (batchId: string, query: { page?: number; pageSize?: number } = {}) =>
+        Promise.resolve({
+          batch: { id: batchId },
+          rows: {
+            items: (query.page ?? 1) > 1 ? [] : makeRows(1),
+            page: query.page ?? 1,
+            pageSize: query.pageSize,
+            total: '45',
+          },
+        }),
+    );
+    const container = await mountImport();
+    tableRows(container, 0)[0]?.click();
+    await flush();
+
+    await clickPage(container, 1, 2);
+    await flush();
+
+    const pages = mockApi.getDeviceImportBatchDetail.mock.calls.map(
+      (call) => (call[1] as { page?: number })?.page,
+    );
+    // 先请求第 2 页（空），随后自动回第 1 页
+    expect(pages).toContain(2);
+    expect(pages.at(-1), '空页必须自动回第 1 页').toBe(1);
+    expect(infoSpy).toHaveBeenCalledWith(
+      i18n.global.t('page.iot.device.import.detailPageReset'),
+    );
   });
 });

@@ -46,6 +46,7 @@ const { fakeRealtimeClient, gridApiMock, mockApi, realtimeMock, routeState } =
       getDevicePage: vi.fn(),
     },
     realtimeMock: {
+      authError: null as any,
       error: null as any,
       handlers: new Map<string, Array<(payload: unknown) => void>>(),
       state: null as any,
@@ -76,10 +77,13 @@ vi.mock('../shared/use-iot-realtime', async () => {
   const { ref } = await import('vue');
   const state = ref('live');
   const error = ref('');
+  const authError = ref('');
   realtimeMock.state = state;
   realtimeMock.error = error;
+  realtimeMock.authError = authError;
   return {
     useIotRealtime: () => ({
+      authError,
       error,
       onEvent: (event: string, handler: (payload: unknown) => void) => {
         const list = realtimeMock.handlers.get(event) ?? [];
@@ -178,6 +182,7 @@ beforeEach(() => {
   realtimeMock.handlers.clear();
   realtimeMock.state.value = 'live';
   realtimeMock.error.value = '';
+  realtimeMock.authError.value = '';
   routeState.query = {};
   useAccessStore().setAccessCodes(['*:*:*']);
 });
@@ -320,6 +325,42 @@ describe('设备台账 × device-status：命中可见行才去抖刷新', () =>
     expect(html).toContain('realtime stream HTTP 502');
     // 断线只是提示：工具栏/列表仍可操作（页面没有整体错误态）
     expect(handle.container.querySelector('.grid-stub')).toBeTruthy();
+  });
+});
+
+describe('实时鉴权失败（401/403）必须常驻可见，且不得误显示「实时连接」', () => {
+  it('unauthorized：state=unauthorized 不显示绿色实时标签，页面给出常驻提示 + 「重新登录」按钮', async () => {
+    const handle = await mountPage();
+    expect(handle.container.innerHTML).toContain('实时连接');
+
+    realtimeMock.state.value = 'unauthorized';
+    realtimeMock.authError.value = 'unauthorized';
+    await nextTick();
+
+    const html = handle.container.innerHTML;
+    // 401 的文案（会话过期）
+    expect(html).toMatch(/鉴权失败|realtime\.authFailed/);
+    // 🔴 绝不能还挂着绿色「实时连接」承诺（Tag 渲染为 >实时连接<）
+    expect(html).not.toMatch(/>实时连接</);
+    // 401 必须给重新登录入口（复用全局会话过期入口）
+    expect(
+      handle.container.querySelector('[data-testid="realtime-relogin"]'),
+      'unauthorized 必须提供「重新登录」按钮',
+    ).toBeTruthy();
+  });
+
+  it('forbidden：只说明「无实时数据权限」，不给重新登录按钮（重登不改变角色权限）', async () => {
+    realtimeMock.state.value = 'unauthorized';
+    realtimeMock.authError.value = 'forbidden';
+    const handle = await mountPage();
+    await nextTick();
+
+    const html = handle.container.innerHTML;
+    expect(html).toMatch(/无实时数据权限|realtime\.forbidden/);
+    expect(
+      handle.container.querySelector('[data-testid="realtime-relogin"]'),
+      'forbidden 不应提供「重新登录」按钮',
+    ).toBeNull();
   });
 });
 

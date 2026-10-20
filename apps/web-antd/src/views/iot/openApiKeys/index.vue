@@ -1,6 +1,8 @@
 <script lang="ts" setup>
 import type { Dayjs } from 'dayjs';
 
+import type { RefreshGuard } from '../shared/refresh-guard';
+
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { IotOpenApiKeyApi } from '#/api/iot';
 
@@ -21,6 +23,7 @@ import {
   Popconfirm,
   Progress,
   Tag,
+  Textarea,
   Tooltip,
 } from 'ant-design-vue';
 
@@ -32,15 +35,22 @@ import { extractErrorMessage } from '#/utils/error';
 import CopyText from '../shared/copy-text.vue';
 import { formatDateTime, openApiScopeLabelKey } from '../shared/display';
 import {
+  createRefreshGuard,
+  QueryTimeoutError,
+  withQueryTimeout,
+} from '../shared/refresh-guard';
+import {
   checkOpenApiKeyForm,
   normalizeOpenApiKeyForm,
   OPEN_API_ALLOWED_SCOPES,
   OPEN_API_DANGEROUS_SCOPE,
+  openApiKeyIpWhitelistKind,
   openApiKeyStatusColor,
   openApiKeyStatusLabelKey,
   openApiKeyUsageKind,
   openApiKeyUsageLabel,
   openApiKeyUsagePercent,
+  parseIpWhitelist,
 } from './open-api-key-state';
 
 /**
@@ -59,6 +69,14 @@ const { hasAccessByCodes } = useAccess();
 const canList = computed(() => hasAccessByCodes(['iot:openapi:key-list']));
 
 const listError = ref('');
+
+/**
+ * 列表的「静默丢弃」守卫（见 shared/refresh-guard.ts）。
+ *
+ * 本页虽关闭分页器，但工具栏刷新/签发后刷新/吊销后刷新同样会被 vxe 在途守卫吞掉；
+ * 登记意图后，被吞掉的那次会在当前周期结束补发一次，且查询有 15s 客户端超时。
+ */
+let listGuard: RefreshGuard;
 
 const [Grid, gridApi] = useVbenVxeGrid({
   gridOptions: {
@@ -85,6 +103,14 @@ const [Grid, gridApi] = useVbenVxeGrid({
         title: $t('page.iot.openApiKey.scopes'),
         minWidth: 200,
         slots: { default: 'scopes' },
+      },
+      {
+        // 来源限制：后端 ListItemResp 当前不返回 ipWhitelist，字段缺席时按「未知」展示（-），
+        // 不猜测成「不限来源」；后端补字段后此列自动生效（前向兼容）。
+        field: 'ipWhitelist',
+        title: $t('page.iot.openApiKey.ipWhitelist'),
+        minWidth: 150,
+        slots: { default: 'ipWhitelist' },
       },
       {
         field: 'usedToday',
@@ -124,8 +150,18 @@ const [Grid, gridApi] = useVbenVxeGrid({
     proxyConfig: {
       ajax: {
         query: async () => {
+          // 查询真的启动了 ⇒ 登记过的刷新意图已被执行（没被 vxe 丢弃）
+          listGuard.consumeIntent();
           try {
-            const items = (await getOpenApiKeys()) ?? [];
+            const items =
+              (await withQueryTimeout(getOpenApiKeys()).catch(
+                (error: unknown) => {
+                  if (error instanceof QueryTimeoutError) {
+                    throw new TypeError($t('page.iot.common.queryTimeout'));
+                  }
+                  throw error;
+                },
+              )) ?? [];
             listError.value = '';
             return { items, total: items.length };
           } catch (error) {
@@ -134,6 +170,9 @@ const [Grid, gridApi] = useVbenVxeGrid({
               $t('page.iot.openApiKey.loadFailed'),
             );
             throw error;
+          } finally {
+            // 周期结束（成功/失败）⇒ 有被丢弃的刷新意图就补发一次
+            listGuard.notifyCycleEnd();
           }
         },
       },
@@ -141,6 +180,21 @@ const [Grid, gridApi] = useVbenVxeGrid({
     rowConfig: { keyField: 'id' },
     toolbarConfig: { custom: true, export: false, refresh: true, zoom: true },
   } as VxeTableGridOptions<IotOpenApiKeyApi.KeyItem>,
+  gridEvents: {
+    toolbarButtonClick: ({ code }: { code?: string }) => {
+      if (code === 'reload' || code === 'query') {
+        listGuard.markIntent();
+      }
+    },
+  },
+});
+
+listGuard = createRefreshGuard({
+  isBusy: () => Boolean(gridApi.grid?.reactData?.tableLoading),
+  issue: () => {
+    void gridApi.query();
+  },
+  onTrailing: (active) => gridApi.setLoading(active),
 });
 
 // ---------- 创建表单 ----------
@@ -150,6 +204,8 @@ const formScopes = ref<string[]>(['iot:series:get']);
 const formQps = ref<number | undefined>(10);
 const formQuota = ref<number | undefined>(100_000);
 const formExpireAt = ref<Dayjs>();
+/** 来源 IP 白名单原始输入（逗号/换行分隔；提交前归一化，空 = 不限来源）。 */
+const formIpWhitelist = ref('');
 const creating = ref(false);
 
 // ---------- 签发结果（明文仅此一次） ----------
@@ -162,6 +218,7 @@ function openCreate() {
   formQps.value = 10;
   formQuota.value = 100_000;
   formExpireAt.value = undefined;
+  formIpWhitelist.value = '';
   createOpen.value = true;
 }
 
@@ -176,6 +233,15 @@ async function submitCreate() {
     message.error($t('page.iot.openApiKey.saveFailed'));
     return;
   }
+  // 后端建 Key 时会拒绝非法白名单条目（不静默忽略）⇒ 前端先按同一口径拦住并点名条目，
+  // 避免「点了签发才弹一句保存失败」的往返。
+  const ipWhitelist = parseIpWhitelist(formIpWhitelist.value);
+  if (ipWhitelist.invalidEntry) {
+    message.error(
+      $t('page.iot.openApiKey.ipWhitelistInvalid', [ipWhitelist.invalidEntry]),
+    );
+    return;
+  }
   const normalized = normalizeOpenApiKeyForm(
     formAppName.value,
     formScopes.value,
@@ -187,6 +253,8 @@ async function submitCreate() {
       scopes: normalized.scopes,
       rateLimitQps: formQps.value,
       dailyQuota: formQuota.value,
+      // 归一化后的逗号分隔串；空（未配置）⇒ 传 undefined（后端=不限来源）
+      ipWhitelist: ipWhitelist.normalized,
       expireAt: formExpireAt.value
         ? formExpireAt.value.format('YYYY-MM-DD HH:mm:ss')
         : undefined,
@@ -194,7 +262,7 @@ async function submitCreate() {
     createOpen.value = false;
     issuedOpen.value = true;
     message.success($t('page.iot.openApiKey.createSuccess'));
-    gridApi.query();
+    listGuard.request();
   } catch (error) {
     message.error(
       extractErrorMessage(error, $t('page.iot.openApiKey.saveFailed')),
@@ -208,7 +276,7 @@ async function revoke(row: IotOpenApiKeyApi.KeyItem) {
   try {
     await revokeOpenApiKey(row.id);
     message.success($t('page.iot.openApiKey.revokeSuccess'));
-    gridApi.query();
+    listGuard.request();
   } catch (error) {
     message.error(
       extractErrorMessage(error, $t('page.iot.openApiKey.revokeFailed')),
@@ -229,6 +297,8 @@ async function copyText(text: string) {
 <template>
   <!-- 架构对齐：根节点用 Page auto-content-height（其余 8 个 IoT 列表页的范式） -->
   <Page v-if="canList" auto-content-height>
+    <!-- 页面主标题：视觉上隐藏，供读屏/文档大纲使用（全站 0 个 h1 是审查 P3-5 指出的可访问性缺陷） -->
+    <h1 class="sr-only">{{ $t('page.iot.openApiKey.title') }}</h1>
     <div class="mb-3 flex flex-wrap items-center gap-3">
       <div class="font-semibold">
         {{ $t('page.iot.openApiKey.title') }}
@@ -285,6 +355,26 @@ async function copyText(text: string) {
           </Tooltip>
         </span>
       </template>
+      <template #ipWhitelist="{ row }">
+        <!-- 已配置：完整白名单放 tooltip（列内只显示一行，避免撑破表格） -->
+        <Tooltip
+          v-if="openApiKeyIpWhitelistKind(row.ipWhitelist) === 'configured'"
+          :title="row.ipWhitelist"
+        >
+          <span class="cursor-help font-mono text-xs">
+            {{ row.ipWhitelist }}
+          </span>
+        </Tooltip>
+        <span
+          v-else-if="openApiKeyIpWhitelistKind(row.ipWhitelist) === 'unlimited'"
+          class="text-xs"
+        >
+          {{ $t('page.iot.openApiKey.ipWhitelistUnlimited') }}
+        </span>
+        <!-- 后端 ListItemResp 暂不返回该字段 ⇒ 显示占位 '-'，不猜成「不限来源」 -->
+        <span v-else class="text-xs text-muted-foreground">-</span>
+      </template>
+
       <template #usage="{ row }">
         <div
           v-if="
@@ -400,6 +490,19 @@ async function copyText(text: string) {
         <div class="flex-1">
           <div class="mb-1 text-sm">{{ $t('page.iot.openApiKey.quota') }}</div>
           <InputNumber v-model:value="formQuota" :min="0" class="w-full" />
+        </div>
+      </div>
+      <div>
+        <div class="mb-1 text-sm">
+          {{ $t('page.iot.openApiKey.ipWhitelist') }}
+        </div>
+        <Textarea
+          v-model:value="formIpWhitelist"
+          :rows="2"
+          :placeholder="$t('page.iot.openApiKey.ipWhitelistHelp')"
+        />
+        <div class="mt-1 text-xs text-muted-foreground">
+          {{ $t('page.iot.openApiKey.ipWhitelistHelp') }}
         </div>
       </div>
       <div>

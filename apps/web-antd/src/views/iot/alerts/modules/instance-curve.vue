@@ -82,18 +82,29 @@ onMounted(load);
         :description="$t('page.iot.alert.curve.empty')"
         :image="Empty.PRESENTED_IMAGE_SIMPLE"
       />
+      <!--
+        趋势图是纯装饰性 SVG：读屏/键盘用户无法从路径里获得信息，
+        但也不能完全隐藏——用 role="img" + aria-label 把「这是什么」说出来，
+        精确数值由下方 range 文案承担（避免把整条路径念成噪声）。
+      -->
       <svg
         v-else
+        :aria-label="$t('page.iot.alert.curve.chartLabel')"
         :height="48"
+        role="img"
         viewBox="0 0 220 48"
         :width="220"
-        class="rounded border border-solid border-gray-200"
+        class="rounded border border-solid border-border"
       >
+        <!--
+          颜色走 CSS 变量而不是写死 hex（原来的红/蓝在暗色下不跟随主题）：
+          SVG 的 `stroke` **展示属性**不接受 var()，所以用 style 绑定 CSS 属性（CSS 属性可以）。
+        -->
         <line
           v-if="sparkline.thresholdY !== null"
           :y1="sparkline.thresholdY"
           :y2="sparkline.thresholdY"
-          stroke="#ff4d4f"
+          :style="{ stroke: 'hsl(var(--destructive))' }"
           stroke-dasharray="4 3"
           stroke-width="1"
           x1="0"
@@ -102,7 +113,7 @@ onMounted(load);
         <path
           :d="sparkline.path"
           fill="none"
-          stroke="#1677ff"
+          :style="{ stroke: 'hsl(var(--primary))' }"
           stroke-width="1.5"
         />
       </svg>

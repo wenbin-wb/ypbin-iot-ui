@@ -9,6 +9,7 @@ import { Inbox } from '@vben/icons';
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 
 import { $t } from '#/locales';
+import { chartColor, chartSeriesPalette } from '#/utils/chart-tokens';
 
 defineOptions({ name: 'AnalyticsSeverityDistribution' });
 
@@ -26,28 +27,38 @@ const { renderEcharts } = useEcharts(chartRef);
 /** 空数据时不渲染画布，改为友好空态：空数组会让图表区看起来像坏掉的白块。 */
 const hasData = computed(() => props.items.length > 0);
 
-/** 级别 → 配色（与告警中心的语义一致：严重红 / 警告黄 / 提示蓝） */
-const SEVERITY_COLORS: Record<string, string> = {
-  critical: '#f2547b',
-  info: '#0066f5',
-  unknown: '#8a94a6',
-  warning: '#f0b429',
+/**
+ * 级别 → 语义 token（与告警中心一致：严重 destructive / 警告 warning / 提示 primary / 未知 muted）。
+ * 只存 token 名，颜色在渲染时解析（canvas 不认 CSS 变量，见 `shared/chart-tokens.ts`）。
+ */
+const SEVERITY_TOKENS: Record<
+  string,
+  'destructive' | 'muted-foreground' | 'primary' | 'warning'
+> = {
+  critical: 'destructive',
+  info: 'primary',
+  unknown: 'muted-foreground',
+  warning: 'warning',
 };
-const FALLBACK_PALETTE = ['#0066f5', '#7c7cf0', '#0ec9a3'];
+
+/** 级别是否已知（未知级别不翻译，原样露出码值）。 */
+function isKnownSeverity(code: string) {
+  return SEVERITY_TOKENS[code] !== undefined;
+}
 
 function severityLabel(code: string) {
-  return SEVERITY_COLORS[code] === undefined
-    ? code
-    : $t(`page.iot.alert.severity.${code}`);
+  return isKnownSeverity(code) ? $t(`page.iot.alert.severity.${code}`) : code;
 }
 
 /** 级别配色（未知级别按序号轮替兜底色，保证每项都有颜色） */
 function severityColor(code: string, index: number) {
-  const known = SEVERITY_COLORS[code];
-  if (known !== undefined) {
-    return known;
+  const token = SEVERITY_TOKENS[code];
+  if (token !== undefined) {
+    return chartColor(token);
   }
-  return FALLBACK_PALETTE[index % FALLBACK_PALETTE.length] ?? '#0066f5';
+  // chartSeriesPalette 保证非空（读不到 token 时由降级色板补齐）
+  const palette = chartSeriesPalette();
+  return palette[index % palette.length] ?? palette[0] ?? 'rgb(84, 112, 198)';
 }
 
 /**
@@ -108,7 +119,17 @@ watch(() => props.items, renderChart, { deep: true, flush: 'post' });
 </script>
 
 <template>
-  <EchartsUI v-if="hasData" ref="chartRef" />
+  <!--
+    图表是纯 canvas，读屏拿不到任何信息；ECharts 的 aria 组件未在本项目注册
+    （`packages/effects/plugins/src/echarts/echarts.ts` 未 `echarts.use([AriaComponent])`），
+    所以在容器上给 `role="img"` + `aria-label`，让读屏至少能播报「这是一张什么图」。
+  -->
+  <EchartsUI
+    v-if="hasData"
+    ref="chartRef"
+    :aria-label="$t('page.dashboard.severityTitle')"
+    role="img"
+  />
   <div
     v-else
     class="flex h-[300px] flex-col items-center justify-center gap-2 text-sm text-muted-foreground"

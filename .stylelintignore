@@ -6,3 +6,8 @@ coverage
 .claude
 .agent
 .agents
+
+# Tailwind v4 CSS-first 主题文件：@apply 里是项目自定义工具类，stylelint 的
+# at-rule-prelude-no-invalid 无法解析（HEAD 上既存 24 处误报，与本次整改无关）。
+# 该文件由 Tailwind 构建期校验（类名写错会直接构建失败），不属组件样式。
+internal/tailwind-config/src/theme.css

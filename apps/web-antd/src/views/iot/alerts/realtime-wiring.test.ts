@@ -41,6 +41,7 @@ const { captured, mockApi, realtimeMock } = vi.hoisted(() => ({
     updateAlertRule: vi.fn(),
   },
   realtimeMock: {
+    authError: null as any,
     error: null as any,
     handlers: new Map<string, Array<(payload: unknown) => void>>(),
     state: null as any,
@@ -71,10 +72,14 @@ vi.mock('../shared/use-iot-realtime', async () => {
   const { ref } = await import('vue');
   const state = ref('live');
   const error = ref('');
+  // 页面按新契约消费 authError（401→unauthorized / 403→forbidden / ''→无鉴权问题）
+  const authError = ref('');
   realtimeMock.state = state;
   realtimeMock.error = error;
+  realtimeMock.authError = authError;
   return {
     useIotRealtime: () => ({
+      authError,
       error,
       onEvent: (event: string, handler: (payload: unknown) => void) => {
         const list = realtimeMock.handlers.get(event) ?? [];
