@@ -264,6 +264,19 @@ export interface AnchorLayerCallbacks {
    * 但收到 `undefined` 时需要自己判空 —— 推荐的写法是 `(pointId) => { if (!pointId) return; ... }`。
    */
   onHoverAnchor?: (pointId: string | undefined) => void;
+  /**
+   * 锚点获得键盘焦点（与 hover 同语义：展开卡片；引擎侧据此把该标签排除出避让）。
+   *
+   * 为什么与 hover 分开：焦点是**持久**的（失焦前一直持有），hover 是瞬时的；
+   * 引擎侧对两者的处理不同（焦点标签不应再被避让挤走）。
+   */
+  onFocusAnchor?: (pointId: string) => void;
+  /**
+   * 请求取消当前钉住的卡片（Esc 键）。
+   *
+   * 与 `onClickAnchor` 的方向相反，由页面决定「取消钉住」的落点（清 URL / 清选中态）。
+   */
+  onDismissAnchor?: () => void;
 }
 
 /**
@@ -486,6 +499,42 @@ export function createAnchorLayer(
       capsule.append(dot, nameElement, valueElement);
       labelElement.append(capsule);
 
+      // ---- 键盘可达（a11y） ----
+      //
+      // 改造前锚点只响应鼠标（hover / click），键盘与读屏用户**完全够不到**卡片：
+      // Tab 跳不到、Enter 无反应、读屏也读不到设备名与状态（内容在 canvas 上的 CSS2D 标签里）。
+      // 这里把胶囊变成标准的可聚焦按钮：
+      // - `tabindex=0` + `role=button` + `aria-label`（设备名 + 主展示值，读屏能念出来）；
+      // - Enter / Space 等同点击（钉住卡片）；Esc 等同「点空白」（取消钉住）；
+      // - `focus`/`blur` 同步 hover 语义（聚焦即展开卡片，失焦即收起）。
+      // 为什么加在**胶囊**而不是外层 `.twin-anchor-label`：外层是 CSS2D 的定位挂点，
+      // 尺寸恒为 0 —— 焦点框会是一个 0×0 的点，聚焦位置也随避让位移漂移。
+      capsule.tabIndex = 0;
+      capsule.setAttribute('aria-label', anchor.deviceName);
+      capsule.setAttribute('role', 'button');
+      capsule.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          // Space 默认会滚动容器，必须阻止
+          event.preventDefault();
+          event.stopPropagation();
+          callbacks.onClickAnchor(anchor.pointId);
+          return;
+        }
+        if (event.key === 'Escape') {
+          event.stopPropagation();
+          callbacks.onDismissAnchor?.();
+        }
+      });
+      capsule.addEventListener('focus', () => {
+        setHovered(anchor.pointId);
+        callbacks.onFocusAnchor?.(anchor.pointId);
+      });
+      capsule.addEventListener('blur', () => {
+        if (hoveredPointId === anchor.pointId) {
+          setHovered(undefined);
+        }
+      });
+
       capsule.addEventListener('click', (event) => {
         event.stopPropagation();
         callbacks.onClickAnchor(anchor.pointId);
@@ -626,6 +675,16 @@ export function createAnchorLayer(
         continue;
       }
       node.labelElement.style.display = '';
+      // 读屏文案：设备名 + 主展示值（无数据时用 --，与视觉标签口径一致）。
+      // 只写**结构化**内容，不写中文/英文说明词：文案由页面经 i18n 提供（引擎层不做 i18n）。
+      const spokenValue = state?.primaryText?.trim() ?? '';
+      const spokenAlertCount = state?.alertCount ?? 0;
+      node.capsule.setAttribute(
+        'aria-label',
+        spokenAlertCount > 0
+          ? `${node.descriptor.deviceName} ${spokenValue || '--'} · ${spokenAlertCount}`
+          : `${node.descriptor.deviceName} ${spokenValue || '--'}`,
+      );
       // **按 displayType 分形态渲染**（工单 #126）。
       // 修复前五种形态渲染完全一样，等于「配置项说谎」；现在 switch/color 有真实差异，
       // 未实现的 gauge/sparkline 由 toRenderMode 回落为 label，并在 UI 上标注「暂不支持」。

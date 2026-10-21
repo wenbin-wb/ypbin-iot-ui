@@ -621,6 +621,15 @@ async function mountEngine(): Promise<void> {
       onClickAnchor: (pointId) => {
         onPinAnchor(pointId);
       },
+      // 键盘焦点与 hover 同语义：展开卡片；引擎侧据此把该标签排除出避让（防聚焦时被挤走）
+      onFocusAnchor: (pointId) => {
+        engine()?.setInteractionHover?.(pointId);
+        onHoverAnchor(pointId);
+      },
+      // Esc：取消钉住（与「点画布空白」同语义）
+      onDismissAnchor: () => {
+        onCanvasBlankClick();
+      },
       onHoverAnchor: (pointId) => {
         // 同步给引擎：悬停中的标签不参与避让、暂停脉冲（否则卡片位置与标签来回跳）
         engine()?.setInteractionHover?.(pointId);
