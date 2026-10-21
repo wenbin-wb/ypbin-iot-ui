@@ -204,16 +204,16 @@ describe('layoutLabels：优先级与降级顺序稳定', () => {
   });
 
   it('★ 超预算时降级顺序稳定：同样的输入永远降级同样的那批标签', () => {
-    // 200 个标签塞进 300×300 的小画布 ⇒ 必然有放不下的
+    // 200 个标签塞进 300×300 的小画布 ⇒ 必然有放不下的。
+    // 优先级混排：每 10 个里 1 个告警级、1 个在线级、其余低优先级。
+    // （用查表而不是嵌套三目：嵌套三目在 formatter 与 linter 之间有格式冲突）
+    const PRIORITY_BY_SLOT: Record<number, number> = { 0: 3, 1: 2 };
     const inputs = Array.from({ length: 200 }, (_, index) =>
       input(
         `p${String(index)}`,
         10 + (index % 20) * 14,
         10 + Math.floor(index / 20) * 6,
-        // 告警级与低优先级混排：300×300 放不下 200 个标签，
-        // 能放下的 ~18 个名额必须优先给告警级
-        // 显式括号：嵌套三目必须能一眼看清算术优先级
-        index % 10 === 0 ? 3 : index % 10 === 1 ? 2 : 0,
+        PRIORITY_BY_SLOT[index % 10] ?? 0,
       ),
     );
     const first = layoutLabels(inputs, { height: 300, width: 300 });
