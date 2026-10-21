@@ -88,6 +88,14 @@ interface AnchorNode {
   hovered: boolean;
   /** 上一帧的锚点屏幕坐标（用于判断是否需要重排）。 */
   lastScreen?: { x: number; y: number };
+  /**
+   * 胶囊的屏幕矩形（相对容器左上角；仅在 ~10Hz 的重排那一轮刷新）。
+   *
+   * 为什么不在每帧读 `getBoundingClientRect()`：那是**强制同步布局**（layout thrash），
+   * 6~64 个标签 × 60fps 会把主线程拖住。10Hz 刷新对 hover 判定完全够用
+   * （相机运动时标签最多滞后 100ms，而鼠标本身也在动）。
+   */
+  lastCapsuleRect?: { height: number; width: number; x: number; y: number };
   /** CSS2D 标签的 DOM 元素（胶囊：圆点 + 设备名 + 数值）。 */
   labelElement: HTMLDivElement;
   /** 上次写入的数值文本（用于检测「跳变」触发闪烁）。 */
@@ -155,6 +163,14 @@ export const POINTER_MOVE_THROTTLE_MS = 33;
 
 /** 几何命中的容差（像素）：命中半径 = 圆点半径 + 该容差（手指/触控板更好点中）。 */
 export const HOVER_HIT_TOLERANCE_PX = 6;
+
+/**
+ * 胶囊矩形的命中容差（像素）。
+ *
+ * 胶囊本身就是可见热区，容差只需一点点（防「贴着边缘差 1px」的手抖）；
+ * 给太大会让相邻标签的热区在视觉空隙里重叠，出现「指到空白处却是上一个点」的错觉。
+ */
+export const HOVER_RECT_TOLERANCE_PX = 4;
 
 /** CSS2D 模块的最小接口（由调用方动态 import 后传入）。 */
 export interface Css2dModule {
@@ -765,6 +781,66 @@ export function createAnchorLayer(
         : { ...target };
       applyLabelTransform(node, entry.screen, layout);
     }
+    // 写完样式后统一读一次胶囊矩形（**所有写操作都已结束**，只触发一次布局重算）。
+    // 这一步是 hover 命中的依据：标签是 200~300px 宽的胶囊，热区必须与之一致，
+    // 不能只有圆点周围十几像素（线上实测：真实鼠标几乎点不中）。
+    refreshCapsuleRects();
+  }
+
+  /**
+   * 刷新每个标签胶囊的屏幕矩形（相对容器左上角）。
+   *
+   * ⚠️ 必须用 `.twin-anchor-capsule` 而不是外层 `.twin-anchor-label`：外层只是定位挂点，
+   * 尺寸恒为 0；真实可见区域在胶囊上。
+   * ⚠️ 折叠（只剩圆点）的标签不读胶囊矩形，命中时回退为圆点圆。
+   */
+  function refreshCapsuleRects(): void {
+    const containerRect = container.getBoundingClientRect();
+    for (const node of nodes.values()) {
+      if (!node.descriptor.labelVisible) {
+        node.lastCapsuleRect = undefined;
+        continue;
+      }
+      if (node.collapsed) {
+        // 折叠态胶囊的背景/边框都被隐藏，只剩圆点 ⇒ 用圆点圆判定
+        node.lastCapsuleRect = undefined;
+        continue;
+      }
+      const rect = node.capsule.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) {
+        node.lastCapsuleRect = undefined;
+        continue;
+      }
+      node.lastCapsuleRect = {
+        height: rect.height,
+        width: rect.width,
+        x: rect.left - containerRect.left,
+        y: rect.top - containerRect.top,
+      };
+    }
+  }
+
+  /**
+   * 点是否落在矩形内（带容差）。
+   *
+   * @param rect 矩形（容器坐标）
+   * @param x 指针 X
+   * @param y 指针 Y
+   * @param tolerance 容差（像素，向外扩）
+   * @returns 是否命中
+   */
+  function pointInRect(
+    rect: { height: number; width: number; x: number; y: number },
+    x: number,
+    y: number,
+    tolerance: number,
+  ): boolean {
+    return (
+      x >= rect.x - tolerance &&
+      x <= rect.x + rect.width + tolerance &&
+      y >= rect.y - tolerance &&
+      y <= rect.y + rect.height + tolerance
+    );
   }
 
   /**
@@ -810,30 +886,48 @@ export function createAnchorLayer(
    * 而它的 domElement 是 `pointer-events:none`；一旦有任何父级（标签外层/胶囊）
    * 忘记恢复 `pointer-events:auto`，鼠标事件就整条穿透到 canvas 上 ——
    * 于是「悬停标签出卡片」静默失效，且 DOM 层面完全看不出来。
-   * 用屏幕坐标做距离检测与 DOM 布局无关，最稳。
+   * 用屏幕坐标做命中与 DOM 布局无关，最稳。
+   *
+   * ## 判定顺序（两条，缺一不可）
+   *
+   * 1. **胶囊矩形**：标签是 200~300px 宽的胶囊，热区必须与可见区域一致。
+   *    只判圆点周围 13px 时，真实鼠标几乎永远点不中（线上实测：指针落在文字区域、
+   *    距圆点 50~100px ⇒ `hitTestAnchor` 恒不命中）。
+   * 2. **圆点圆**：折叠成「只剩圆点」的标签没有可见胶囊，命中回退为圆点周围 13px。
+   *
+   * 多个胶囊重叠时取「中心离指针最近」的那个（重叠本不该发生——避让保证不重叠，
+   * 但 hover 放大 1.12 倍时边缘可能轻微重叠）。
    *
    * @param screenX 相对容器左上角的 X
    * @param screenY 相对容器左上角的 Y
-   * @returns 命中的点位与距离；未命中 undefined
+   * @returns 命中的点位；未命中 undefined
    */
   function hitTestAnchor(
     screenX: number,
     screenY: number,
-  ): undefined | { distance: number; pointId: string } {
-    const radius = DOT_DIAMETER_PX / 2 + HOVER_HIT_TOLERANCE_PX;
+  ): undefined | { pointId: string } {
+    const dotRadius = DOT_DIAMETER_PX / 2 + HOVER_HIT_TOLERANCE_PX;
     let best: undefined | { distance: number; pointId: string };
     for (const node of nodes.values()) {
       if (!node.descriptor.labelVisible) {
         continue;
       }
+      const rect = node.lastCapsuleRect;
       const screen = node.lastScreen;
-      if (!screen) {
-        continue;
+      let distance: number | undefined;
+      if (
+        rect &&
+        pointInRect(rect, screenX, screenY, HOVER_RECT_TOLERANCE_PX)
+      ) {
+        distance = Math.hypot(
+          rect.x + rect.width / 2 - screenX,
+          rect.y + rect.height / 2 - screenY,
+        );
+      } else if (screen) {
+        const dotDistance = Math.hypot(screen.x - screenX, screen.y - screenY);
+        distance = dotDistance <= dotRadius ? dotDistance : undefined;
       }
-      const dx = screen.x - screenX;
-      const dy = screen.y - screenY;
-      const distance = Math.hypot(dx, dy);
-      if (distance > radius) {
+      if (distance === undefined) {
         continue;
       }
       if (!best || distance < best.distance) {

@@ -672,3 +672,168 @@ describe('createAnchorLayer：几何命中 hover（不依赖 DOM 命中测试）
     expect(hovers).toEqual([]);
   });
 });
+
+/**
+ * hover 热区必须与**可见胶囊矩形**一致。
+ *
+ * 线上实测的缺陷：标签是 200~300px 宽的胶囊，但热区只有圆点周围 13px ⇒ 真实鼠标
+ * （落在文字区域，距圆点 50~100px）永远不命中，属性卡片出不来。
+ * 这里用 3 个胶囊矩形覆盖「落在胶囊内」与「落在两胶囊之间的空隙」两种关键情况。
+ */
+describe('createAnchorLayer：胶囊矩形命中（热区与可见区域一致）', () => {
+  /** 造一个「相对容器左上角」的鼠标事件。 */
+  function pointerMove(x: number, y: number): Event {
+    const event = new Event('pointermove');
+    Object.defineProperties(event, {
+      clientX: { value: x },
+      clientY: { value: y },
+    });
+    return event;
+  }
+
+  /**
+   * 造一个「会返回真实胶囊矩形」的替身层。
+   *
+   * happy-dom 不做真实布局（`getBoundingClientRect()` 全 0），所以这里替换
+   * `Element.prototype.getBoundingClientRect`：按 class 返回预设矩形，
+   * 且**每个胶囊的矩形固定**（模拟避让后已稳定的布局）。
+   */
+  function setupWithCapsuleRects(
+    rects: Record<
+      string,
+      { height: number; width: number; x: number; y: number }
+    >,
+  ) {
+    const fake = fakeThree();
+    const container = document.createElement('div');
+    Object.defineProperty(container, 'getBoundingClientRect', {
+      value: () => ({ height: 600, left: 0, top: 0, width: 800, x: 0, y: 0 }),
+    });
+    const original = Element.prototype.getBoundingClientRect;
+    Element.prototype.getBoundingClientRect = function (this: Element) {
+      const pointId = (this.closest('.twin-anchor-label') as HTMLElement | null)
+        ?.dataset.pointId;
+      if (this.classList.contains('twin-anchor-capsule') && pointId) {
+        const rect = rects[pointId];
+        if (rect) {
+          return {
+            bottom: rect.y + rect.height,
+            height: rect.height,
+            left: rect.x,
+            right: rect.x + rect.width,
+            top: rect.y,
+            width: rect.width,
+            x: rect.x,
+            y: rect.y,
+            toJSON: () => rect,
+          } as DOMRect;
+        }
+      }
+      return original.call(this);
+    };
+    const hovers: Array<string | undefined> = [];
+    const layer = createAnchorLayer(
+      fake as never,
+      fakeCss2d() as never,
+      container,
+      {
+        onClickAnchor: () => undefined,
+        onHoverAnchor: (pointId) => hovers.push(pointId),
+      },
+    );
+    layer.attach(new (fakeThree().Group)() as never, [
+      anchor('p1', '泵'),
+      anchor('p2', '阀'),
+      anchor('p3', '表'),
+    ]);
+    /** 模拟 CSS2DRenderer 每帧写入的投影结果（圆点屏幕坐标在容器内）。 */
+    const setScreen = (pointId: string, x: number, y: number): void => {
+      const label = document.querySelector<HTMLElement>(
+        `.twin-anchor-label[data-point-id="${pointId}"]`,
+      );
+      if (label) {
+        label.style.transform = `translate(-50%,-50%) translate(${x}px,${y}px)`;
+      }
+    };
+    return {
+      cleanup: () => {
+        Element.prototype.getBoundingClientRect = original;
+        layer.dispose();
+        vi.useRealTimers();
+      },
+      container,
+      hovers,
+      layer,
+      setScreen,
+    };
+  }
+
+  it('★ 指针落在中间胶囊的**文字区域**（远离圆点）⇒ 命中该 pointId', () => {
+    vi.useFakeTimers();
+    // 三个胶囊互相不重叠；p2 的矩形横跨 x=300..560
+    const { cleanup, container, hovers, layer, setScreen } =
+      setupWithCapsuleRects({
+        p1: { height: 22, width: 200, x: 40, y: 100 },
+        p2: { height: 22, width: 260, x: 300, y: 200 },
+        p3: { height: 22, width: 200, x: 620, y: 300 },
+      });
+    setScreen('p1', 60, 160);
+    setScreen('p2', 320, 260);
+    setScreen('p3', 640, 360);
+    layer.render({} as never, {} as never);
+    layer.render({} as never, {} as never);
+
+    // 指针在 p2 胶囊的**右端文字区域**（x=520），距圆点（320,260）约 200px
+    container.dispatchEvent(pointerMove(520, 211));
+    expect(hovers, '★ 落在胶囊矩形内必须命中（这正是真实鼠标的位置）').toEqual([
+      'p2',
+    ]);
+    cleanup();
+  });
+
+  it('★ 指针落在两个胶囊之间的空隙 ⇒ 回调 undefined', () => {
+    vi.useFakeTimers();
+    const { cleanup, container, hovers, layer, setScreen } =
+      setupWithCapsuleRects({
+        p1: { height: 22, width: 200, x: 40, y: 100 },
+        p2: { height: 22, width: 260, x: 300, y: 200 },
+        p3: { height: 22, width: 200, x: 620, y: 300 },
+      });
+    setScreen('p1', 60, 160);
+    setScreen('p2', 320, 260);
+    setScreen('p3', 640, 360);
+    layer.render({} as never, {} as never);
+    layer.render({} as never, {} as never);
+
+    // 先进入 p2
+    container.dispatchEvent(pointerMove(400, 211));
+    expect(hovers).toEqual(['p2']);
+    // 移到 p1 与 p2 之间的空隙（x=250，不在任何胶囊内、也不在任何圆点旁）
+    vi.advanceTimersByTime(50);
+    container.dispatchEvent(pointerMove(250, 150));
+    expect(
+      hovers,
+      '★ 落在空隙必须是 undefined（否则卡片会挂在错误设备上）',
+    ).toEqual(['p2', undefined]);
+    cleanup();
+  });
+
+  it('折叠（只剩圆点）的标签：胶囊不可见 ⇒ 回退为圆点圆判定', () => {
+    vi.useFakeTimers();
+    const { cleanup, container, hovers, layer } = setupWithCapsuleRects({});
+    // 让节点进入折叠态，并给它一个屏幕坐标（圆点中心）
+    const label = document.querySelector<HTMLElement>(
+      '.twin-anchor-label[data-point-id="p1"]',
+    );
+    if (label) {
+      label.dataset.collapsed = 'true';
+      label.style.transform = 'translate(-50%,-50%) translate(200px,150px)';
+    }
+    layer.render({} as never, {} as never);
+    layer.render({} as never, {} as never);
+    // 圆点半径 7 + 容差 6 = 13px 内命中
+    container.dispatchEvent(pointerMove(205, 155));
+    expect(hovers).toEqual(['p1']);
+    cleanup();
+  });
+});
