@@ -6,7 +6,22 @@ import { isDisplayTypeSupported } from '#/three/twin/display';
 
 /**
  * 数字孪生页的表单 schema 与选项常量（页面只做编排）。
+ *
+ * ## 长度/数值上限一律引用 `TWIN_LIMITS`，不写字面量
+ *
+ * `api/iot/twin.ts` 的 `TWIN_LIMITS` 是后端 `TwinLimits` 的前端镜像。若这里的
+ * `maxlength` 写字面量（如 `255`），改了一个另一个不会跟 ⇒ 就是 `TwinLimits`
+ * 注释里说的「散落必然漂移」在前端侧重演（工单 #128）。
  */
+
+/**
+ * 锚点缩放的最小值。
+ *
+ * `TWIN_LIMITS` 里没有这一项：它不是**后端**限制，而是前端表单的可用性约束
+ * （缩放到 0 会让模型消失，用户会以为加载失败）。故在前端定义为具名常量，
+ * 而不是在 schema 里写 `0.000001` 这种魔法值。
+ */
+const MIN_ANCHOR_SCALE = 0.000001;
 
 /** 场景类型选项。 */
 export function sceneTypeOptions(): Array<{ label: string; value: string }> {
@@ -109,13 +124,17 @@ export function usePointFormSchema(): FormSchema[] {
     },
     {
       component: 'Input',
-      componentProps: { maxlength: 255 },
+      componentProps: {
+        maxlength: IotTwinApi.TWIN_LIMITS.maxNodeNameLength,
+      },
       fieldName: 'nodeName',
       label: $t('page.iot.twin.nodeName'),
     },
     {
       component: 'Input',
-      componentProps: { maxlength: 64 },
+      componentProps: {
+        maxlength: IotTwinApi.TWIN_LIMITS.maxIconLength,
+      },
       fieldName: 'icon',
       label: $t('page.iot.twin.icon'),
     },
@@ -127,7 +146,10 @@ export function usePointFormSchema(): FormSchema[] {
     },
     {
       component: 'Textarea',
-      componentProps: { maxlength: 500, rows: 2 },
+      componentProps: {
+        maxlength: IotTwinApi.TWIN_LIMITS.maxPointRemarkLength,
+        rows: 2,
+      },
       fieldName: 'remark',
       label: $t('page.iot.twin.remark'),
     },
@@ -212,7 +234,7 @@ export function useSceneFormSchema(
     },
     {
       component: 'InputNumber',
-      componentProps: { min: 0.000001, step: 0.1 },
+      componentProps: { min: MIN_ANCHOR_SCALE, step: 0.1 },
       defaultValue: 1,
       fieldName: 'anchorScale',
       help: $t('page.iot.twin.anchorScaleHelp'),

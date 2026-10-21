@@ -51,3 +51,71 @@ describe('twinLimits 与后端同口径', () => {
     ]);
   });
 });
+
+/**
+ * 「常量已接线」门禁（工单 #128）。
+ *
+ * 仅断言「常量值等于 500」是**假绿**：它不能证明这个上限被用上了。
+ * 这里扫源码，检查每个应当被消费的常量确有引用点。
+ */
+describe('twinLimits 已接线（不是只定义不用）', () => {
+  /** 读取孪生相关业务源码（排除测试）。 */
+  async function sourceFiles(): Promise<Array<{ code: string; file: string }>> {
+    const { readdirSync, readFileSync } = await import('node:fs');
+    const { dirname, resolve } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const base = dirname(fileURLToPath(import.meta.url));
+    const files: Array<{ code: string; file: string }> = [
+      { code: readFileSync(resolve(base, 'data.ts'), 'utf8'), file: 'data.ts' },
+      {
+        code: readFileSync(resolve(base, 'index.vue'), 'utf8'),
+        file: 'index.vue',
+      },
+    ];
+    for (const dir of [resolve(base, 'modules'), resolve(base, 'composables')]) {
+      for (const name of readdirSync(dir)) {
+        if (/\.(?:ts|vue)$/.test(name) && !name.endsWith('.test.ts')) {
+          files.push({
+            code: readFileSync(resolve(dir, name), 'utf8'),
+            file: name,
+          });
+        }
+      }
+    }
+    return files;
+  }
+
+  it('★ maxPointsPerScene 在业务代码里被真实消费（此前仅测试引用）', async () => {
+    const files = await sourceFiles();
+    const hits = files.filter((item) => item.code.includes('maxPointsPerScene'));
+    expect(hits.map((item) => item.file)).not.toHaveLength(0);
+  });
+
+  it('★ data.ts 的表单长度规则不再写字面量', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { dirname, resolve } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const base = dirname(fileURLToPath(import.meta.url));
+    const code = readFileSync(resolve(base, 'data.ts'), 'utf8');
+    const literalLengths = [...code.matchAll(/maxlength:\s*(\d+)/g)].map(
+      (match) => match[1],
+    );
+    expect(literalLengths).toEqual([]);
+  });
+
+  it('关键上限常量在业务代码中各有至少一个引用点', async () => {
+    const files = await sourceFiles();
+    const joined = files.map((item) => item.code).join('\n');
+    for (const key of [
+      'maxNodeNameLength',
+      'maxIconLength',
+      'maxPointRemarkLength',
+      'maxSceneCodeLength',
+      'maxSceneNameLength',
+      'maxSceneRemarkLength',
+      'maxPointsPerScene',
+    ]) {
+      expect(joined.includes(key), `${key} 没有任何消费点`).toBe(true);
+    }
+  });
+});

@@ -17,6 +17,7 @@ import ListErrorAlert from '../shared/list-error-alert.vue';
 import { useTwinEditor } from './composables/use-twin-editor';
 import { useTwinRuntime } from './composables/use-twin-runtime';
 import { useTwinScene } from './composables/use-twin-scene';
+import { buildDeviceDetailTarget } from './modules/device-detail-link';
 import ModelPanel from './modules/model-panel.vue';
 import PointPanel from './modules/point-panel.vue';
 import RuntimeLegend from './modules/runtime-legend.vue';
@@ -87,6 +88,20 @@ const currentSceneId = computed(() => {
   const value = route.query.sceneId;
   return typeof value === 'string' && value !== '' ? value : '';
 });
+
+/**
+ * 当前选中点位 id（来自 URL `?pointId=`，工单 #127）。
+ *
+ * **URL 是唯一真相**（与 `?sceneId=` 同款）：选中态变化要写回 URL，
+ * 这样「从设备详情点进来」「刷新页面」「分享链接」三种路径都能落到同一个点位。
+ */
+const currentPointId = computed(() => {
+  const value = route.query.pointId;
+  return typeof value === 'string' && value !== '' ? value : '';
+});
+
+/** 深链提示（点位在当前场景找不到时给用户一条可见说明，不静默忽略）。 */
+const deeplinkNotice = ref('');
 
 /** 当前场景（找不到时为 undefined，画布会给出错误态）。 */
 const currentScene = computed(() => findScene(currentSceneId.value));
@@ -170,6 +185,20 @@ async function loadPoints(sceneId: string): Promise<void> {
     }
     points.value = data;
     pointsError.value = '';
+    // 深链校验（工单 #127）：URL 指名的点位若不在本场景，给出可见提示并回落场景级。
+    // 不静默忽略——否则用户会以为「链接坏了」而不知道为什么。
+    if (currentPointId.value) {
+      const exists = data.some((item) => item.id === currentPointId.value);
+      if (exists) {
+        selectPoint(currentPointId.value);
+        deeplinkNotice.value = '';
+      } else {
+        deeplinkNotice.value = $t('page.iot.twin.pointNotFoundInScene');
+        // 清掉失效的 pointId，避免 URL 长期带着一个不存在的点位
+        await router.replace({ query: { ...route.query, pointId: undefined } });
+        selectPoint(null);
+      }
+    }
   } catch (loadError) {
     if (generation !== pointsGeneration) {
       return;
@@ -241,9 +270,38 @@ function onPlaceAnchor(payload: {
   setDraft(payload);
 }
 
-/** 点击已有锚点：高亮并在右侧面板定位（不直接打开编辑，避免误改）。 */
-function onSelectAnchor(pointId: string): void {
+/**
+ * 点击已有锚点：高亮 + 写回 URL（`?pointId=`）。
+ *
+ * 不直接打开编辑弹窗（避免误改）；要改请点右侧列表的「编辑」。
+ * 写回 URL 让「当前选中」可分享、可刷新恢复。
+ *
+ * @param pointId 点位主键
+ */
+async function onSelectAnchor(pointId: string): Promise<void> {
   selectPoint(pointId);
+  if (currentPointId.value === pointId) {
+    return;
+  }
+  await router.replace({ query: { ...route.query, pointId } });
+}
+
+/**
+ * 跳转设备详情（运行态下钻闭环的另一半，工单 #127）。
+ *
+ * 复用既有 `?deviceId=` 约定（见 `modules/device-detail-link.ts`），不新造 URL 格式。
+ *
+ * @param pointId 点位主键
+ */
+async function openDeviceDetail(pointId: string): Promise<void> {
+  const point = points.value.find((item) => item.id === pointId);
+  const target = buildDeviceDetailTarget(point?.deviceId);
+  if (!target) {
+    // 设备已被删除 / 点位不存在：给出可见提示而不是「点了没反应」
+    deeplinkNotice.value = $t('page.iot.twin.deviceMissingForPoint');
+    return;
+  }
+  await router.push(target);
 }
 
 /**
@@ -347,6 +405,14 @@ function onAssetsLoaded(list: IotTwinApi.ModelAssetResp[]): void {
             :message="$t('page.iot.twin.ancestryBroken')"
             type="warning"
           />
+          <Alert
+            v-if="deeplinkNotice"
+            class="pointer-events-auto max-w-md"
+            closable
+            :message="deeplinkNotice"
+            type="info"
+            @close="deeplinkNotice = ''"
+          />
         </div>
 
         <RuntimeLegend class="absolute bottom-3 left-3" />
@@ -392,6 +458,7 @@ function onAssetsLoaded(list: IotTwinApi.ModelAssetResp[]): void {
           :scene-id="currentSceneId"
           @cancel-placing="cancelPlacing"
           @dismiss-place="dismissPlaceForm"
+          @open-device="openDeviceDetail"
           @refresh="reloadAfterPointChange"
           @select="onSelectAnchor"
           @start-placing="startPlacing"

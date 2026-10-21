@@ -1,14 +1,20 @@
 <script lang="ts" setup>
-import type { IotTwinApi } from '#/api/iot';
-
 import { computed, ref, watch } from 'vue';
 
 import { useAccess } from '@vben/access';
 import { Plus } from '@vben/icons';
 
-import { Button, Empty, message, Popconfirm, Spin, Tag } from 'ant-design-vue';
+import {
+  Button,
+  Empty,
+  message,
+  Popconfirm,
+  Spin,
+  Tag,
+  Tooltip,
+} from 'ant-design-vue';
 
-import { deleteTwinPoint } from '#/api/iot';
+import { deleteTwinPoint, IotTwinApi } from '#/api/iot';
 import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
 
@@ -58,6 +64,8 @@ const emit = defineEmits<{
   cancelPlacing: [];
   /** 点位表单已关闭（清掉拾取预填）。 */
   dismissPlace: [];
+  /** 打开设备详情（运行态下钻，工单 #127）。 */
+  openDevice: [pointId: string];
   /** 点位变更（保存/删除后刷新）。 */
   refresh: [];
   /** 选中某个点位。 */
@@ -86,6 +94,17 @@ const pickedConsumed = ref(false);
 /** 有效预填坐标（已消费则为 undefined）。 */
 const effectivePicked = computed(() =>
   pickedConsumed.value ? undefined : props.pickedAnchor,
+);
+
+/** 每个点位的失效绑定数（> 0 时标红提示）。 */
+/**
+ * 是否已达单场景点位上���（工单 #128）。
+ *
+ * 后端有同样的硬上限，但**前端必须先拦**：让用户填完表单、提交后才被后端拒绝，
+ * 是最差的体验；而且后端错误文案与前端其它校验风格不一致。
+ */
+const pointLimitReached = computed(
+  () => props.points.length >= IotTwinApi.TWIN_LIMITS.maxPointsPerScene,
 );
 
 /** 每个点位的失效绑定数（> 0 时标红提示）。 */
@@ -198,7 +217,7 @@ function primaryText(point: IotTwinApi.PointResp): string {
         <!-- 「放置锚点」是在 3D 里点位置（比手填坐标直观得多），与「新增」并列 -->
         <Button
           v-if="!placing"
-          :disabled="!sceneId"
+          :disabled="!sceneId || pointLimitReached"
           size="small"
           @click="emit('startPlacing')"
         >
@@ -207,10 +226,25 @@ function primaryText(point: IotTwinApi.PointResp): string {
         <Button v-else danger size="small" @click="emit('cancelPlacing')">
           {{ $t('page.iot.twin.cancelPlace') }}
         </Button>
-        <Button :disabled="!sceneId" size="small" type="primary" @click="onCreate">
-          <Plus class="size-4" />
-          {{ $t('common.create') }}
-        </Button>
+        <Tooltip
+          :title="
+            pointLimitReached
+              ? $t('page.iot.twin.pointLimitReached', [
+                  IotTwinApi.TWIN_LIMITS.maxPointsPerScene,
+                ])
+              : ''
+          "
+        >
+          <Button
+            :disabled="!sceneId || pointLimitReached"
+            size="small"
+            type="primary"
+            @click="onCreate"
+          >
+            <Plus class="size-4" />
+            {{ $t('common.create') }}
+          </Button>
+        </Tooltip>
       </div>
     </div>
 
@@ -271,6 +305,14 @@ function primaryText(point: IotTwinApi.PointResp): string {
               </div>
             </div>
             <div class="flex shrink-0 flex-col gap-1">
+              <!-- 运行态下钻：从锚点直接跳到设备详情（工单 #127） -->
+              <Button
+                size="small"
+                type="link"
+                @click.stop="emit('openDevice', point.id)"
+              >
+                {{ $t('page.iot.twin.openDevice') }}
+              </Button>
               <Button
                 v-if="canUpdate"
                 size="small"
