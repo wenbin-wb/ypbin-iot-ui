@@ -153,10 +153,7 @@ interface EngineOptionalCapabilities {
   }) => undefined | { visible: boolean; x: number; y: number };
   /** 注入「相机飞行」实现（引擎只算目标点，飞行由 CameraRig 执行）。 */
   setFlyHandler?: (
-    handler: (
-      pointId: string,
-      distanceScale?: number,
-    ) => Promise<void> | void,
+    handler: (pointId: string, distanceScale?: number) => Promise<void> | void,
   ) => void;
   /** 悬停交互提示（悬停中的锚点不参与避让、暂停脉冲）。 */
   setInteractionHover?: (pointId?: string) => void;
@@ -228,7 +225,9 @@ const canvasSize = ref({ height: 0, width: 0 });
 const now = ref(Date.now());
 
 /** 卡片当前展示哪个点位：钉住优先于悬停。 */
-const activePointId = computed(() => pinnedPointId.value ?? hoveredPointId.value);
+const activePointId = computed(
+  () => pinnedPointId.value ?? hoveredPointId.value,
+);
 
 /** 卡片数据（依赖 `now`：相对时间随实时刷新）。 */
 const cardModel = computed<PropertyCardModel | undefined>(() => {
@@ -320,6 +319,68 @@ function sampleCardPosition(): void {
 }
 
 /**
+ * 从事件目标上读锚点点位 ID（DOM 委托通道，见模板注释）。
+ *
+ * @param target 事件目标
+ * @returns 点位 ID；不在锚点标签内时 undefined
+ */
+function readPointIdFromEventTarget(
+  target: EventTarget | null,
+): string | undefined {
+  if (!(target instanceof Element)) {
+    return undefined;
+  }
+  const label = target.closest<HTMLElement>('.twin-anchor-label');
+  if (!label) {
+    return undefined;
+  }
+  const { pointId } = label.dataset;
+  return pointId === undefined || pointId === '' ? undefined : pointId;
+}
+
+/**
+ * 指针移入锚点标签（DOM 委托通道）。
+ *
+ * @param event 指针事件
+ */
+function onPointerOverDelegated(event: PointerEvent): void {
+  const pointId = readPointIdFromEventTarget(event.target);
+  if (pointId) {
+    onHoverAnchor(pointId);
+  }
+}
+
+/**
+ * 指针移出锚点标签（DOM 委托通道）。
+ *
+ * 只在「真的离开了这个标签」时上报 `undefined`：标签内部相邻子元素之间移动也会触发
+ * pointerout，用 `relatedTarget` 判断是否仍在同一标签内，避免卡片闪烁。
+ *
+ * @param event 指针事件
+ */
+function onPointerOutDelegated(event: PointerEvent): void {
+  const pointId = readPointIdFromEventTarget(event.target);
+  if (!pointId) {
+    return;
+  }
+  const nextLabel =
+    event.relatedTarget instanceof Element
+      ? event.relatedTarget.closest<HTMLElement>('.twin-anchor-label')
+      : null;
+  if (nextLabel?.dataset.pointId === pointId) {
+    return;
+  }
+  // 指针进入卡片本身时也不要关闭（卡片是可交互浮层）
+  if (
+    event.relatedTarget instanceof Element &&
+    event.relatedTarget.closest('[data-twin-property-card]')
+  ) {
+    return;
+  }
+  onHoverAnchor(undefined);
+}
+
+/**
  * 处理锚点悬停（进入/离开）。
  *
  * @param pointId 点位 ID（undefined = 离开）
@@ -394,7 +455,8 @@ async function mountEngine(): Promise<void> {
       errorMessages: {
         downloadFailed: (detail) =>
           $t('page.iot.twin.modelDownloadFailed', { detail }),
-        parseFailed: (detail) => $t('page.iot.twin.modelParseFailed', { detail }),
+        parseFailed: (detail) =>
+          $t('page.iot.twin.modelParseFailed', { detail }),
       },
       onStateChange: (next, error) => {
         state.value = next;
@@ -797,7 +859,22 @@ defineExpose({
 
 <template>
   <div class="relative h-full w-full">
-    <div ref="containerRef" class="h-full w-full"></div>
+    <!--
+      悬停/点击的**双通道**：
+      ① 引擎层回调（onHoverAnchor / onClickAnchor）是主通道：它同时驱动标签的
+        避让排除、脉冲暂停等等渲染侧行为；
+      ② DOM 委托是兜底通道：标签本身就是可交互 DOM 元素，用 pointerover/pointerout
+        直接判定，不依赖「引擎层是否把回调接上」。两通道写同一个状态，天然幂等。
+      为什么需要兜底：实测踩过「引擎层 hover 回调没上报 ⇒ 卡片永远不出现」，
+      而标签 DOM 明明在（元素命中测试正常）—— 用 DOM 事件兜底后交互不可能因引擎侧
+      漏接而失效。
+    -->
+    <div
+      ref="containerRef"
+      class="h-full w-full"
+      @pointerout="onPointerOutDelegated"
+      @pointerover="onPointerOverDelegated"
+    ></div>
 
     <!-- 悬浮/点击属性卡片（浮层，跟随 3D 锚点） -->
     <TwinPropertyCard
