@@ -2,6 +2,8 @@
  * three 引擎层的公共类型（零 Vue 依赖，可被单测直接 import）。
  */
 
+import type { TwinRenderMode } from './display';
+
 /** 场景进入/加载状态机（每一次迁移都必须让 UI 可见）。 */
 export type TwinSceneState =
   | 'disposed'
@@ -51,6 +53,20 @@ export interface AnchorRuntimeState {
   primaryText: string;
   /** 是否有任何最新值（false ⇒ 标签显示 `--`，不是 0）。 */
   hasValue: boolean;
+  /**
+   * 主展示属性的渲染模式（由 `displayType` 映射，见 `display.ts`）。
+   *
+   * 不传时按 `label` 渲染（向后兼容：`runtime-store` 之外的调用方可能不提供）。
+   */
+  renderMode?: TwinRenderMode;
+  /**
+   * `color` 模式的染色比例（0~1，由 min/max 线性映射）。
+   *
+   * 缺 min/max 时为 undefined ⇒ 回落为按在线状态着色（不做无依据猜测）。
+   */
+  colorRatio?: number;
+  /** `switch` 模式的二态（undefined ⇒ 无法判定，显示 `--`）。 */
+  switchState?: boolean;
 }
 
 /** 锚点描述（由页面从点位响应转换而来，引擎层不依赖 API 类型）。 */

@@ -4,6 +4,8 @@ import type { AnchorRuntimeState, TwinSceneState } from '#/three/twin/types';
 
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
+import { useAccessStore } from '@vben/stores';
+
 import { Alert, Button } from 'ant-design-vue';
 
 import { resolveModelUrl } from '#/api/iot';
@@ -43,7 +45,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  /** 飞行模式被回退时的原因（页面要展示，不能静默）。 */
+  /** 飞行模式被回退时的原因（**已本地化**；引擎层只给 key，这里用 $t 渲染）。 */
   fallback: [reason: string];
   /**
    * 配置态拾取到模型表面交点（父组件据此打开点位表单）。
@@ -121,12 +123,18 @@ async function mountEngine(): Promise<void> {
     const { CameraRig } = await import('#/three/twin/camera-rig');
     const CSS2D = await import('three/addons/renderers/CSS2DRenderer.js');
 
+    // 令牌由**画布层**注入给引擎层：引擎层不直接依赖 @vben/stores，
+    // 否则会形成静态依赖边把 three 提回首屏（工单 #125）。
+    const accessStore = useAccessStore();
     manager = new TwinSceneManager({
       container,
+      getAccessToken: () => accessStore.accessToken,
+      // detail 来自 fetch/loader 的异常文本（第三方，英文为主）；整句用本语言的模板包住，
+      // 保证「句子是当前语言」，而不是把中文模板与英文 detail 生硬拼接。
       errorMessages: {
         downloadFailed: (detail) =>
-          $t('page.iot.twin.modelDownloadFailed', [detail]),
-        parseFailed: (detail) => $t('page.iot.twin.modelParseFailed', [detail]),
+          $t('page.iot.twin.modelDownloadFailed', { detail }),
+        parseFailed: (detail) => $t('page.iot.twin.modelParseFailed', { detail }),
       },
       onStateChange: (next, error) => {
         state.value = next;
@@ -243,13 +251,35 @@ async function loadScene(): Promise<void> {
       view: parseViewJson(props.scene.viewJson),
     });
     if (result.fallbackReason) {
-      emit('fallback', result.fallbackReason);
+      // 引擎层不本地化（拿不到 $t）⇒ 在这里用 key + params 渲染，避免英文界面中英混杂
+      emit(
+        'fallback',
+        $t(result.fallbackReason.key, result.fallbackReason.params ?? {}),
+      );
     }
     cameraRig?.captureHome();
     picker?.resetForNewModel();
     picker?.buildBvh();
-  } catch {
-    // 失败原因已通过 onStateChange 上报（画布状态变 failed）
+  } catch (error) {
+    // ⚠️ 这条 catch 有两个不同来源，必须分开处理（工单 #132 修）：
+    //
+    // ① 真正的加载失败（下载/解析）：`enterScene` 内部已 setState('failed') 并带上
+    //    errorMessages 生成的文案，画布模板会渲染错误态 + 重试按钮 ⇒ 此处不必重复提示。
+    // ② 并发切换被拒：`enterScene` 在 `setState('loading')` **之前**就抛
+    //    「场景正在切换中」⇒ **没有任何状态变化**。原实现的注释「已通过 onStateChange
+    //    上报」在这里不成立，表现为「用户点了完全没反应」（实测确认）。
+    //    改为：记录到 loadError，让画布显示可理解的提示。
+    const message = error instanceof Error ? error.message : String(error);
+    const isBusyRejection = message.includes('正在切换中');
+    if (isBusyRejection) {
+      loadError.value = message;
+      return;
+    }
+    // ① 类：状态已由 onStateChange 置为 failed，但若文案为空则兜底一次，
+    // 避免出现「失败态却没有原因」的空白错误框。
+    if (!loadError.value) {
+      loadError.value = message;
+    }
   }
 }
 

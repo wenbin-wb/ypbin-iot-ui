@@ -3,6 +3,8 @@ import type { AnchorRuntimeState } from './types';
 import type { IotTwinApi } from '#/api/iot';
 import type { IotRealtimeLatestPayload } from '#/api/iot/realtime';
 
+import { toRenderMode, toSwitchState } from './display';
+
 /**
  * 运行态值的合并与节流（**实时驱动 3D 的唯一入口**）。
  *
@@ -48,6 +50,9 @@ interface PointRuntime {
   primaryProperty?: string;
   /** 主展示属性的单位（用于拼接 `26.5 ℃`）。 */
   primaryUnit?: null | string;
+  /** 主展示属性的展示形态（决定画布怎么画，见 `display.ts`）。 */
+  primaryDisplayType?: null | string;
+
   /** 启停位。 */
   status?: null | number;
   /** 属性标识 → 最新值。 */
@@ -236,6 +241,7 @@ export class TwinRuntimeStore {
         deviceName: point.deviceName ?? point.deviceCode ?? point.deviceId,
         onlineStatus: point.onlineStatus,
         primaryDecimals: primary?.decimals,
+        primaryDisplayType: primary?.displayType,
         primaryProperty: primary?.propertyIdentifier,
         primaryUnit: primary?.unit,
         status: point.status,
@@ -311,13 +317,39 @@ function toAnchorState(runtime: PointRuntime): AnchorRuntimeState {
       primaryText = `${primaryText} ${runtime.primaryUnit}`;
     }
   }
+  const renderMode = toRenderMode(runtime.primaryDisplayType);
   return {
     alertCount: runtime.alertCount,
+    // color 形态：按**数据质量**分档染色（good=0 / 其它=1）。
+    // 不用 min/max 线性映射：运行态快照里没有物模型的 min/max（它们在
+    // IotTwinDevicePropertyResp，属设备属性配置接口），拿不到就不猜。
+    colorRatio: hasValue ? (isGoodQuality(value?.quality) ? 0 : 1) : undefined,
     hasValue,
     onlineStatus: runtime.onlineStatus,
     primaryText,
+    renderMode,
     status: runtime.status,
+    switchState: hasValue ? toSwitchState(value?.value ?? null) : undefined,
   };
+}
+
+/**
+ * 数据质量是否为 good。
+ *
+ * 后端 `quality` 是字符串（如 `good` / `bad` / `uncertain`，具体取值随采集协议）。
+ * 判定用「不以 bad/uncertain 开头」而不是白名单 `=== 'good'`：
+ * 各协议的质量码不统一，白名单会把合法值误判为异常（进而误染色）。
+ *
+ * @param quality 质量码
+ * @returns 是否视为正常
+ */
+function isGoodQuality(quality?: null | string): boolean {
+  if (quality === null || quality === undefined || quality === '') {
+    // 无质量码时按正常处理：不因为「没上报质量」就把点位染成异常色
+    return true;
+  }
+  const normalized = quality.trim().toLowerCase();
+  return !normalized.startsWith('bad') && !normalized.startsWith('uncertain');
 }
 
 /**

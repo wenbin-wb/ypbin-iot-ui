@@ -90,6 +90,12 @@ export interface SceneManagerOptions {
   };
   /** 状态变化回调。 */
   onStateChange: (state: TwinSceneState, error?: TwinSceneError) => void;
+  /**
+   * 取访问令牌（由画布组件注入，引擎层不直接依赖状态库）。
+   *
+   * 目的：让引擎层保持「零首屏依赖」，three 才能被真正按需加载（工单 #125）。
+   */
+  getAccessToken?: () => null | string | undefined;
 }
 
 /** 一个场景的加载描述（由页面从场景响应 + 资产响应转换而来）。 */
@@ -112,10 +118,24 @@ export interface SceneLoadRequest {
   modelBytes?: null | number;
 }
 
+/**
+ * 飞行模式回退原因（**结构化，不在引擎层本地化**）。
+ *
+ * <p>引擎层不做 i18n：它拿不到 `$t`，返回中文字符串会导致英文界面出现中英混杂
+ * （工单 #131 的实测问题）。这里只返回「用哪个 key、带什么参数」，
+ * 由画布层用 `$t(key, params)` 渲染。</p>
+ */
+export interface TwistFallbackReason {
+  /** i18n key（`page.iot.twin.*`）。 */
+  key: string;
+  /** 插值参数（`$t` 的第二个参数）。 */
+  params?: Record<string, number | string>;
+}
+
 /** `enterScene` 的返回值：实际使用的模式与（可选的）回退原因。 */
 export interface EnterSceneResult {
   /** 因不满足条件而未启用飞行模式时的原因（页面要展示，不能静默）。 */
-  fallbackReason?: string;
+  fallbackReason?: TwistFallbackReason;
   /** 实际使用的切换模式。 */
   mode: TwinSwitchMode;
 }
@@ -168,6 +188,9 @@ export class TwinSceneManager {
 
   private fadeOverlay?: HTMLDivElement;
 
+  /** 取访问令牌（注入，见 SceneManagerOptions#getAccessToken）。 */
+  private getAccessToken?: () => null | string | undefined;
+
   private initialized = false;
 
   private modelRoot?: THREE_NS.Group;
@@ -191,6 +214,7 @@ export class TwinSceneManager {
     this.container = options.container;
     this.onStateChange = options.onStateChange;
     this.errorMessages = options.errorMessages;
+    this.getAccessToken = options.getAccessToken;
   }
 
   /**
@@ -616,15 +640,19 @@ export class TwinSceneManager {
   /** 是否允许飞行模式（不允许时给出**具体原因**，页面要能展示）。 */
   private canFly(request: SceneLoadRequest): {
     allowed: boolean;
-    reason?: string;
+    reason?: TwistFallbackReason;
   } {
     const bytes = request.modelBytes ?? 0;
     if (bytes > FLY_MAX_MODEL_BYTES) {
       return {
         allowed: false,
-        reason: `模型约 ${Math.round(bytes / 1024 / 1024)}MB，超过 ${Math.round(
-          FLY_MAX_MODEL_BYTES / 1024 / 1024,
-        )}MB 上限：飞行下钻需要父子场景同时驻留，显存不够，已自动改为切换加载`,
+        reason: {
+          key: 'page.iot.twin.flyFallbackModelTooLarge',
+          params: {
+            limitMb: Math.round(FLY_MAX_MODEL_BYTES / 1024 / 1024),
+            modelMb: Math.round(bytes / 1024 / 1024),
+          },
+        },
       };
     }
     const deviceMemory = (
@@ -636,14 +664,16 @@ export class TwinSceneManager {
     ) {
       return {
         allowed: false,
-        reason: `检测到设备内存约 ${deviceMemory}GB，飞行下钻需要双场景驻留显存，已自动改为切换加载`,
+        reason: {
+          key: 'page.iot.twin.flyFallbackLowMemory',
+          params: { deviceMemory },
+        },
       };
     }
     if (request.ancestry.length <= 1) {
       return {
         allowed: false,
-        reason:
-          '目标场景没有锚点变换（与父场景原点重合），飞行过去看不出位置变化，已改为切换加载',
+        reason: { key: 'page.iot.twin.flyFallbackNoAnchor' },
       };
     }
     return { allowed: true };
@@ -726,6 +756,7 @@ export class TwinSceneManager {
   ): Promise<LoadedModel> {
     const options: LoadModelOptions = {
       basePath: request.basePath,
+      getAccessToken: this.getAccessToken,
       url: request.modelUrl,
     };
     try {

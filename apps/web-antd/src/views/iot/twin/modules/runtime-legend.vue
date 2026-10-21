@@ -2,14 +2,13 @@
 import { computed } from 'vue';
 
 import { $t } from '#/locales';
-
 import {
   TWIN_COLOR_ALERT,
   TWIN_COLOR_DISABLED,
   TWIN_COLOR_OFFLINE,
   TWIN_COLOR_ONLINE,
   TWIN_COLOR_UNKNOWN,
-} from '../twin-colors';
+} from '#/three/twin/colors';
 
 /**
  * 运行态图例（在线 / 离线 / 未知 / 停用 / 告警）。

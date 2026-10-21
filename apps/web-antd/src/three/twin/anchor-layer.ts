@@ -17,7 +17,8 @@ import {
   TWIN_COLOR_OFFLINE,
   TWIN_COLOR_ONLINE,
   TWIN_COLOR_UNKNOWN,
-} from '../../views/iot/twin/twin-colors';
+} from './colors';
+import { colorForRatio, toRenderMode } from './display';
 
 /**
  * 锚点渲染层：设备图标 + 数值标签 + 状态着色 + 告警闪烁。
@@ -211,7 +212,11 @@ export function createAnchorLayer(
   function applyStates(): void {
     for (const [pointId, node] of nodes) {
       const state = currentStates.get(pointId);
-      const color = resolveColor(state);
+      // color 形态：图标按数值色阶染色（越界变红），比状态色更能反映「值有多糟」
+      const color =
+        state?.renderMode === 'color' && state.colorRatio !== undefined
+          ? colorForRatio(state.colorRatio)
+          : resolveColor(state);
       node.sprite.material.color.set(color);
 
       if (!node.descriptor.labelVisible) {
@@ -219,19 +224,50 @@ export function createAnchorLayer(
         continue;
       }
       node.labelElement.style.display = '';
-      const text = state?.primaryText?.trim() ? state.primaryText : '--';
       const name = node.descriptor.deviceName;
-      node.labelElement.textContent = `${name} ${text}`;
+      // **按 displayType 分形态渲染**（工单 #126）。
+      // 修复前五种形态渲染完全一样，等于「配置项说谎」；现在 switch/color 有真实差异，
+      // 未实现的 gauge/sparkline 由 toRenderMode 回落为 label，并在 UI 上标注「暂不支持」。
+      const mode = state?.renderMode ?? toRenderMode('value');
+      if (mode === 'switch') {
+        node.labelElement.textContent = `${name} ${switchGlyph(state)}`;
+      } else if (mode === 'color' && state?.colorRatio !== undefined) {
+        // 数值着色：用一个色块 + 数值，直观看出越界程度
+        const text = state?.primaryText?.trim() ? state.primaryText : '--';
+        node.labelElement.textContent = `${name} ${text}`;
+        node.labelElement.style.borderColor = colorForRatio(state.colorRatio);
+        node.labelElement.style.borderWidth = '2px';
+      } else {
+        const text = state?.primaryText?.trim() ? state.primaryText : '--';
+        node.labelElement.textContent = `${name} ${text}`;
+      }
       // 无数据（hasValue=false）时标签用弱化色，明确告诉用户「这是没有数据，不是 0」
       node.labelElement.style.color =
         state?.hasValue === false
           ? TWIN_COLOR_LABEL_TEXT_MUTED
           : TWIN_COLOR_LABEL_TEXT;
-      node.labelElement.style.borderColor =
-        (state?.alertCount ?? 0) > 0
-          ? TWIN_COLOR_LABEL_BORDER_ALERT
-          : TWIN_COLOR_LABEL_BORDER;
+      if (mode !== 'color') {
+        node.labelElement.style.borderColor =
+          (state?.alertCount ?? 0) > 0
+            ? TWIN_COLOR_LABEL_BORDER_ALERT
+            : TWIN_COLOR_LABEL_BORDER;
+      }
     }
+  }
+
+  /**
+   * `switch` 形态的符号：开 = ●（实心，配合状态色），关 = ○（空心）。
+   *
+   * 无法判定（非二值属性 / 无数据）时渲染 `--`，**不猜**它当前是开还是关。
+   *
+   * @param state 运行态
+   * @returns 展示文本
+   */
+  function switchGlyph(state?: AnchorRuntimeState): string {
+    if (state?.switchState === undefined) {
+      return '--';
+    }
+    return state.switchState ? '● 开' : '○ 关';
   }
 
   /**

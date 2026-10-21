@@ -2,8 +2,6 @@ import type * as THREEType from 'three';
 
 import type { TwinLoadProgress } from './types';
 
-import { useAccessStore } from '@vben/stores';
-
 /**
  * 模型加载器装配（GLTFLoader + Draco + KTX2 + Meshopt）。
  *
@@ -54,6 +52,17 @@ export interface LoadModelOptions {
   onProgress?: (progress: TwinLoadProgress) => void;
   /** 中止信号（切换场景/离开页面时用）。 */
   signal?: AbortSignal;
+  /**
+   * 取访问令牌（**由调用方注入**，引擎层不直接依赖状态库）。
+   *
+   * <p>为什么不在这里 `useAccessStore()`：`@vben/stores` 是**首屏可达**模块，
+   * 引擎层静态 import 它会形成 `首屏 → 引擎层` 的静态依赖边，把 740KB 的 three
+   * 一并提回首屏（工单 #125 的实测根因）。引擎层必须保持「零首屏依赖」，
+   * 才能被 `await import()` 真正按需加载。</p>
+   *
+   * @returns 当前令牌（无令牌时返回空）
+   */
+  getAccessToken?: () => null | string | undefined;
   /**
    * Draco 解码器目录（指向 `draco_decoder.wasm` 所在目录）。
    *
@@ -217,9 +226,9 @@ async function downloadWithAuth(
   options: LoadModelOptions,
 ): Promise<ArrayBuffer> {
   const headers: Record<string, string> = {};
-  const accessStore = useAccessStore();
-  if (accessStore.accessToken) {
-    headers.Authorization = `Bearer ${accessStore.accessToken}`;
+  const token = options.getAccessToken?.();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
   }
 
   const response = await fetch(options.url, {

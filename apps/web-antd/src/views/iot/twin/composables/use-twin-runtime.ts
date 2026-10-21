@@ -44,6 +44,13 @@ export function useTwinRuntime(options: {
 
   const store = new TwinRuntimeStore({ onFlush: options.onFlush });
   let alertReloadTimer: ReturnType<typeof setTimeout> | undefined;
+  /**
+   * 快照请求世代号（竞态守卫，工单 #132）。
+   *
+   * 快速连切场景时，先发的「大场景」快照可能后到，把新场景的运行态覆盖掉 ⇒
+   * 3D 锚点会用旧场景的值渲染在新模型上。`await` 回来后比对世代，过期即丢弃。
+   */
+  let snapshotGeneration = 0;
 
   /**
    * 加载场景快照（进入场景、告警变化、手动刷新时调用）。
@@ -55,21 +62,31 @@ export function useTwinRuntime(options: {
     sceneId: string,
     bindings: Map<string, IotTwinApi.BindingResp[]>,
   ): Promise<void> {
+    const generation = ++snapshotGeneration;
     loading.value = true;
     try {
       const data = await getTwinRuntime(sceneId);
+      // 过期响应：期间已切到别的场景 ⇒ 丢弃，否则旧场景的值会渲染到新模型上
+      if (generation !== snapshotGeneration) {
+        return;
+      }
       snapshot.value = data;
       store.replaceSnapshot(data, bindings);
       loadedAt.value = new Date();
       error.value = '';
     } catch (loadError) {
+      if (generation !== snapshotGeneration) {
+        return;
+      }
       error.value = extractErrorMessage(
         loadError,
         $t('page.iot.twin.runtimeLoadFailed'),
       );
       throw loadError;
     } finally {
-      loading.value = false;
+      if (generation === snapshotGeneration) {
+        loading.value = false;
+      }
     }
   }
 

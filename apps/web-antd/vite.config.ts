@@ -9,22 +9,42 @@ export default defineConfig(async () => {
           output: {
             // 数字孪生用的 three.js 单独切 chunk。
             //
-            // 为什么需要：three 约 600KB（压缩后 ~150KB），且只有进入 /iot/twin 才用得到。
-            // 让它独立成 chunk 后：① 首屏主包不含它；② 版本不变时切页面不重复下载
-            // （浏览器长期缓存）；③ 便于在构建报告里单独看它的体积。
+            // 为什么需要：three 约 740KB（gzip ≈186KB），且只有进入 /iot/twin 才用得到。
+            // 让它独立成 chunk 后：① 首屏不加载它；② 版本不变时切页面不重复下载；
+            // ③ 便于在构建报告里单独看它的体积。
             //
-            // 注：本仓构建链是 rolldown（见 internal/vite-config 的 `build.rolldownOptions`），
-            // 不是 rollup ⇒ 用 `advancedChunks` 而非 `manualChunks`。
-            // addons（GLTFLoader/CSS2DRenderer 等）不单独分组：它们由引擎层
-            // 动态 import 引入，会被自动并入对应的动态 chunk。
+            // 本仓构建链是 rolldown（见 internal/vite-config 的 `build.rolldownOptions`），
+            // 不是 rollup。
+            //
+            // ⚠️ 这里有两个**实测踩过的坑**（工单 #125），改配置前务必读完：
+            //
+            // 坑 1：`includeDependenciesRecursively` 默认是 **true** —— 该组会把 three 的
+            //   **全部递归依赖**一起吸进 `three-core`，其中包含被 UI 组件共用的
+            //   `@babel/helpers` 之类模块。结果：`three-core` 里混入了非 three 的导出，
+            //   而 `DialogTitle` / `AlertBuilder` 等纯 UI chunk 反过来
+            //   `import { _n, vn } from './three-core-*.js'` ⇒ 231 个 chunk 静态依赖它、
+            //   首屏 `index.html` 直接 `modulepreload` 740KB 的 three。
+            //   **必须显式设为 false**，让分组只收 three 自己的文件。
+            //
+            // 坑 2：isolate 的判据**不是**「有没有单独的 chunk 文件」，而是：
+            //   ① 首屏 `dist/index.html` 的 `modulepreload` 里没有 three；
+            //   ② 静态 import 它的 chunk 数为 0（只剩动态 import）。
+            //   `advancedChunks` 只决定「切到哪个文件」，**不决定「谁在何时加载」**。
+            //
+            // 另：引擎层（`src/three/twin/**`）**不得** import `src/views/**`，
+            // 否则会形成静态依赖环把 three 拉回首屏（`anchor-layer` 曾反向 import 视图层的
+            // 调色板，已把调色板下沉为 `src/three/twin/colors.ts`）。
             advancedChunks: {
+              includeDependenciesRecursively: false,
               groups: [
                 {
                   name: 'three-core',
+                  priority: 20,
                   test: /node_modules[\\/]three[\\/]build[\\/]three\.(module|core)\.js$/,
                 },
                 {
                   name: 'three-bvh',
+                  priority: 20,
                   test: /node_modules[\\/]three-mesh-bvh[\\/]/,
                 },
               ],

@@ -40,6 +40,15 @@ export function useTwinScene() {
   const loading = ref(false);
   /** 加载失败原因（空串 = 无错）。 */
   const error = ref('');
+  /**
+   * 请求世代号（竞态守卫，工单 #132）。
+   *
+   * 每次 `load()` 自增并记下本次世代；`await` 回来后若世代已变，说明期间又发起了更新的
+   * 请求（或已切场景）⇒ **丢弃本次结果**，不覆盖较新的数据。
+   * 不用 `AbortController`：本仓 requestClient 的取消语义未统一，而「丢弃过期结果」
+   * 已足以保证界面正确，且不会因取消失败而残留 pending 状态。
+   */
+  let sceneLoadGeneration = 0;
 
   /** 组树后的根节点列表。 */
   const tree = computed<SceneTreeNode[]>(() => buildTree(scenes.value));
@@ -55,11 +64,20 @@ export function useTwinScene() {
 
   /** 重新拉取场景列表。 */
   async function load(): Promise<void> {
+    const generation = ++sceneLoadGeneration;
     loading.value = true;
     try {
-      scenes.value = await getTwinSceneList();
+      const data = await getTwinSceneList();
+      // 过期响应：期间有更新的加载或已卸载，丢弃（否则旧数据会覆盖新场景）
+      if (generation !== sceneLoadGeneration) {
+        return;
+      }
+      scenes.value = data;
       error.value = '';
     } catch (loadError) {
+      if (generation !== sceneLoadGeneration) {
+        return;
+      }
       // 保留上一次数据：清空会让用户误以为配置丢了
       error.value = extractErrorMessage(
         loadError,
@@ -67,7 +85,10 @@ export function useTwinScene() {
       );
       throw loadError;
     } finally {
-      loading.value = false;
+      // 只有最新世代才收起 loading：否则旧请求结束会把新请求的 loading 提前关掉
+      if (generation === sceneLoadGeneration) {
+        loading.value = false;
+      }
     }
   }
 

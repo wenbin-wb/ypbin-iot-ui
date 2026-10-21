@@ -1,14 +1,20 @@
 /**
  * 数字孪生状态色（**调色板模块**：色值集中在此，`.vue` 只 import 常量）。
  *
- * ## 为什么必须独立成 `.ts`
+ * ## 为什么放在**引擎层**（`three/twin/colors.ts`）而不是视图层
  *
- * 仓库有 `design-token` 门禁（`views/iot/shared/design-token.test.ts`）：
- * **禁止在 `.vue` 里硬编码 6 位 hex**（绕过主题 token、暗色模式下不可用）。
- * 3D 锚点的状态色是**画布渲染用的真实颜色**（three 的 `Color` 与 CSS2D 标签都吃它），
- * 无法用 Tailwind 语义 token 表达（canvas 里没有 CSS 变量继承），因此按门禁给出的
- * 正解处理：下沉到 `.ts` 调色板模块（`.ts` 不在扫描范围，与
- * `tenant-ledger/modules/access-topology-colors.ts` 同款做法）。
+ * 两个理由，缺一都会出问题：
+ *
+ * 1. **design-token 门禁**（`views/iot/shared/design-token.test.ts`）**禁止在 `.vue` 里
+ *    硬编码 6 位 hex**（绕过主题 token、暗色不可用）。3D 锚点的状态色是画布渲染用的
+ *    真实颜色（three 的 `Color` 与 CSS2D 标签都吃它），无法用 Tailwind 语义 token
+ *    表达（canvas 里没有 CSS 变量继承）⇒ 下沉到 `.ts` 调色板模块。
+ * 2. **依赖方向**：本文件被 `three/twin/anchor-layer.ts`（引擎层）使用。
+ *    若把它放在 `views/iot/twin/`，引擎层就要 `import '../../views/...'` ——
+ *    形成 `views → anchor-layer → three` 的**静态**依赖环，会把 740KB 的 three
+ *    提前拉进首屏（`advancedChunks` 只决定切到哪个文件，不决定何时加载）。
+ *    放在引擎层后，方向变成 `views → three/twin/colors`（单向），three 才能真正按需加载。
+ *    详见工单 #125。
  *
  * ## 为什么不用主题 token
  *

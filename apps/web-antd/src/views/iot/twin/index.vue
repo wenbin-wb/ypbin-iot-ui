@@ -107,6 +107,15 @@ const points = ref<IotTwinApi.PointResp[]>([]);
 const pointsLoading = ref(false);
 const pointsError = ref('');
 
+/**
+ * 点位请求世代号（竞态守卫，工单 #132）。
+ *
+ * 快速连切场景时，先发后到的旧场景点位会覆盖新场景的点位 ⇒ 3D 锚点用旧场景的
+ * **局部坐标**画在新场景的**模型**上（位置完全错乱，且用户看不出原因）。
+ * `await` 回来后比对世代，过期即丢弃。
+ */
+let pointsGeneration = 0;
+
 /** 点位 → 绑定（运行态快照据此决定主展示属性与单位/精度）。 */
 const bindingsByPointId = computed(() => {
   const map = new Map<string, IotTwinApi.BindingResp[]>();
@@ -151,17 +160,28 @@ async function loadPoints(sceneId: string): Promise<void> {
     pointsError.value = '';
     return;
   }
+  const generation = ++pointsGeneration;
   pointsLoading.value = true;
   try {
-    points.value = await getTwinPointList(sceneId);
+    const data = await getTwinPointList(sceneId);
+    // 过期响应：已切到别的场景 ⇒ 丢弃（否则旧场景坐标会画到新模型上）
+    if (generation !== pointsGeneration) {
+      return;
+    }
+    points.value = data;
     pointsError.value = '';
   } catch (loadError) {
+    if (generation !== pointsGeneration) {
+      return;
+    }
     pointsError.value = extractErrorMessage(
       loadError,
       $t('page.iot.twin.pointLoadFailed'),
     );
   } finally {
-    pointsLoading.value = false;
+    if (generation === pointsGeneration) {
+      pointsLoading.value = false;
+    }
   }
 }
 

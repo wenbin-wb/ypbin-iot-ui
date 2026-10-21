@@ -2,6 +2,7 @@ import type { VbenFormSchema as FormSchema } from '#/adapter/form';
 
 import { IotTwinApi } from '#/api/iot';
 import { $t } from '#/locales';
+import { isDisplayTypeSupported } from '#/three/twin/display';
 
 /**
  * 数字孪生页的表单 schema 与选项常量（页面只做编排）。
@@ -17,15 +18,33 @@ export function sceneTypeOptions(): Array<{ label: string; value: string }> {
   ];
 }
 
-/** 展示形态选项。 */
-export function displayTypeOptions(): Array<{ label: string; value: string }> {
-  return [
-    { label: $t('page.iot.twin.displayType.value'), value: 'value' },
-    { label: $t('page.iot.twin.displayType.gauge'), value: 'gauge' },
-    { label: $t('page.iot.twin.displayType.switch'), value: 'switch' },
-    { label: $t('page.iot.twin.displayType.color'), value: 'color' },
-    { label: $t('page.iot.twin.displayType.sparkline'), value: 'sparkline' },
+/**
+ * 展示形态选项。
+ *
+ * 选项**不隐藏**未实现的形态（`gauge` / `sparkline`）：已存库的历史配置需要能被回显，
+ * 隐藏会让用户编辑时发现「我配的形态不见了」。改为在标签上标注「暂不支持」，
+ * 由 `isDisplayTypeSupported` 判定（工单 #126：宁可诚实标注，不做「能选但不生效」）。
+ */
+export function displayTypeOptions(): Array<{
+  label: string;
+  value: string;
+}> {
+  const entries: Array<{ code: string; key: string }> = [
+    { code: 'value', key: 'value' },
+    { code: 'gauge', key: 'gauge' },
+    { code: 'switch', key: 'switch' },
+    { code: 'color', key: 'color' },
+    { code: 'sparkline', key: 'sparkline' },
   ];
+  return entries.map(({ code, key }) => {
+    const base = $t(`page.iot.twin.displayType.${key}`);
+    return {
+      label: isDisplayTypeSupported(code)
+        ? base
+        : `${base}（${$t('page.iot.twin.displayTypeUnsupported')}）`,
+      value: code,
+    };
+  });
 }
 
 /** 展示角色选项。 */
