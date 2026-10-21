@@ -19,3 +19,4 @@ export * from './shadow';
 export * from './tag';
 export * from './thingmodel';
 export * from './trace';
+export * from './twin';
