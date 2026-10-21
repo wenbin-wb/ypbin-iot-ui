@@ -57,11 +57,17 @@ const {
 } = useTwinScene();
 
 const {
+  cancelPlacing,
+  dismissPlaceForm,
+  draft: editorDraft,
   editingPointId,
   hasDraft,
   mode: editorMode,
+  placeFormOpen,
+  reset: resetEditor,
   selectPoint,
   setDraft,
+  startPlacing,
 } = useTwinEditor();
 
 /** 画布组件引用（用于把运行态状态推给画布）。 */
@@ -163,6 +169,8 @@ async function loadPoints(sceneId: string): Promise<void> {
 watch(
   currentSceneId,
   async (sceneId) => {
+    // 切场景要丢掉放置态与草稿：它们属于上一个场景的坐标系，跨场景保留必然错位
+    resetEditor();
     if (!sceneId) {
       points.value = [];
       return;
@@ -187,6 +195,8 @@ onMounted(async () => {
 
 /** 点位保存/删除后刷新（点位变 ⇒ 绑定变 ⇒ 运行态的主展示属性变）。 */
 async function reloadAfterPointChange(): Promise<void> {
+  // 保存/删除后退出放置态：草稿已落库，留着会让用户以为还要再点一次
+  resetEditor();
   await loadPoints(currentSceneId.value);
   if (currentSceneId.value) {
     try {
@@ -355,10 +365,16 @@ function onAssetsLoaded(list: IotTwinApi.ModelAssetResp[]): void {
           :error="pointsError"
           :loading="pointsLoading"
           :pending="hasDraft"
+          :picked-anchor="editorDraft ?? undefined"
+          :place-form-open="placeFormOpen"
+          :placing="editorMode === 'place'"
           :points="points"
           :scene-id="currentSceneId"
+          @cancel-placing="cancelPlacing"
+          @dismiss-place="dismissPlaceForm"
           @refresh="reloadAfterPointChange"
           @select="onSelectAnchor"
+          @start-placing="startPlacing"
         />
 
         <ModelPanel

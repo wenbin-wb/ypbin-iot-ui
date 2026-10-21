@@ -31,6 +31,16 @@ import DeviceSelect from './device-select.vue';
  * 保存时 `formApi.getValues()` 与 `bindings.value` 合并成 `PointSaveReq`。
  */
 const props = defineProps<{
+  /**
+   * 拾取预填坐标（「放置锚点」流程传入）。
+   *
+   * 与 `point` 互斥：`point` 是编辑存量点位（含 id），`pickedAnchor` 是在画布上
+   * 新点出的位置（无 id，新建）。两者同时存在时以 `point` 为准。
+   */
+  pickedAnchor?: {
+    local: { x: number; y: number; z: number };
+    normal: { x: number; y: number; z: number };
+  };
   /** 编辑时的原始点位（undefined = 新建）。 */
   point?: IotTwinApi.PointResp;
   /** 当前场景 id。 */
@@ -254,6 +264,16 @@ onMounted(async () => {
       remark: props.point.remark ?? undefined,
     });
     await loadProperties(props.point.deviceId);
+  } else if (props.pickedAnchor) {
+    // 「放置锚点」流程：坐标由画布拾取并已换算成本场景局部系，直接预填
+    formApi.setValues({
+      localX: Number(props.pickedAnchor.local.x.toFixed(4)),
+      localY: Number(props.pickedAnchor.local.y.toFixed(4)),
+      localZ: Number(props.pickedAnchor.local.z.toFixed(4)),
+      normalX: Number(props.pickedAnchor.normal.x.toFixed(4)),
+      normalY: Number(props.pickedAnchor.normal.y.toFixed(4)),
+      normalZ: Number(props.pickedAnchor.normal.z.toFixed(4)),
+    });
   }
   modalApi.open();
 });

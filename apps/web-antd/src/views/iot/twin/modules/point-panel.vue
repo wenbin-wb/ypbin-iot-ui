@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { IotTwinApi } from '#/api/iot';
 
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 import { useAccess } from '@vben/access';
 import { Plus } from '@vben/icons';
@@ -33,6 +33,20 @@ const props = defineProps<{
   loading: boolean;
   /** 是否有未保存的草稿。 */
   pending: boolean;
+  /** 画布拾取到的预填坐标（「放置锚点」流程）。 */
+  pickedAnchor?: {
+    local: { x: number; y: number; z: number };
+    normal: { x: number; y: number; z: number };
+  };
+  /**
+   * 拾取草稿表单是否应打开。
+   *
+   * 由父组件（编辑器状态机）决定：拾取成功 ⇒ true；用户取消 ⇒ false。
+   * 本组件不自己推断，避免与状态机产生两套真相。
+   */
+  placeFormOpen: boolean;
+  /** 是否处于「放置锚点」模式（画布接受表面点击）。 */
+  placing: boolean;
   /** 点位列表。 */
   points: IotTwinApi.PointResp[];
   /** 当前场景 id。 */
@@ -40,10 +54,16 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
+  /** 取消放置模式。 */
+  cancelPlacing: [];
+  /** 点位表单已关闭（清掉拾取预填）。 */
+  dismissPlace: [];
   /** 点位变更（保存/删除后刷新）。 */
   refresh: [];
   /** 选中某个点位。 */
   select: [pointId: string];
+  /** 进入放置锚点模式。 */
+  startPlacing: [];
 }>();
 
 const { hasAccessByCodes } = useAccess();
@@ -54,6 +74,19 @@ const canDelete = computed(() => hasAccessByCodes(['iot:twin:delete']));
 /** 表单显隐与编辑对象。 */
 const formOpen = ref(false);
 const formPoint = ref<IotTwinApi.PointResp | undefined>(undefined);
+
+/**
+ * 拾取预填是否已消费。
+ *
+ * 消费后置 true：用户关掉表单再点「新增」时不该再带上一次的拾取坐标
+ * （那会让用户以为坐标被记住了）。
+ */
+const pickedConsumed = ref(false);
+
+/** 有效预填坐标（已消费则为 undefined）。 */
+const effectivePicked = computed(() =>
+  pickedConsumed.value ? undefined : props.pickedAnchor,
+);
 
 /** 每个点位的失效绑定数（> 0 时标红提示）。 */
 const staleCountByPoint = computed(() => {
@@ -70,6 +103,7 @@ const staleCountByPoint = computed(() => {
 /** 新增点位。 */
 function onCreate(): void {
   formPoint.value = undefined;
+  pickedConsumed.value = true;
   formOpen.value = true;
 }
 
@@ -80,6 +114,7 @@ function onCreate(): void {
  */
 function onEdit(point: IotTwinApi.PointResp): void {
   formPoint.value = point;
+  pickedConsumed.value = true;
   formOpen.value = true;
 }
 
@@ -98,6 +133,31 @@ async function onDelete(point: IotTwinApi.PointResp): Promise<void> {
       extractErrorMessage(deleteError, $t('page.iot.twin.pointDeleteFailed')),
     );
   }
+}
+
+/** 拾取到新位置 ⇒ 自动打开表单（用户刚在画布上点了一下，立刻能填设备）。 */
+watch(
+  () => props.placeFormOpen,
+  (open) => {
+    if (!open) {
+      return;
+    }
+    formPoint.value = undefined;
+    pickedConsumed.value = false;
+    formOpen.value = true;
+  },
+);
+
+/**
+ * 表单关闭。
+ *
+ * 放置流程下关闭表单要回到「继续选点」而不是退出放置模式 ——
+ * 用户常常点偏了要重新点，直接退出会让他每次都要再点一次按钮。
+ */
+function onFormClose(): void {
+  formOpen.value = false;
+  // 拾取草稿已消费（或用户主动关掉），通知状态机收起表单标志
+  emit('dismissPlace');
 }
 
 /** 表单保存成功。 */
@@ -134,16 +194,24 @@ function primaryText(point: IotTwinApi.PointResp): string {
         {{ $t('page.iot.twin.pointList') }}
         <span class="text-muted-foreground">（{{ points.length }}）</span>
       </span>
-      <Button
-        v-if="canCreate"
-        :disabled="!sceneId"
-        size="small"
-        type="primary"
-        @click="onCreate"
-      >
-        <Plus class="size-4" />
-        {{ $t('common.create') }}
-      </Button>
+      <div v-if="canCreate" class="flex items-center gap-1">
+        <!-- 「放置锚点」是在 3D 里点位置（比手填坐标直观得多），与「新增」并列 -->
+        <Button
+          v-if="!placing"
+          :disabled="!sceneId"
+          size="small"
+          @click="emit('startPlacing')"
+        >
+          {{ $t('page.iot.twin.placeAnchor') }}
+        </Button>
+        <Button v-else danger size="small" @click="emit('cancelPlacing')">
+          {{ $t('page.iot.twin.cancelPlace') }}
+        </Button>
+        <Button :disabled="!sceneId" size="small" type="primary" @click="onCreate">
+          <Plus class="size-4" />
+          {{ $t('common.create') }}
+        </Button>
+      </div>
     </div>
 
     <ListErrorAlert
@@ -151,6 +219,14 @@ function primaryText(point: IotTwinApi.PointResp): string {
       :message="error"
       :title="$t('page.iot.twin.pointLoadFailed')"
     />
+
+    <!-- 放置模式提示：告诉用户「去画布点一下」，否则用户不知道该做什么 -->
+    <div
+      v-if="placing"
+      class="mx-2 mt-2 rounded border border-primary/40 bg-primary/5 px-2 py-1 text-xs text-primary"
+    >
+      {{ $t('page.iot.twin.clickSurfaceHint') }}
+    </div>
 
     <div class="min-h-0 flex-1 overflow-auto p-2">
       <Spin v-if="loading" />
@@ -224,9 +300,10 @@ function primaryText(point: IotTwinApi.PointResp): string {
 
     <PointForm
       v-if="formOpen"
+      :picked-anchor="effectivePicked"
       :point="formPoint"
       :scene-id="sceneId"
-      @close="formOpen = false"
+      @close="onFormClose"
       @success="onFormSuccess"
     />
   </div>
