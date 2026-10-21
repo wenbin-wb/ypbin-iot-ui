@@ -274,6 +274,7 @@ function primaryText(point: IotTwinApi.PointResp): string {
         <li
           v-for="point in points"
           :key="point.id"
+          :data-twin-point-row="point.id"
           class="cursor-pointer rounded border border-border p-2 text-xs hover:border-primary"
           :class="{ 'border-primary': point.id === editingPointId }"
           @click="emit('select', point.id)"
@@ -306,7 +307,11 @@ function primaryText(point: IotTwinApi.PointResp): string {
                 </Tag>
               </div>
             </div>
-            <div class="flex shrink-0 flex-col gap-1">
+            <!--
+              操作区必须 shrink-0 且不换行：此前未给 shrink-0 时，窄屏（1600 宽 + 右栏 320px）
+              下三个 type="link" 按钮被 flex 压成三行竖排（实测截图），把行高撑到 3 倍。
+            -->
+            <div class="flex shrink-0 items-center gap-1">
               <!-- 运行态下钻：从锚点直接跳到设备详情（工单 #127） -->
               <Button
                 size="small"

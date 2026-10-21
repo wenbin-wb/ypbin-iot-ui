@@ -1578,9 +1578,51 @@
       "assetNameRequired": "Please enter a model name",
       "assetNameTooLong": "Model name must not exceed {0} characters",
       "backParent": "Back to parent",
+      "badge": {
+        "alerts": "{0} alert(s)",
+        "noModel": "No model bound",
+        "points": "{0} point(s)"
+      },
       "bindingLimit": "Up to {0}",
       "bindings": "Property bindings",
       "cancelPlace": "Cancel placing",
+      "card": {
+        "age": {
+          "day": "{0}d ago",
+          "hour": "{0}h ago",
+          "minute": "{0}m ago",
+          "second": "{0}s ago"
+        },
+        "alertCount": "{0} active alert(s)",
+        "badQuality": "Abnormal data quality ({0})",
+        "bindingStale": "Property no longer exists; please rebind",
+        "close": "Close card",
+        "editPoint": "Point settings",
+        "hint": "Hover for details · click to pin",
+        "noBinding": "No properties bound to this point",
+        "noData": "No readings yet",
+        "openDevice": "Device details",
+        "pinned": "Pinned",
+        "primaryHint": "Primary property (shown on the canvas label)",
+        "property": "Property",
+        "quality": {
+          "bad": "Bad quality",
+          "good": "Good",
+          "missing": "No data",
+          "stale": "Value expired",
+          "unknown": "Unknown quality"
+        },
+        "stale": "Value expired (cached)",
+        "status": {
+          "alert": "In alert",
+          "disabled": "Disabled",
+          "normal": "Online",
+          "offline": "Offline",
+          "unknown": "Unknown (no connection event yet)"
+        },
+        "updatedAt": "Updated",
+        "value": "Value"
+      },
       "clickSurfaceHint": "Click the model surface to place a device anchor",
       "create": "Create",
       "decimals": "Decimals",
@@ -1617,6 +1659,16 @@
       "flyFallbackNoAnchor": "The target scene has no anchor transform (it coincides with the parent origin), so a fly-through would show no positional change. Switching was used instead",
       "icon": "Icon key",
       "incompleteBinding": "Some binding rows have no property selected. Please select or remove them",
+      "kpi": {
+        "alerts": "Alerts",
+        "devices": "Devices",
+        "global": "all",
+        "models": "Models",
+        "onlineRate": "Online",
+        "points": "Points",
+        "scenes": "Scenes",
+        "scope": "current scene"
+      },
       "labelVisible": "Always show label",
       "legendAlert": "Alert",
       "legendDisabled": "Disabled",
@@ -1676,9 +1728,30 @@
       "sceneTypeLabel": "Scene type",
       "selectProperty": "Select property",
       "selectSceneHint": "Select a scene on the left to start",
+      "shell": {
+        "full": "Full",
+        "label": "Shell",
+        "section": "Section"
+      },
       "sort": "Sort",
       "staleBindingHint": "The property no longer exists in the thing model (possibly due to a TSL re-import). Remove and select it again",
       "staleCount": "{0} property binding(s) invalidated",
+      "status": {
+        "fps": "FPS",
+        "models": "Models",
+        "motion": {
+          "off": "Motion off (low-end device)",
+          "reduced": "Motion reduced"
+        },
+        "realtime": {
+          "closed": "Realtime off",
+          "connecting": "Realtime connecting",
+          "live": "Realtime live",
+          "reconnecting": "Realtime reconnecting",
+          "unauthorized": "Realtime unauthorized"
+        },
+        "updatedAgo": "updated {0}s ago"
+      },
       "title": "Digital Twin",
       "unitOverride": "Unit override",
       "unmapped": "Not collected",

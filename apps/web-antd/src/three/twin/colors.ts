@@ -62,3 +62,78 @@ export const TWIN_COLOR_ICON_BASE = '#ffffff';
 
 /** 图标内圈深色。 */
 export const TWIN_COLOR_ICON_INNER = 'rgba(11,18,32,0.85)';
+
+// ---------------------------------------------------------------------------
+// 视觉改造（Track A）：环境 / 灯光 / 后处理 / 动效相关色板
+//
+// 设计语言（对齐用户给的冷链大屏参考图，但**保持深色底**）：
+//   - 建筑/地面/机柜 = **低饱和冷灰蓝**（不能是纯灰，纯灰在暗底上会显得「死」）；
+//   - 状态点/告警 = **高饱和**（在线绿 / 告警红），用来和冷灰形成冷暖对比；
+//   - 点缀 = **暖金琥珀自发光**（配 Bloom，画面才有「温度」与层次）。
+//
+// 为什么全部放这里：`.vue` 禁 6 位 hex（design-token 门禁），且这些是 canvas 里的
+// 真实颜色（无法用 Tailwind 语义 token 表达）。集中在一处也便于整体调色。
+// ---------------------------------------------------------------------------
+
+/** 画布背景渐变：顶部（略亮，模拟「有天光的上方」）。 */
+export const TWIN_COLOR_BACKGROUND_TOP = '#111a2b';
+
+/** 画布背景渐变：底部（略暗，营造纵深，但仍留足对比度让地平线可见）。 */
+export const TWIN_COLOR_BACKGROUND_BOTTOM = '#070b14';
+
+/**
+ * 半球光：天空色（冷灰蓝，略亮）。
+ *
+ * HemisphereLight 让「顶面亮、侧/底面暗」，这是参考图里最明显的质感来源。
+ */
+export const TWIN_COLOR_HEMI_SKY = '#8fa6c8';
+
+/** 半球光：地面色（深冷灰，压住底部，避免死黑）。 */
+export const TWIN_COLOR_HEMI_GROUND = '#16202e';
+
+/** 主方向光（柔和冷白，负责投影）。 */
+export const TWIN_COLOR_SUN = '#f2f6ff';
+
+/** 补光（极弱的暖色，从背面补，勾出建筑轮廓，避免暗部一片冷灰）。 */
+export const TWIN_COLOR_FILL = '#4a5c78';
+
+/** 地面：冷灰混凝土。 */
+export const TWIN_COLOR_GROUND = '#182130';
+
+/** 地面网格线（工业风，低对比）。 */
+export const TWIN_COLOR_GRID_LINE = '#2b3a50';
+
+/** 网格次级线（更暗）。 */
+export const TWIN_COLOR_GRID_LINE_MINOR = '#1e2a3a';
+
+/** 扫描线纹理（斜向，画在地面上，透明度 <5%）。 */
+export const TWIN_COLOR_SCAN_LINE = '#6f8fb8';
+
+/** 暖金琥珀：机柜指示灯/点缀自发光（配合 Bloom，只让这一类发光）。 */
+export const TWIN_COLOR_WARM_GLOW = '#ffb347';
+
+/** 扫描光圈的冷青（工业设备感，与暖金形成对比，低透明度）。 */
+export const TWIN_COLOR_SCAN_RING = '#38bdf8';
+
+/** 锚点标签：胶囊底的描边（冷灰，high contrast 才不会被背景吃掉）。 */
+export const TWIN_COLOR_LABEL_CAPSULE_BORDER = 'rgba(203,213,225,.55)';
+
+/** 锚点标签：投影（柔和，制造「浮在模型上方」的层级感）。 */
+export const TWIN_COLOR_LABEL_SHADOW = 'rgba(2,6,23,.55)';
+
+/** 锚点标签：hover 时的高亮描边。 */
+export const TWIN_COLOR_LABEL_CAPSULE_BORDER_HOVER = 'rgba(226,232,240,.95)';
+
+/** 锚点标签：hover 光晕（白色低透明度外发光）。 */
+export const TWIN_COLOR_LABEL_GLOW = 'rgba(226,232,240,.35)';
+
+/** 锚点标签：被挤压降级为圆点时的底色（中性灰）。 */
+export const TWIN_COLOR_DOT_NEUTRAL = '#cbd5e1';
+
+/**
+ * 告警扩散环的颜色（红）。
+ *
+ * 与 {@link TWIN_COLOR_ALERT} 同色相但独立常量：扩散环要参与 Bloom，
+ * 且需要在浅/深背景上都醒目，后续可能单独调亮度而不影响锚点状态色。
+ */
+export const TWIN_COLOR_ALERT_RIPPLE = '#f87171';
