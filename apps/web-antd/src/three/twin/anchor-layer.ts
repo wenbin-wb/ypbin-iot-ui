@@ -190,8 +190,23 @@ export function createAnchorLayer(
       modelRoot.add(labelObject);
       nodes.set(anchor.pointId, { descriptor: anchor, labelElement, sprite });
     }
+    // 重放**已收到**的运行态：数据通常比模型先到（先拉 runtime 再加载 GLB），
+    // 不重放会让标签停在空文本，直到设备下次上报才有内容（那时用户早已认为功能坏了）。
+    if (currentStates.size > 0) {
+      applyStates();
+      ensureBlinkTimer();
+    }
   }
 
+  /**
+   * 卸载锚点的 DOM/贴图。
+   *
+   * ⚠️ **刻意不清空 `currentStates`**（这是线上实测修掉的缺陷）：
+   * 运行态快照是**先于**模型加载到达的（`index.vue` 先拉点位与 runtime，画布再异步加载模型）。
+   * 若这里清掉已收到的状态，`attach()` 之后就没有数据可重放 ⇒ **锚点标签永远是空白**，
+   * 而界面又不报错（表现为「有图标没文字」）。
+   * 数据由 `update()` 持续覆盖，按点位 ID 关联，换场景后旧 ID 自然不会被命中，无需手工清理。
+   */
   function detach(): void {
     for (const node of nodes.values()) {
       node.sprite.removeFromParent();
@@ -199,7 +214,6 @@ export function createAnchorLayer(
       node.labelElement.remove();
     }
     nodes.clear();
-    currentStates = new Map();
   }
 
   function update(states: Map<string, AnchorRuntimeState>): void {

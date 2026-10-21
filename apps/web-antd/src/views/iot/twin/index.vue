@@ -2,7 +2,7 @@
 import type { IotTwinApi } from '#/api/iot';
 import type { AnchorRuntimeState } from '#/three/twin/types';
 
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
@@ -74,8 +74,14 @@ const {
 /** 画布组件引用（用于把运行态状态推给画布）。 */
 const canvasRef = ref<InstanceType<typeof TwinCanvas> | null>(null);
 
+/** 最近一次运行态（画布就绪后补推用）。 */
+let latestAnchorStates: Map<string, AnchorRuntimeState> | null = null;
+
 const runtime = useTwinRuntime({
   onFlush: (states: Map<string, AnchorRuntimeState>) => {
+    // 存一份最新的：画布可能还没装配好（`canvasRef.value` 为 null），
+    // 就绪后由 `onCanvasReady` 补推，否则首屏状态永久丢失 ⇒ 标签全空。
+    latestAnchorStates = states;
     canvasRef.value?.updateAnchorStates(states);
   },
 });
@@ -259,6 +265,11 @@ watch(
       return;
     }
     await loadPoints(sceneId);
+    // ⚠️ 必须等一次渲染刷新再读 `bindingsByPointId`（computed 的失效是**异步**的）：
+    // `loadPoints` 里刚 `points.value = data`，同一 tick 内 computed 仍返回**旧缓存**，
+    // 于是 `loadSnapshot` 拿到空的绑定映射 ⇒ 主展示属性解析不出来 ⇒
+    // 锚点标签永远是空文本（线上实测：6 个标签 textContent 全为空）。
+    await nextTick();
     try {
       await runtime.loadSnapshot(sceneId, bindingsByPointId.value);
     } catch {
@@ -281,6 +292,7 @@ async function reloadAfterPointChange(): Promise<void> {
   // 保存/删除后退出放置态：草稿已落库，留着会让用户以为还要再点一次
   resetEditor();
   await loadPoints(currentSceneId.value);
+  await nextTick();
   if (currentSceneId.value) {
     try {
       await runtime.loadSnapshot(currentSceneId.value, bindingsByPointId.value);
@@ -297,6 +309,20 @@ async function reloadAfterPointChange(): Promise<void> {
  *
  * @param payload 拾取结果
  */
+/**
+ * 画布装配完成 ⇒ 补推已收到的运行态。
+ *
+ * 为什么需要：`onFlush` 在画布挂载前就会触发（先拉数据、后装配 WebGL），
+ * 而 push 用 `canvasRef.value?.` 会静默丢弃 ⇒ 首屏 6 个状态丢失、锚点标签全空。
+ * 实测证据：`flush 提交 states=6` 已执行，但 `anchorLayer.update` **从未被调用**，
+ * 6 个 `.twin-anchor-label` 的 textContent 全为空。
+ */
+function onCanvasReady(): void {
+  if (latestAnchorStates) {
+    canvasRef.value?.updateAnchorStates(latestAnchorStates);
+  }
+}
+
 function onPlaceAnchor(payload: {
   local: { x: number; y: number; z: number };
   normal: { x: number; y: number; z: number };
@@ -407,6 +433,7 @@ function onAssetsLoaded(list: IotTwinApi.ModelAssetResp[]): void {
           :scene-id="currentSceneId"
           @fallback="(reason: string) => (fallbackReason = reason)"
           @place="onPlaceAnchor"
+          @ready="onCanvasReady"
           @select="onSelectAnchor"
           @state-change="
             (state: string, error?: string) => {

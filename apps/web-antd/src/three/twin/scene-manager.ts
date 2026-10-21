@@ -179,6 +179,9 @@ export class TwinSceneManager {
 
   private controls?: import('three/addons/controls/OrbitControls.js').OrbitControls;
 
+  /** 当前已挂载的场景 ID（用于区分「同场景重建」与「真的换场景」）。 */
+  private currentSceneId?: string;
+
   /** 当前场景的世界变换矩阵（局部坐标 → 世界坐标）。 */
   private currentWorldMatrix?: THREE_NS.Matrix4;
 
@@ -192,6 +195,27 @@ export class TwinSceneManager {
   private getAccessToken?: () => null | string | undefined;
 
   private initialized = false;
+
+  /**
+   * 最近一次收到的锚点描述（模型就绪前到达的**暂存**在此）。
+   *
+   * 为什么必须有：`refreshAnchors` 在 `modelRoot` 尚未就绪时无法挂载锚点，
+   * 若直接丢弃，而此后 `props.anchors` 又不再变化（静态场景的常态），
+   * 锚点就**永远不会被创建** ⇒ 画布上只有模型、没有任何设备点与标签。
+   * 实测表现：同一页面刷新多次，有时 6 个标签正常、有时全空（时序竞态）。
+   */
+  private lastAnchors?: AnchorDescriptor[];
+
+  /**
+   * 最近一次收到的运行态（锚点层就绪前到达的数据**暂存**在此）。
+   *
+   * 为什么必须有：`onFlush` 在 `runtime.loadSnapshot()` 完成时触发，而画布此时
+   * 可能仍在 `await manager.init()` 里（`anchorLayer` 还没 attach）⇒
+   * `this.anchorLayer?.update()` 静默丢弃 ⇒ **锚点标签永远是空文本**。
+   * 实测现象：`onFlush` 已收到 6 个状态，而 6 个 `.twin-anchor-label` 的
+   * textContent 全为空、childNodes 为 0。
+   */
+  private lastAnchorStates?: Map<string, AnchorRuntimeState>;
 
   private modelRoot?: THREE_NS.Group;
 
@@ -224,6 +248,10 @@ export class TwinSceneManager {
    */
   attachAnchorLayer(layer: AnchorLayer): void {
     this.anchorLayer = layer;
+    // 重放锚点层就绪前收到的状态：否则那些数据被永久丢弃，标签一直空白
+    if (this.lastAnchorStates && this.lastAnchorStates.size > 0) {
+      layer.update(this.lastAnchorStates);
+    }
   }
 
   /**
@@ -289,6 +317,16 @@ export class TwinSceneManager {
 
     this.setState('loading');
     try {
+      // 换场景判定必须在**加载之前**做，并且只在**真的换场景**时清掉上一场景的锚点快照。
+      // 两个坑（都实测踩过）：
+      //   ① 若清得太晚，`refreshAnchors` 期间暂存的新场景锚点会被一起清掉；
+      //   ② 若对「同场景重建」（资产到达触发的重载）也清，会丢掉加载期间到达的最新点位。
+      const sceneChanged =
+        this.currentSceneId !== undefined && this.currentSceneId !== request.sceneId;
+      this.currentSceneId = request.sceneId;
+      if (sceneChanged) {
+        this.lastAnchors = undefined;
+      }
       const loaded = await this.loadModelOrThrow(request);
       await this.fadeOut();
       await this.clearCurrentModel();
@@ -452,7 +490,32 @@ export class TwinSceneManager {
    *
    * @param states 点位 ID → 运行态
    */
+  /**
+   * 只刷新锚点层（点位增删改时用），**不重载模型**。
+   *
+   * 为什么不能整场景重建：`attachModel` 会 `detach()` 掉全部锚点元素再重建。
+   * 若运行态刷新也走这条路，锚点会被高频重建 —— 新元素文本为空、旧元素刚被移除，
+   * 结果就是「标签永远看不见」（线上实测：写入 108 次、读到的 6 个元素全为空）。
+   * 点位变化只影响锚点的位置/绑定，模型没变就只该重建锚点。
+   *
+   * @param anchors 新的锚点描述
+   */
+  refreshAnchors(anchors: AnchorDescriptor[]): void {
+    // 无论能否立刻挂载，都要记住最新值：attachModel 会用它建锚点
+    this.lastAnchors = anchors;
+    if (!this.modelRoot) {
+      return;
+    }
+    this.anchorLayer?.attach(this.modelRoot, anchors);
+    // 重建后立刻重放最近一次运行态，避免标签又空一帧
+    if (this.lastAnchorStates && this.lastAnchorStates.size > 0) {
+      this.anchorLayer?.update(this.lastAnchorStates);
+    }
+  }
+
   updateAnchorStates(states: Map<string, AnchorRuntimeState>): void {
+    // 始终先存一份：锚点层可能还没就绪（见 lastAnchorStates 的说明）
+    this.lastAnchorStates = states;
     this.anchorLayer?.update(states);
   }
 
@@ -633,7 +696,18 @@ export class TwinSceneManager {
     // 记下 pivot 链：dispose 时整条一起移除（否则留下孤儿 Group 与残留显存）
     this.ancestryPivots = createdPivots;
 
-    this.anchorLayer?.attach(root, request.anchors);
+    // 用**最新**的锚点：`request.anchors` 是 loadScene 开始时捕获的快照，
+    // 而模型加载期间 props.anchors 可能已更新（refreshAnchors 暂存了最新值）。
+    // 用旧快照会让「加载期间新增的点位」不显示。
+    // 优先用加载期间暂存的新值；没有则用本次请求携带的。
+    // 两者都为空是合法情况（场景暂无点位）。
+    const anchorsToUse = this.lastAnchors ?? request.anchors;
+    this.lastAnchors = anchorsToUse;
+    this.anchorLayer?.attach(root, anchorsToUse);
+    // 挂载后立刻重放运行态（数据通常比模型先到）
+    if (this.lastAnchorStates && this.lastAnchorStates.size > 0) {
+      this.anchorLayer?.update(this.lastAnchorStates);
+    }
     this.applyView(request.view);
   }
 

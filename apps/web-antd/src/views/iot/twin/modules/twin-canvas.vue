@@ -58,6 +58,8 @@ const emit = defineEmits<{
       normal: { x: number; y: number; z: number };
     },
   ];
+  /** 画布装配完成（父组件据此补推最新运行态）。 */
+  ready: [];
   /** 点击已有锚点（父组件据此高亮该点位）。 */
   select: [pointId: string];
   /** 画布状态变化。 */
@@ -181,6 +183,9 @@ async function mountEngine(): Promise<void> {
       },
       useBvh: props.editorMode === 'place',
     });
+    // 通知父组件「画布已就绪」：此前 `onFlush` 用 `canvasRef.value?.` 静默丢弃，
+    // 而画布就绪晚于运行态首帧 ⇒ 首屏的 6 个状态永久丢失，标签全空（实测）。
+    emit('ready');
   } catch (error) {
     loadError.value = extractErrorMessage(
       error,
@@ -355,10 +360,43 @@ watch(
 );
 
 /** 锚点变化（点位增删改）时重建场景（引擎内部会 dispose 旧模型，保证显存干净）。 */
+/**
+ * 点位变化（增删改）时**只重建锚点层**，不重载模型。
+ *
+ * ⚠️ 这里曾是线上缺陷：原先直接 `await loadScene()` ⇒ 每次都重新下载并解析整个 GLB、
+ * 重建整条祖先链与全部锚点。而 `props.anchors` 是父组件的 `points` 数组，
+ * 运行态刷新会让它被重新赋值 ⇒ **锚点被高频重建**，
+ * 新元素文本为空、旧元素（带着文本）刚被移除 ⇒ 画布上**永远看不到标签**。
+ * 实测证据：`textContent` 被正确写入 108 次，但每次读到的 6 个元素都是空文本。
+ *
+ * 模型没变就没必要重载：锚点只是挂在模型上的子节点。
+ */
 watch(
   () => props.anchors,
-  async () => {
-    await loadScene();
+  () => {
+    if (!manager || !props.scene) {
+      return;
+    }
+    manager.refreshAnchors(
+      props.anchors.map((point) => ({
+        deviceId: point.deviceId,
+        deviceName: point.deviceIdName ?? point.deviceId,
+        icon: point.icon ?? null,
+        labelVisible: point.labelVisible,
+        local: {
+          x: Number(point.localX),
+          y: Number(point.localY),
+          z: Number(point.localZ),
+        },
+        normal: {
+          x: Number(point.normalX),
+          y: Number(point.normalY),
+          z: Number(point.normalZ),
+        },
+        pointId: point.id,
+        sort: point.sort ?? 0,
+      })),
+    );
   },
   { deep: false },
 );
