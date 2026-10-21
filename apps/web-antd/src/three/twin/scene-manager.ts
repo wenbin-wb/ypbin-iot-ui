@@ -131,11 +131,6 @@ export class ModelParseError extends Error {
   }
 }
 
-/** 度 → 弧度。 */
-function toRadians(degrees: number): number {
-  return (degrees * Math.PI) / 180;
-}
-
 /**
  * 场景管理器（每个画布一个实例）。
  *
@@ -143,10 +138,6 @@ function toRadians(degrees: number): number {
  * `dispose()`。
  */
 export class TwinSceneManager {
-  private anchorLayer?: AnchorLayer;
-
-  private animationFrameId = 0;
-
   /**
    * 当前场景的祖先链 pivot（嵌套 Group）。
    *
@@ -154,6 +145,10 @@ export class TwinSceneManager {
    * 下次进入场景又会叠一层，反复切换后场景图无限增长（形状上也表现为模型越走越远）。
    */
   private ancestryPivots: THREE_NS.Object3D[] = [];
+
+  private anchorLayer?: AnchorLayer;
+
+  private animationFrameId = 0;
 
   /** 上一次切换建立的内存基线（geometries 数量）。 */
   private baselineGeometries = 0;
