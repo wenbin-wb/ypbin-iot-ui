@@ -32,6 +32,7 @@ import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
 
 import ListErrorAlert from '../../shared/list-error-alert.vue';
+import { extractNodeNames } from './model-node-names';
 
 /**
  * 模型资产管理面板（上传 / 外链登记 / 删除 / 引用数）。
@@ -111,7 +112,12 @@ async function doUpload(file: File): Promise<void> {
   uploading.value = true;
   uploadPercent.value = 0;
   try {
+    // **上传前解析节点名**（工单 #130 遗留项）。
+    // 后端 `node_names_json` 就是为「按节点名预匹配锚点」存的；此前从不提交 ⇒ 该能力一直是死的。
+    // 解析失败不阻断上传（节点名只是辅助索引），失败时返回空数组并已 console.warn 留痕。
+    const nodeNames = await extractNodeNames(file);
     await uploadModelAsset(file, {
+      nodeNames,
       onProgress: (percent) => {
         uploadPercent.value = percent;
       },
