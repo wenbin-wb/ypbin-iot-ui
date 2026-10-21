@@ -116,6 +116,23 @@ export function useTwinLiveValues(options: TwinLiveValuesOptions = {}) {
       store.value = next;
       error.value = '';
       markDirty();
+      // 留痕：快照里的属性数 vs 真正有值的属性数（卡片「暂无上报」时据此区分
+      // 「运行态没到」与「后端确实没上报」——两者 UI 都显示 --，但排查路径不同）
+      if (next.size > 0) {
+        let withValue = 0;
+        for (const entry of next.values()) {
+          for (const value of Object.values(entry.values)) {
+            if (value?.value !== null && value?.value !== undefined) {
+              withValue += 1;
+            }
+          }
+        }
+        // 用 console.warn（本仓 lint 只允许 warn/error）：这条是**排查线索**，
+        // 「卡片全显示 --」时凭它区分「运行态没到」与「后端确实没上报」。
+        console.warn(
+          `[iot/twin] 卡片实时值快照：点位 ${next.size} 个，有值属性 ${withValue} 个`,
+        );
+      }
     } catch (loadError) {
       // 卡片是"锦上添花"的信息入口：快照失败不能让整页报错（页面另一路已有错误提示），
       // 但必须留痕，且卡片会显示 `--`——不能像"有数据"一样安静。
