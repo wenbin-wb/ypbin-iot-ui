@@ -172,6 +172,35 @@ export const HOVER_HIT_TOLERANCE_PX = 6;
  */
 export const HOVER_RECT_TOLERANCE_PX = 4;
 
+/**
+ * hover 粘滞时长（毫秒）。
+ *
+ * 为什么需要：`hitTestAnchor` 的两条依据**不同源**——胶囊矩形来自 DOM 实测
+ * （`getBoundingClientRect`），圆点圆来自 3D 投影（`lastScreen`）。相机移动或标签刚
+ * 重排的那一帧两者可能差几十像素，表现为 `setHovered(pid)` → 下一帧几何判不中 →
+ * `setHovered(undefined)` → **卡片刚出现就消失**（dev 实测命中序列 true→false→false）。
+ * 粘滞期内即使几何暂时不命中也不清空，直到鼠标真正移出胶囊矩形外扩
+ * {@link HOVER_STICKY_EXIT_MARGIN_PX}px 或触发 `pointerleave`。
+ */
+export const HOVER_STICKY_MS = 260;
+
+/**
+ * 粘滞期内判定「真正离开」的外扩距离（像素）。
+ *
+ * 取值要明显大于用户的「手抖/微移」幅度：16px 约等于一个中文字符宽度，
+ * 鼠标在标签边缘轻晃不会导致卡片消失；真正移开（去点别的设备）必然超过它。
+ */
+export const HOVER_STICKY_EXIT_MARGIN_PX = 16;
+
+/**
+ * 坐标同源检查的告警阈值（像素）。
+ *
+ * `lastScreen`（投影）与胶囊矩形（DOM 实测）在同一个标签上正常应相差「圆点半径 + 抬升量」
+ * 左右（约 21px，这是两者的定义差）；超过该阈值说明投影与 DOM 的坐标系真的不同源了，
+ * 需要排查（限流 `console.warn` 一次）。
+ */
+export const COORDINATE_DRIFT_THRESHOLD_PX = 140;
+
 /** CSS2D 模块的最小接口（由调用方动态 import 后传入）。 */
 export interface Css2dModule {
   CSS2DObject: new (element: HTMLElement) => THREE_NS.Object3D;
@@ -252,6 +281,10 @@ export function createAnchorLayer(
    */
   let ripplePhaseSeconds = 0;
   let hoveredPointId: string | undefined;
+  /** hover 粘滞截止时间（毫秒时间戳；期间不清空 hover，防 true→false 抖动）。 */
+  let hoverStickyUntil = 0;
+  /** 坐标漂移告警是否已打过（限流：只报一次）。 */
+  let coordinateDriftWarned = false;
   /** 上一次处理 `pointermove` 的时间（节流用）。 */
   let lastPointerMoveAt = Number.NEGATIVE_INFINITY;
   /** 容器当前的鼠标位置（相对容器左上角；用于几何命中）。 */
@@ -493,6 +526,7 @@ export function createAnchorLayer(
     clearFlashTimers();
     pointer.active = false;
     hoveredPointId = undefined;
+    hoverStickyUntil = 0;
     for (const node of nodes.values()) {
       node.sprite.removeFromParent();
       node.sprite.material.dispose();
@@ -964,7 +998,84 @@ export function createAnchorLayer(
     }
     lastPointerMoveAt = nowMs;
     const hit = hitTestAnchor(pointer.x, pointer.y);
-    setHovered(hit?.pointId);
+    if (hit) {
+      // 命中：进入 hover 并刷新粘滞窗口
+      setHovered(hit.pointId);
+      hoverStickyUntil = nowMs + HOVER_STICKY_MS;
+      warnCoordinateDriftOnce();
+      return;
+    }
+    // 未命中：粘滞期内且指针仍在该标签胶囊的「外扩矩形」内 ⇒ 保持 hover（防 true→false 抖动）
+    const sticky = hoveredPointId ? nodes.get(hoveredPointId) : undefined;
+    if (
+      sticky &&
+      nowMs < hoverStickyUntil &&
+      isPointerNearNode(sticky, pointer.x, pointer.y)
+    ) {
+      return;
+    }
+    hoverStickyUntil = 0;
+    setHovered(undefined);
+  }
+
+  /**
+   * 指针是否仍在某个节点的「胶囊矩形（外扩）+ 圆点圆」范围内。
+   *
+   * 与 `hitTestAnchor` 的区别：这里**只用来维持已有的 hover**，因此外扩更大、更宽容
+   * （宁可多保持 260ms，也不要让卡片闪一下就没）。
+   *
+   * @param node 当前 hover 的节点
+   * @param x 指针 X（容器坐标）
+   * @param y 指针 Y（容器坐标）
+   * @returns 是否仍在附近
+   */
+  function isPointerNearNode(node: AnchorNode, x: number, y: number): boolean {
+    const rect = node.lastCapsuleRect;
+    if (rect && pointInRect(rect, x, y, HOVER_STICKY_EXIT_MARGIN_PX)) {
+      return true;
+    }
+    const screen = node.lastScreen;
+    if (!screen) {
+      return false;
+    }
+    return (
+      Math.hypot(screen.x - x, screen.y - y) <=
+      DOT_DIAMETER_PX / 2 + HOVER_HIT_TOLERANCE_PX + HOVER_STICKY_EXIT_MARGIN_PX
+    );
+  }
+
+  /**
+   * 坐标同源自检：`lastScreen`（3D 投影）与胶囊矩形（DOM 实测）应保持固定关系
+   * （胶囊挂在圆点正上方：水平差 ≈ 圆点半径、垂直差 ≈ 抬升量 + 高度）。
+   *
+   * 两者如果大幅漂移，说明投影与 DOM 的坐标系不同源（例如容器尺寸、devicePixelRatio、
+   * camera 更新时序），hover 会出现「命中后立刻被清」的抖动。这里只在**首次**超阈值时
+   * `console.warn` 一次，供集成方核对（不刷屏、不影响功能）。
+   */
+  function warnCoordinateDriftOnce(): void {
+    if (coordinateDriftWarned) {
+      return;
+    }
+    for (const node of nodes.values()) {
+      const rect = node.lastCapsuleRect;
+      const screen = node.lastScreen;
+      if (!rect || !screen) {
+        continue;
+      }
+      const expectedX = screen.x - DOT_DIAMETER_PX / 2;
+      const expectedY = screen.y - DOT_DIAMETER_PX / 2;
+      const drift = Math.hypot(rect.x - expectedX, rect.y - expectedY);
+      if (drift > COORDINATE_DRIFT_THRESHOLD_PX) {
+        coordinateDriftWarned = true;
+        console.warn(
+          `[iot/twin] 标签坐标不同源：pointId=${node.descriptor.pointId} 的投影坐标 ` +
+            `(${screen.x.toFixed(1)},${screen.y.toFixed(1)}) 与 DOM 实测胶囊 ` +
+            `(${rect.x.toFixed(1)},${rect.y.toFixed(1)}) 相差 ${drift.toFixed(1)}px ` +
+            `（阈值 ${COORDINATE_DRIFT_THRESHOLD_PX}px）。这会让 hover 出现抖动，请核对容器尺寸与 devicePixelRatio`,
+        );
+        return;
+      }
+    }
   }
 
   /** 把指针位置换算成「相对画布容器左上角」的坐标。 */
@@ -978,6 +1089,8 @@ export function createAnchorLayer(
   /** 指针离开画布：解除 hover（否则卡片会一直挂着）。 */
   function onPointerLeave(): void {
     pointer.active = false;
+    // 明确离开画布：粘滞窗口作废（否则卡片会挂着不消失）
+    hoverStickyUntil = 0;
     setHovered(undefined);
   }
 
@@ -993,6 +1106,12 @@ export function createAnchorLayer(
       previous.labelElement.style.setProperty('--twin-hover-scale', '1');
     }
     hoveredPointId = pointId;
+    if (pointId) {
+      // 命中即开粘滞窗口：避免「命中 → 下一帧几何没判中 → 立刻清空」的抖动
+      hoverStickyUntil =
+        (typeof performance === 'undefined' ? Date.now() : performance.now()) +
+        HOVER_STICKY_MS;
+    }
     const next = pointId ? nodes.get(pointId) : undefined;
     if (next) {
       next.hovered = true;

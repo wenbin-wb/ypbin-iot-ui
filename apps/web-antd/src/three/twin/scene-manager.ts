@@ -106,6 +106,15 @@ const DEFAULT_CAMERA_AZIMUTH_RAD = (Math.PI * 4) / 3;
 /** 默认机位距离系数（相对模型最大尺寸；1.9 倍让模型占画面约 2/3）。 */
 const DEFAULT_CAMERA_DISTANCE_RATIO = 1.9;
 
+/**
+ * `projectToScreen` 的越界容差（像素）。
+ *
+ * 锚点贴在画布边缘时（标签会被夹紧到 4px 留边），浮点误差 + 画布/容器尺寸的 1~2px 差
+ * 会把它判成「越界」⇒ 调用方隐藏卡片 ⇒ 表现为「卡片闪一下就没了」。
+ * 这里给容差，把「离边缘多少算越界」的决策留给调用方。
+ */
+const PROJECT_CLIP_TOLERANCE_PX = 24;
+
 /** 环境贴图对场景的强度（RoomEnvironment 偏亮，直接给强会让金属发白）。 */
 const ENVIRONMENT_INTENSITY = 0.62;
 
@@ -931,19 +940,34 @@ export class TwinSceneManager {
     }
     const vector = new THREE.Vector3(world.x, world.y, world.z);
     vector.project(camera);
-    const width = this.container.clientWidth || 1;
-    const height = this.container.clientHeight || 1;
+    // ⚠️ 尺寸必须与 **CSS2DRenderer 同源**：它内部用自己 `setSize` 时的宽高
+    // （= 我们 `resize()` 里传的 container 尺寸）。这里优先取 renderer 的绘制尺寸
+    // （`getSize`，与画布一致），拿不到再用容器尺寸。
+    // 之前只用 `container.clientWidth`：场景切换/容器短暂 0 宽时会算错，且与
+    // 画布实际绘制尺寸可能有 1~2px 差（滚动条/边框）⇒ 卡片定位与锚点视觉位置错开。
+    const size = this.renderer?.getSize
+      ? this.renderer.getSize(new THREE.Vector2())
+      : undefined;
+    const width =
+      size?.x && size.x > 0 ? size.x : this.container.clientWidth || 1;
+    const height =
+      size?.y && size.y > 0 ? size.y : this.container.clientHeight || 1;
     const x = ((vector.x + 1) / 2) * width;
     const y = ((-vector.y + 1) / 2) * height;
     // `project` 对相机背后的点会给出「镜像」坐标（z > 1），必须用 z 判断可见性，
-    // 否则相机背后的锚点会被投到屏幕上并被当成可见
+    // 否则相机背后的锚点会被投到屏幕上并被当成可见。
+    //
+    // 越界容差 {@link PROJECT_CLIP_TOLERANCE_PX}：锚点贴着画布边缘时（标签被夹紧到
+    // 4px 留边）浮点误差会把它判成「越界」，调用方据此隐藏卡片 ⇒ 卡片「闪一下就没」。
+    // 这里只排除**真正在视锥外/相机背后**的点，越界多少交给调用方决定。
+    const tolerance = PROJECT_CLIP_TOLERANCE_PX;
     const visible =
       vector.z < 1 &&
       vector.z > -1 &&
-      x >= 0 &&
-      y >= 0 &&
-      x <= width &&
-      y <= height;
+      x >= -tolerance &&
+      y >= -tolerance &&
+      x <= width + tolerance &&
+      y <= height + tolerance;
     return { visible, x, y };
   }
 
