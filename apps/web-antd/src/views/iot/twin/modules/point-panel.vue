@@ -250,8 +250,10 @@ function primaryText(point: IotTwinApi.PointResp): string {
 
     <ListErrorAlert
       v-if="error"
-      :message="error"
+      :error="error"
+      :retry-text="$t('page.iot.twin.retry')"
       :title="$t('page.iot.twin.pointLoadFailed')"
+      @retry="emit('refresh')"
     />
 
     <!-- 放置模式提示：告诉用户「去画布点一下」，否则用户不知道该做什么 -->

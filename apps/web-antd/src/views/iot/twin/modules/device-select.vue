@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { computed, onMounted, ref, watch } from 'vue';
 
+import { useDebounceFn } from '@vueuse/core';
 import { Select, Spin } from 'ant-design-vue';
 
 import { getDevicePage } from '#/api/iot';
@@ -53,7 +54,7 @@ const innerValue = computed({
 });
 
 /**
- * 远程搜索设备。
+ * 远程搜索设备（防抖后的实际请求，#130）。
  *
  * @param keyword 关键字（设备名/编码）
  */
@@ -111,6 +112,16 @@ watch(
   { immediate: true },
 );
 
+/**
+ * 防抖后的搜索入口（300ms）。
+ *
+ * 为什么必须防抖：此前每次按键都发一次 `/iot/devices`（100 条/次），
+ * 输入「3 号泵」= 4 次请求，既浪费带宽也容易让后发先至的旧结果覆盖新结果。
+ */
+const debouncedSearch = useDebounceFn((keyword: string) => {
+  void search(keyword);
+}, 300);
+
 /** 首次聚焦时拉一页（避免打开空下拉）。 */
 function onFocus(): void {
   if (options.value.length === 0) {
@@ -140,7 +151,7 @@ onMounted(() => {
     allow-clear
     show-search
     @focus="onFocus"
-    @search="search"
+    @search="debouncedSearch"
   >
     <template #notFoundContent>
       <Spin v-if="loading" size="small" />

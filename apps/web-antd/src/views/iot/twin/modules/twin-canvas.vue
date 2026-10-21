@@ -336,6 +336,24 @@ watch(
   },
 );
 
+/**
+ * 资产列表到达后重新评估（#130）。
+ *
+ * 为什么需要：`loadScene` 在挂载时就跑了，而 `assets` 由「模型资产」面板异步加载，
+ * 此时可能还是空数组 ⇒ `modelBytes` 恒 `undefined` ⇒ 「模型过大禁用飞行」这条保护
+ * **永远不生效**（只剩 deviceMemory 那条）。
+ * 资产到达后重跑一次 `loadScene`：引擎内部会正确 dispose 旧模型，不会泄漏。
+ */
+watch(
+  () => props.assets,
+  async (assets, previous) => {
+    // 只在「从无到有」时重跑：避免每次资产刷新都重建模型
+    if (assets.length > 0 && (previous?.length ?? 0) === 0) {
+      await loadScene();
+    }
+  },
+);
+
 /** 锚点变化（点位增删改）时重建场景（引擎内部会 dispose 旧模型，保证显存干净）。 */
 watch(
   () => props.anchors,

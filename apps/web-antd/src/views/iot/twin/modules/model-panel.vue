@@ -232,8 +232,10 @@ onMounted(async () => {
 
     <ListErrorAlert
       v-if="error"
-      :message="error"
+      :error="error"
+      :retry-text="$t('page.iot.twin.retry')"
       :title="$t('page.iot.twin.assetLoadFailed')"
+      @retry="load"
     />
 
     <div class="max-h-48 overflow-auto p-2">

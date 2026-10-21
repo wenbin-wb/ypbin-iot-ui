@@ -7,7 +7,7 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
 
-import { Alert, Empty, Spin } from 'ant-design-vue';
+import { Alert, Empty, Modal, Spin } from 'ant-design-vue';
 
 import { getTwinPointList } from '#/api/iot';
 import { $t } from '#/locales';
@@ -79,6 +79,13 @@ const runtime = useTwinRuntime({
     canvasRef.value?.updateAnchorStates(states);
   },
 });
+
+// 解构成独立 ref：模板里才能自动解包（`runtime.error.value` 在模板中不会解包）
+const {
+  authError: realtimeAuthError,
+  error: runtimeError,
+  realtimeError,
+} = runtime;
 
 /** 模型资产列表（由模型面板块加载后共享给画布）。 */
 const assets = ref<IotTwinApi.ModelAssetResp[]>([]);
@@ -153,7 +160,34 @@ async function enterScene(sceneId: string): Promise<void> {
   if (sceneId === currentSceneId.value) {
     return;
   }
+  // 未保存草稿确认（#129）：`useTwinEditor` 的注释承诺过「切场景会提示」，
+  // 但此前没有实现——用户切走后草稿静默丢失，坐标白配。
+  if (hasDraft.value) {
+    const confirmed = await confirmDiscardDraft();
+    if (!confirmed) {
+      return;
+    }
+  }
   await router.replace({ query: { ...route.query, sceneId } });
+}
+
+/**
+ * 确认是否丢弃未保存的点位草稿。
+ *
+ * @returns 用户是否确认继续（true = 丢弃并继续切换）
+ */
+function confirmDiscardDraft(): Promise<boolean> {
+  return new Promise((resolve) => {
+    Modal.confirm({
+      centered: true,
+      content: $t('page.iot.twin.unsavedDraftConfirm'),
+      okText: $t('page.iot.twin.discardAndSwitch'),
+      cancelText: $t('common.cancel'),
+      onCancel: () => resolve(false),
+      onOk: () => resolve(true),
+      title: $t('page.iot.twin.unsavedDraftTitle'),
+    });
+  });
 }
 
 /** 返回上级场景（面包屑）。 */
@@ -323,8 +357,10 @@ function onAssetsLoaded(list: IotTwinApi.ModelAssetResp[]): void {
     <h1 class="sr-only">{{ $t('page.iot.twin.title') }}</h1>
     <ListErrorAlert
       v-if="sceneError"
-      :message="sceneError"
+      :error="sceneError"
+      :retry-text="$t('page.iot.twin.retry')"
       :title="$t('page.iot.twin.sceneLoadFailed')"
+      @retry="loadScenes"
     />
     <div v-else class="flex h-full min-h-0 gap-3">
       <!-- 左：场景树 -->
@@ -403,6 +439,26 @@ function onAssetsLoaded(list: IotTwinApi.ModelAssetResp[]): void {
             v-if="ancestry.broken && currentScene"
             class="pointer-events-auto max-w-md"
             :message="$t('page.iot.twin.ancestryBroken')"
+            type="warning"
+          />
+          <!-- 运行态快照加载失败：锚点会「只是不更新」，必须显式告知（#129） -->
+          <Alert
+            v-if="runtimeError"
+            class="pointer-events-auto max-w-md"
+            closable
+            :message="runtimeError"
+            type="error"
+            @close="runtimeError = ''"
+          />
+          <!-- 实时流断开：数据停止更新但界面看起来「正常」，最容易误判（#129） -->
+          <Alert
+            v-if="realtimeError || realtimeAuthError"
+            class="pointer-events-auto max-w-md"
+            :message="
+              realtimeAuthError
+                ? $t('page.iot.twin.realtimeAuthFailed')
+                : $t('page.iot.twin.realtimeDisconnected')
+            "
             type="warning"
           />
           <Alert

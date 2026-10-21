@@ -1592,6 +1592,7 @@
       "deviceRequired": "Please select a device",
       "deviceSearchFailed": "Failed to search devices",
       "deviceWithoutProduct": "This device has no product bound, so properties cannot be configured. Bind a product in the device ledger first",
+      "discardAndSwitch": "Discard and switch",
       "displayRole": {
         "primary": "Primary",
         "secondary": "Secondary"
@@ -1647,6 +1648,8 @@
       "pointLoadFailed": "Failed to load points",
       "pointNotFoundInScene": "The point in the link is not in the current scene (it may have been deleted or moved). Returned to the scene view",
       "propertyLoadFailed": "Failed to load properties",
+      "realtimeAuthFailed": "Live data connection failed: your session may have expired. Please sign in again",
+      "realtimeDisconnected": "Live data disconnected (reconnecting). Anchors show the last received values",
       "registerExternal": "Register external",
       "remark": "Remark",
       "retry": "Retry",
@@ -1676,6 +1679,8 @@
       "unitOverride": "Unit override",
       "unmapped": "Not collected",
       "unmappedBindingHint": "Some properties have no collection point configured, so they will never produce live data. Configure them under the device's Properties & Points tab",
+      "unsavedDraftConfirm": "You have unsaved point changes. Switching scene will discard them. Continue?",
+      "unsavedDraftTitle": "Unsaved changes",
       "update": "Edit",
       "uploadFailed": "Failed to upload model",
       "uploadModel": "Upload model"

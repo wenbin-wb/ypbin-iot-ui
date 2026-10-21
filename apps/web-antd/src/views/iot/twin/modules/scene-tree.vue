@@ -7,6 +7,7 @@ import type { IotTwinApi } from '#/api/iot';
 
 import { computed, ref } from 'vue';
 
+import { useAccess } from '@vben/access';
 import { useVbenDrawer } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
@@ -55,6 +56,12 @@ const emit = defineEmits<{
   /** 数据已变更，需要刷新。 */
   refresh: [];
 }>();
+
+/** 权限门禁（#129）：点位与模型都有权限判断，此前独缺场景树这一层。 */
+const { hasAccessByCodes } = useAccess();
+const canCreate = computed(() => hasAccessByCodes(['iot:twin:create']));
+const canUpdate = computed(() => hasAccessByCodes(['iot:twin:update']));
+const canDelete = computed(() => hasAccessByCodes(['iot:twin:delete']));
 
 /** 展开的节点 key（受控：新增子场景后自动展开父节点）。 */
 const expandedKeys = ref<string[]>([]);
@@ -183,7 +190,7 @@ defineExpose({ expandNode });
       <span class="text-sm font-medium">{{
         $t('page.iot.twin.sceneTree')
       }}</span>
-      <Button size="small" type="primary" @click="onCreateRoot">
+      <Button v-if="canCreate" size="small" type="primary" @click="onCreateRoot">
         <Plus class="size-4" />
         {{ $t('common.create') }}
       </Button>
@@ -208,6 +215,7 @@ defineExpose({ expandNode });
             <span class="truncate">{{ sceneName }}（{{ sceneCode }}）</span>
             <span class="hidden shrink-0 gap-1 group-hover:flex">
               <Button
+                v-if="canCreate"
                 size="small"
                 type="link"
                 @click.stop="onCreateChild(node as unknown as SceneTreeNode)"
@@ -215,6 +223,7 @@ defineExpose({ expandNode });
                 {{ $t('common.create') }}
               </Button>
               <Button
+                v-if="canUpdate"
                 size="small"
                 type="link"
                 @click.stop="onEdit(node as unknown as SceneTreeNode)"
@@ -222,6 +231,7 @@ defineExpose({ expandNode });
                 {{ $t('common.edit') }}
               </Button>
               <Popconfirm
+                v-if="canDelete"
                 :title="
                   $t('ui.actionMessage.deleteConfirm', [
                     String(sceneName ?? ''),

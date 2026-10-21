@@ -1592,6 +1592,7 @@
       "deviceRequired": "请选择设备",
       "deviceSearchFailed": "设备搜索失败",
       "deviceWithoutProduct": "该设备未绑定产品，无法配置属性：请先在设备台账里为其选择产品",
+      "discardAndSwitch": "丢弃并切换",
       "displayRole": {
         "primary": "主展示",
         "secondary": "次展示"
@@ -1647,6 +1648,8 @@
       "pointLoadFailed": "点位加载失败",
       "pointNotFoundInScene": "链接指定的点位不在当前场景中（可能已被删除或移到其它场景），已回到场景视图",
       "propertyLoadFailed": "属性加载失败",
+      "realtimeAuthFailed": "实时数据连接失败：登录态可能已失效，请重新登录",
+      "realtimeDisconnected": "实时数据已断开（正在重连），锚点显示的是最后一次收到的值",
       "registerExternal": "登记外链",
       "remark": "备注",
       "retry": "重试",
@@ -1676,6 +1679,8 @@
       "unitOverride": "单位覆盖",
       "unmapped": "未配置采集",
       "unmappedBindingHint": "部分属性尚未配置采集点位，绑定后不会有实时数据（请到设备详情「属性与点位」里补齐）",
+      "unsavedDraftConfirm": "当前有未保存的点位改动，切换场景将丢弃这些改动，是否继续？",
+      "unsavedDraftTitle": "有未保存的改动",
       "update": "编辑",
       "uploadFailed": "模型上传失败",
       "uploadModel": "上传模型"

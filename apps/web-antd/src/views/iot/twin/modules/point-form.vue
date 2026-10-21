@@ -1,6 +1,4 @@
 <script lang="ts" setup>
-import type { IotTwinApi } from '#/api/iot';
-
 import { computed, onMounted, ref, watch } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
@@ -11,6 +9,7 @@ import { useVbenForm } from '#/adapter/form';
 import {
   createTwinPoint,
   getTwinDeviceProperties,
+  IotTwinApi,
   updateTwinPoint,
 } from '#/api/iot';
 import { $t } from '#/locales';
@@ -51,6 +50,9 @@ const emit = defineEmits<{
   close: [];
   success: [];
 }>();
+
+/** 单点位绑定上限（暴露给模板；`TWIN_LIMITS` 是值不是类型，见 #130）。 */
+const MAX_BINDINGS = IotTwinApi.TWIN_LIMITS.maxBindingsPerPoint;
 
 const isUpdate = computed(() => Boolean(props.point?.id));
 const saving = ref(false);
@@ -323,7 +325,7 @@ onMounted(async () => {
           {{ $t('page.iot.twin.bindings') }}
         </span>
         <span class="text-xs text-muted-foreground">
-          {{ $t('page.iot.twin.bindingLimit', [12]) }}
+          {{ $t('page.iot.twin.bindingLimit', [MAX_BINDINGS]) }}
         </span>
       </div>
       <Spin v-if="propertiesLoading" />

@@ -1,12 +1,6 @@
 import { computed, ref } from 'vue';
 
-import {
-  createTwinScene,
-  deleteTwinScene,
-  getTwinSceneList,
-  IotTwinApi,
-  updateTwinScene,
-} from '#/api/iot';
+import { getTwinSceneList, IotTwinApi } from '#/api/iot';
 import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
 
@@ -172,43 +166,21 @@ export function useTwinScene() {
       }));
   }
 
-  /** 新建场景并刷新列表。 */
-  async function createScene(data: IotTwinApi.SceneSaveReq): Promise<number> {
-    const id = await createTwinScene(data);
-    await load();
-    return id;
-  }
 
-  /** 编辑场景并刷新列表。 */
-  async function updateScene(
-    id: string,
-    data: IotTwinApi.SceneSaveReq,
-  ): Promise<void> {
-    await updateTwinScene(id, data);
-    await load();
-  }
 
-  /** 删除场景并刷新列表。 */
-  async function removeScene(id: string): Promise<void> {
-    await deleteTwinScene(id);
-    await load();
-  }
 
   return {
     ancestryOf,
     byId,
     canAddChild,
-    createScene,
     depthOf,
     error,
     findScene,
     load,
     loading,
     parentOptions,
-    removeScene,
     scenes,
     tree,
-    updateScene,
   };
 }
 
