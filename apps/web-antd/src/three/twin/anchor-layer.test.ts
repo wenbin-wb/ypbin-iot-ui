@@ -260,6 +260,7 @@ describe('createAnchorLayer：状态重放', () => {
  */
 describe('createAnchorLayer：hover 回调语义（进入 pointId / 离开 undefined）', () => {
   it('★ 鼠标离开标签必须回调 undefined（否则 hover 卡片永远关不掉）', () => {
+    vi.useFakeTimers();
     const fake = fakeThree();
     const container = document.createElement('div');
     const hovers: Array<string | undefined> = [];
@@ -282,7 +283,15 @@ describe('createAnchorLayer：hover 回调语义（进入 pointId / 离开 undef
     capsule?.dispatchEvent(new Event('pointerenter'));
     expect(hovers).toEqual(['p1']);
     capsule?.dispatchEvent(new Event('pointerleave'));
-    expect(hovers, '★ 离开时必须是 undefined').toEqual(['p1', undefined]);
+    // 离开现在是「待定关闭」：300ms 内没有新的命中才真正清空（防「鼠标滑到相邻元素」时卡片闪烁）
+    expect(hovers, '离开瞬间不应立刻清空').toEqual(['p1']);
+    vi.advanceTimersByTime(400);
+    expect(hovers, '★ 待定关闭到期后必须是 undefined').toEqual([
+      'p1',
+      undefined,
+    ]);
+    layer.dispose();
+    vi.useRealTimers();
   });
 
   it('向后兼容：只写 `(pointId: string) => void` 的旧回调仍能赋值并收到进入事件', () => {
@@ -610,10 +619,15 @@ describe('createAnchorLayer：几何命中 hover（不依赖 DOM 命中测试）
     container.dispatchEvent(pointerMove(401, 301, 100, 50));
     expect(hovers).toEqual(['p1']);
 
-    // 移出半径（> 圆点半径 7 + 容差 6 = 13px）
+    // 移出半径（> 圆点半径 7 + 容差 6 = 13px）⇒ 进入「待定关闭」
     vi.advanceTimersByTime(50);
     container.dispatchEvent(pointerMove(400 + 60, 300, 100, 50));
-    expect(hovers, '★ 指针离开必须回调 undefined').toEqual(['p1', undefined]);
+    expect(hovers, '移出瞬间不硬清空（防坐标抖动误判）').toEqual(['p1']);
+    vi.advanceTimersByTime(400);
+    expect(hovers, '★ 待定关闭到期后必须回调 undefined').toEqual([
+      'p1',
+      undefined,
+    ]);
 
     layer.dispose();
     vi.useRealTimers();
@@ -811,6 +825,8 @@ describe('createAnchorLayer：胶囊矩形命中（热区与可见区域一致�
     // 移到 p1 与 p2 之间的空隙（x=250，不在任何胶囊内、也不在任何圆点旁）
     vi.advanceTimersByTime(50);
     container.dispatchEvent(pointerMove(250, 150));
+    // 「待定关闭」到期后才清空（防坐标抖动误判导致卡片闪烁）
+    vi.advanceTimersByTime(400);
     expect(
       hovers,
       '★ 落在空隙必须是 undefined（否则卡片会挂在错误设备上）',
@@ -912,9 +928,11 @@ describe('createAnchorLayer：hover 粘滞（防 true→false 抖动）', () => 
       'p1',
     ]);
 
-    // 走远（远超粘滞外扩）⇒ 清空
+    // 走远（远超粘滞外扩）⇒ 进入待定关闭，到期后清空
     vi.advanceTimersByTime(40);
     container.dispatchEvent(pointerMove(200, 400));
+    expect(hovers, '走远瞬间不硬清空').toEqual(['p1']);
+    vi.advanceTimersByTime(400);
     expect(hovers).toEqual(['p1', undefined]);
 
     Element.prototype.getBoundingClientRect = originalRect;
@@ -943,10 +961,15 @@ describe('createAnchorLayer：hover 粘滞（防 true→false 抖动）', () => 
     // 用 setHovered 直接进入 hover（模拟管理器转发），不依赖几何
     layer.setHovered('p1');
     expect(hovers).toEqual(['p1']);
-    // 超过粘滞窗口后，指针在空白处的移动会清空
+    // 超过粘滞窗口后，指针在空白处的移动会排上「待定关闭」，到期才清空
     vi.advanceTimersByTime(400);
     container.dispatchEvent(pointerMove(5, 700));
-    expect(hovers).toEqual(['p1', undefined]);
+    expect(hovers, '空白处移动不立即硬清空').toEqual(['p1']);
+    vi.advanceTimersByTime(400);
+    expect(hovers, '★ 待定关闭到期后必须清空（不能常驻）').toEqual([
+      'p1',
+      undefined,
+    ]);
     layer.dispose();
     vi.useRealTimers();
   });
@@ -971,5 +994,124 @@ describe('createAnchorLayer：hover 粘滞（防 true→false 抖动）', () => 
     expect(hovers).toEqual(['p1', undefined]);
     layer.dispose();
     vi.useRealTimers();
+  });
+});
+
+/**
+ * DOM 事件是**权威**，几何判定只作补充（线上最后一个 hover 缺陷的修复）。
+ *
+ * ## 缺陷因果链（dev 实测）
+ *
+ * 指针一直在胶囊内时 `pointerenter` **只触发一次**；一旦几何判定（投影坐标与 DOM 实测
+ * 不同源，实测差 176.9px）在节流后那次误判失败并**硬清空** hover，就再没有任何事件能把它
+ * 恢复 ⇒「首次能出、之后大概率不出」。
+ *
+ * 修复：几何未命中只排「待定关闭」（`HOVER_PENDING_CLEAR_MS`），任何 DOM 命中都会取消它。
+ */
+describe('createAnchorLayer：DOM 命中优先于几何判定（hover 不再永久丢失）', () => {
+  function pointerMove(x: number, y: number): Event {
+    const event = new Event('pointermove');
+    Object.defineProperties(event, {
+      clientX: { value: x },
+      clientY: { value: y },
+    });
+    return event;
+  }
+
+  /** 造一个「几何永远判不中」的环境（无 transform / 无胶囊矩形），但胶囊 DOM 可派发事件。 */
+  function setupGeometryBlind() {
+    const fake = fakeThree();
+    const container = document.createElement('div');
+    Object.defineProperty(container, 'getBoundingClientRect', {
+      value: () => ({ height: 716, left: 0, top: 0, width: 710, x: 0, y: 0 }),
+    });
+    const hovers: Array<string | undefined> = [];
+    const layer = createAnchorLayer(
+      fake as never,
+      fakeCss2d() as never,
+      container,
+      {
+        onClickAnchor: () => undefined,
+        onHoverAnchor: (pointId) => hovers.push(pointId),
+      },
+    );
+    layer.attach(new (fakeThree().Group)() as never, [anchor('p1', '泵')]);
+    const capsule = document.querySelector('.twin-anchor-capsule');
+    expect(capsule).toBeTruthy();
+    return {
+      capsule,
+      cleanup: () => layer.dispose(),
+      container,
+      hovers,
+      layer,
+    };
+  }
+
+  it('★ 几何判定失败但 DOM pointerover 触发 ⇒ 仍然命中（DOM 是权威）', () => {
+    const { capsule, cleanup, hovers } = setupGeometryBlind();
+    capsule?.dispatchEvent(new Event('pointerover'));
+    expect(
+      hovers,
+      '★ DOM 命中必须生效，不能因为几何坐标不同源就被吞掉',
+    ).toEqual(['p1']);
+    cleanup();
+  });
+
+  it('★ 指针停在胶囊上、几何每次都失败 ⇒ 连续 5 次 pointermove hover 不丢', () => {
+    vi.useFakeTimers();
+    try {
+      const { capsule, cleanup, container, hovers } = setupGeometryBlind();
+      capsule?.dispatchEvent(new Event('pointerover'));
+      expect(hovers).toEqual(['p1']);
+      // 几何判不中的容器 pointermove（每 100ms 一次，模拟真实鼠标在胶囊内移动）
+      for (let index = 0; index < 5; index++) {
+        vi.advanceTimersByTime(100);
+        container.dispatchEvent(pointerMove(695, 575));
+        // 期间胶囊上的 pointermove 持续续期（真实浏览器会同时派发给胶囊）
+        capsule?.dispatchEvent(new Event('pointermove'));
+      }
+      vi.advanceTimersByTime(500);
+      expect(
+        hovers,
+        '★ hover 不能丢（修复前：几何误判一次就永久丢失）',
+      ).toEqual(['p1']);
+      cleanup();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('★ 指针离开胶囊且 300ms 内无任何命中 ⇒ 回调 undefined（防卡片常驻）', () => {
+    vi.useFakeTimers();
+    try {
+      const { capsule, cleanup, hovers } = setupGeometryBlind();
+      capsule?.dispatchEvent(new Event('pointerover'));
+      expect(hovers).toEqual(['p1']);
+      capsule?.dispatchEvent(new Event('pointerleave'));
+      // 待定关闭期内：还没清（避免「滑到相邻元素」时闪烁）
+      expect(hovers).toEqual(['p1']);
+      vi.advanceTimersByTime(400);
+      expect(hovers, '★ 到期必须清空，否则卡片常驻').toEqual(['p1', undefined]);
+      cleanup();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('待定关闭期间再次命中 ⇒ 取消关闭（hover 保留）', () => {
+    vi.useFakeTimers();
+    try {
+      const { capsule, cleanup, hovers } = setupGeometryBlind();
+      capsule?.dispatchEvent(new Event('pointerover'));
+      capsule?.dispatchEvent(new Event('pointerleave'));
+      // 100ms 后（未到期）再次进入
+      vi.advanceTimersByTime(100);
+      capsule?.dispatchEvent(new Event('pointerover'));
+      vi.advanceTimersByTime(400);
+      expect(hovers, '重新命中后不应被早已排好的关闭清掉').toEqual(['p1']);
+      cleanup();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

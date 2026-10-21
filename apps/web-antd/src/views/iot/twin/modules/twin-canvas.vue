@@ -195,6 +195,13 @@ interface EngineOptionalCapabilities {
   /** 悬停交互提示（悬停中的锚点不参与避让、暂停脉冲）。 */
   setInteractionHover?: (pointId?: string) => void;
   /**
+   * 当前模型是否真的有可隐藏的外壳节点（屋顶/墙体/桁架）。
+   *
+   * 必须问引擎而不是「有没有这个方法」：方法永远存在，但**模型里没有对应节点名**时
+   * 调用它等于空操作 ⇒ 页面会显示一个点了没反应的开关（实测踩过）。
+   */
+  isShellSupported?: () => boolean;
+  /**
    * 设置「剖切 / 完整」外观：默认剖切（隐藏屋顶与近侧墙），否则锚点被屋顶挡住看不到。
    *
    * 之所以由引擎层按**节点名**处理而不是改 GLB：资产保持完整封闭（换别的场景/别的模型
@@ -767,9 +774,10 @@ async function loadScene(): Promise<void> {
     cameraRig?.captureHome();
     picker?.resetForNewModel();
     picker?.buildBvh();
-    // 探测「剖切外观」能力（模型里是否真有可隐藏的屋顶/墙体节点）
+    // 探测「剖切外观」能力：问引擎「这个模型里真的找到了外壳节点吗」，
+    // 不能用「方法是否存在」代替（方法永远存在 ⇒ 开关永远显示但点了没反应）。
     const caps = engine();
-    const canShell = typeof caps?.setShellVisible === 'function';
+    const canShell = caps?.isShellSupported?.() === true;
     emit('shellSupported', canShell);
     if (canShell) {
       caps?.setShellVisible?.(showShell.value);

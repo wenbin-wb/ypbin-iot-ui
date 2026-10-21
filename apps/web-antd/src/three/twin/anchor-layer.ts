@@ -185,6 +185,19 @@ export const HOVER_RECT_TOLERANCE_PX = 4;
 export const HOVER_STICKY_MS = 260;
 
 /**
+ * 「待定关闭」延时（毫秒）。
+ *
+ * 几何判定未命中时**不再立即清空 hover**，而是排一个延时清除：
+ * 期间任何 DOM 命中（胶囊 pointerover/pointermove）或几何命中都会取消它。
+ *
+ * 为什么必须这样（线上实测的最后一个缺陷）：指针一直在胶囊内时
+ * `pointerenter` **只触发一次**，之后再也不会触发。一旦几何判定在节流后那次误判失败
+ * 而硬清空 hover，就再没有任何事件能把它恢复 ⇒「首次能出、之后大概率不出」。
+ * **DOM 事件才是权威，几何只作补充**。
+ */
+export const HOVER_PENDING_CLEAR_MS = 300;
+
+/**
  * 粘滞期内判定「真正离开」的外扩距离（像素）。
  *
  * 取值要明显大于用户的「手抖/微移」幅度：16px 约等于一个中文字符宽度，
@@ -283,6 +296,8 @@ export function createAnchorLayer(
   let hoveredPointId: string | undefined;
   /** hover 粘滞截止时间（毫秒时间戳；期间不清空 hover，防 true→false 抖动）。 */
   let hoverStickyUntil = 0;
+  /** 「待定关闭」定时器（几何未命中时排的延时清除；任何命中都会取消它）。 */
+  let pendingClearTimer: ReturnType<typeof globalThis.setTimeout> | undefined;
   /** 坐标漂移告警是否已打过（限流：只报一次）。 */
   let coordinateDriftWarned = false;
   /** 上一次处理 `pointermove` 的时间（节流用）。 */
@@ -475,12 +490,25 @@ export function createAnchorLayer(
         event.stopPropagation();
         callbacks.onClickAnchor(anchor.pointId);
       });
-      capsule.addEventListener('pointerenter', () => {
+      // ---- DOM 命中是**权威**：只要指针在胶囊上，hover 就永不丢失 ----
+      // `pointerenter` 只在首次进入时触发一次（指针一直在胶囊内不会重复触发），
+      // 因此必须再用 `pointermove` 续期；两者都取消「待定关闭」。
+      const onCapsuleHover = (): void => {
+        cancelPendingClear();
+        hoverStickyUntil =
+          (typeof performance === 'undefined'
+            ? Date.now()
+            : performance.now()) + HOVER_STICKY_MS;
         setHovered(anchor.pointId);
-      });
+      };
+      capsule.addEventListener('pointerover', onCapsuleHover, listenerOptions);
+      capsule.addEventListener('pointermove', onCapsuleHover, listenerOptions);
+      capsule.addEventListener('pointerenter', onCapsuleHover, listenerOptions);
       capsule.addEventListener('pointerleave', () => {
+        // 明确离开胶囊：立即进入「待定关闭」（而不是硬清空 —— 可能只是移到相邻元素上）
         if (hoveredPointId === anchor.pointId) {
-          setHovered(undefined);
+          hoverStickyUntil = 0;
+          schedulePendingClear();
         }
       });
 
@@ -999,13 +1027,20 @@ export function createAnchorLayer(
     lastPointerMoveAt = nowMs;
     const hit = hitTestAnchor(pointer.x, pointer.y);
     if (hit) {
-      // 命中：进入 hover 并刷新粘滞窗口
+      // 几何命中：进入 hover、刷新粘滞窗口、取消待定关闭
+      cancelPendingClear();
       setHovered(hit.pointId);
       hoverStickyUntil = nowMs + HOVER_STICKY_MS;
       warnCoordinateDriftOnce();
       return;
     }
-    // 未命中：粘滞期内且指针仍在该标签胶囊的「外扩矩形」内 ⇒ 保持 hover（防 true→false 抖动）
+    // 几何未命中 ⇒ **不再硬清空**：
+    //   - 指针仍在本标签附近（粘滞窗口内）⇒ 保持；
+    //   - 否则只排一个「待定关闭」，期间 DOM 的 pointerover/pointermove 会把它取消。
+    //
+    // 为什么不能硬清空（线上实测）：指针一直在胶囊内时 `pointerenter` 只触发一次，
+    // 一旦这里清空就再没有任何事件能恢复 ⇒ hover 永久丢失，直到指针离开再进入。
+    // 也就是说：几何坐标不同源时（投影 vs DOM 实测），硬清空会**吞掉** DOM 的权威事实。
     const sticky = hoveredPointId ? nodes.get(hoveredPointId) : undefined;
     if (
       sticky &&
@@ -1014,8 +1049,32 @@ export function createAnchorLayer(
     ) {
       return;
     }
-    hoverStickyUntil = 0;
-    setHovered(undefined);
+    schedulePendingClear();
+  }
+
+  /** 取消「待定关闭」（任何一次真实命中都会调用）。 */
+  function cancelPendingClear(): void {
+    if (pendingClearTimer !== undefined) {
+      globalThis.clearTimeout(pendingClearTimer);
+      pendingClearTimer = undefined;
+    }
+  }
+
+  /**
+   * 排一个「待定关闭」：{@link HOVER_PENDING_CLEAR_MS} 内没有任何命中才真正清空。
+   *
+   * 幂等：已有待定关闭时不重复排（否则高频 pointermove 会把关闭时间无限推后，
+   * 鼠标移到画布空白处后卡片永远不消失）。
+   */
+  function schedulePendingClear(): void {
+    if (pendingClearTimer !== undefined) {
+      return;
+    }
+    pendingClearTimer = globalThis.setTimeout(() => {
+      pendingClearTimer = undefined;
+      hoverStickyUntil = 0;
+      setHovered(undefined);
+    }, HOVER_PENDING_CLEAR_MS);
   }
 
   /**
