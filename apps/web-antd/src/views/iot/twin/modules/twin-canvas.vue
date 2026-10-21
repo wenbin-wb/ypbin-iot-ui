@@ -113,8 +113,21 @@ const emit = defineEmits<{
   renderStats: [stats: { geometries: number; textures: number }];
   /** 点击已有锚点（父组件据此高亮该点位）。 */
   select: [pointId: string];
+  /**
+   * 当前模型是否支持「剖切外观」（即含可隐藏的屋顶/墙体节点）。
+   *
+   * 不支持时页面**不显示**「显示屋顶」开关 —— 不做一个点了没反应的开关。
+   */
+  shellSupported: [supported: boolean];
   /** 画布状态变化。 */
   stateChange: [state: TwinSceneState, error?: string];
+  /**
+   * 请求取消钉住（点画布空白）。
+   *
+   * 与 `pinChange(undefined)` 的区别：**无论钉住是怎么建立的**都要清掉 URL
+   * （深链 `?pointId=` 进入时本地没有过 pin 事件，只清内部状态清不掉 URL）。
+   */
+  unpinRequest: [];
 }>();
 
 const containerRef = ref<HTMLDivElement | null>(null);
@@ -157,6 +170,15 @@ interface EngineOptionalCapabilities {
   ) => void;
   /** 悬停交互提示（悬停中的锚点不参与避让、暂停脉冲）。 */
   setInteractionHover?: (pointId?: string) => void;
+  /**
+   * 设置「剖切 / 完整」外观：默认剖切（隐藏屋顶与近侧墙），否则锚点被屋顶挡住看不到。
+   *
+   * 之所以由引擎层按**节点名**处理而不是改 GLB：资产保持完整封闭（换别的场景/别的模型
+   * 仍可用），且用户可随时切回完整视图核对几何。
+   *
+   * @param show true = 显示屋顶与全部墙体（完整外观）
+   */
+  setShellVisible?: (show: boolean) => void;
 }
 
 /** 把 manager 当作「带可选能力」的对象访问。 */
@@ -279,6 +301,19 @@ let sampleQueued = false;
 
 /**
  * 采样当前卡片锚点的屏幕位置（**不会每帧调用**：只在需要时排队一次 rAF）。
+ *
+ * ## 三级来源（按可靠性降序，实测踩过坑后的结论）
+ *
+ * 1. **DOM 实测**（首选）：锚点标签本身就是画布里的 DOM 节点（CSS2D 渲染器每帧把它摆到
+ *    投影位置），直接读 `.twin-anchor-label[data-point-id]` 的 `getBoundingClientRect()`
+ *    再减去容器原点 —— **与用户看到的像素完全同源**，不受相机/容器尺寸/缩放差异影响。
+ * 2. **引擎投影**（次选）：`projectToScreen(anchorWorld)`。它在「标签还没被 CSS2D 摆好」
+ *    时可用，但坐标系与 DOM 可能相差几十像素（实测：同一锚点两者差 100+px 时卡片
+ *    短暂出现又消失）。
+ * 3. 都拿不到 ⇒ 卡片不显示（钉住态保留，转回来再出现）。
+ *
+ * 为什么不能只用引擎投影：本项目实测出现过「投影坐标正确但 `visible=false`（因为用的是
+ * 容器 clientWidth 而非渲染尺寸）、卡片一闪即逝」的缺陷 —— DOM 实测从根上绕开这类问题。
  */
 function sampleCardPosition(): void {
   if (sampleQueued) {
@@ -289,22 +324,19 @@ function sampleCardPosition(): void {
     sampleQueued = false;
     const pointId = activePointId.value;
     const container = containerRef.value;
-    if (!pointId || !manager || !container) {
-      return;
-    }
-    const caps = engine();
-    const world = caps?.getAnchorWorldPosition?.(pointId);
-    const screen = world ? caps?.projectToScreen?.(world) : undefined;
-    if (!screen || !screen.visible) {
-      // 锚点被移出画面：卡片隐藏（钉住态保留，转回来会重新出现）
-      cardAnchor.value = undefined;
+    if (!pointId || !container) {
       return;
     }
     canvasSize.value = {
       height: container.clientHeight,
       width: container.clientWidth,
     };
-    const next = { x: screen.x, y: screen.y };
+    const next = readAnchorScreenPosition(pointId, container);
+    if (!next) {
+      // 锚点不在画布 DOM 里：卡片隐藏（钉住态保留，转回来会重新出现）
+      cardAnchor.value = undefined;
+      return;
+    }
     // 2px 阈值：相机微动（阻尼回弹）时不触发 Vue 更新
     if (
       lastAnchorPx &&
@@ -316,6 +348,44 @@ function sampleCardPosition(): void {
     lastAnchorPx = next;
     cardAnchor.value = next;
   });
+}
+
+/**
+ * 读锚点的屏幕位置（容器坐标）：DOM 实测优先，引擎投影回退。
+ *
+ * @param pointId 点位 ID
+ * @param container 画布容器
+ * @returns 容器坐标；都拿不到时 undefined
+ */
+function readAnchorScreenPosition(
+  pointId: string,
+  container: HTMLElement,
+): undefined | { x: number; y: number } {
+  const containerRect = container.getBoundingClientRect();
+  // ① DOM 实测：标签是 CSS2D 元素，位置就是用户看到的像素
+  const label = container.querySelector<HTMLElement>(
+    `.twin-anchor-label[data-point-id="${CSS.escape(pointId)}"]`,
+  );
+  const capsule = label?.querySelector<HTMLElement>('.twin-anchor-capsule');
+  const visibleRect =
+    capsule?.getBoundingClientRect() ?? label?.getBoundingClientRect();
+  if (visibleRect && visibleRect.width > 0 && visibleRect.height > 0) {
+    // 卡片锚点用**胶囊底边中点**（胶囊挂在圆点上方，底边中点≈圆点上方一点）
+    return {
+      x: visibleRect.left - containerRect.left + visibleRect.width / 2,
+      y: visibleRect.top - containerRect.top + visibleRect.height,
+    };
+  }
+  // ② 引擎投影回退（标签还没被摆好时）
+  const caps = engine();
+  const world = caps?.getAnchorWorldPosition?.(pointId);
+  const screen = world ? caps?.projectToScreen?.(world) : undefined;
+  if (!screen) {
+    return undefined;
+  }
+  // 不再用引擎的 visible 标志（它用的是容器 clientWidth，实测会误判）：
+  // 越界统一交给 cardVisible 的 isAnchorVisible（带 24px 容差）判断。
+  return { x: screen.x, y: screen.y };
 }
 
 /**
@@ -336,6 +406,31 @@ function readPointIdFromEventTarget(
   }
   const { pointId } = label.dataset;
   return pointId === undefined || pointId === '' ? undefined : pointId;
+}
+
+/**
+ * 指针按下兜底：**在画布上按下（非锚点标签）⇒ 取消钉住**。
+ *
+ * ## 为什么用 `pointerdown` 而不是 `click`
+ *
+ * 实测踩过两个坑：
+ * 1. picker 在 `pointerup` 上做射线拾取，而 `OrbitControls` 的拖拽会**吞掉后续 click**
+ *    （按下→移动→抬起 时不派发 click）⇒ 用 click 会「拖完相机点了没反应」；
+ * 2. picker 只在「射线什么都没命中」时才回调 undefined，而运行态点到**模型本体**
+ *    会命中 surface ⇒ 「点模型取消钉住」失效（dev 实测：点空白后 URL 仍带 pointId）。
+ *
+ * `pointerdown` 在锚点标签上会被锚点层 `stopPropagation`（点击锚点钉住），
+ * 所以这里收到 `pointerdown` 就等于「在画布别处按下」，语义精确且不依赖射线拾取。
+ *
+ * 钉住态下的取消是**幂等**的：拖动相机时按下一次就取消，符合直觉。
+ *
+ * @param event 指针按下事件
+ */
+function onPointerDownDelegated(event: PointerEvent): void {
+  if (readPointIdFromEventTarget(event.target)) {
+    return;
+  }
+  onCanvasBlankClick();
 }
 
 /**
@@ -380,6 +475,9 @@ function onPointerOutDelegated(event: PointerEvent): void {
   onHoverAnchor(undefined);
 }
 
+/** 指针是否在属性卡片上（决定 hover 是否可以被离开事件清掉）。 */
+let pointerOnCard = false;
+
 /**
  * 处理锚点悬停（进入/离开）。
  *
@@ -388,9 +486,30 @@ function onPointerOutDelegated(event: PointerEvent): void {
 function onHoverAnchor(pointId?: string): void {
   if (pointId) {
     hoveredPointId.value = pointId;
+    pointerOnCard = false;
     lastAnchorPx = undefined;
     sampleCardPosition();
-  } else if (hoveredPointId.value !== undefined) {
+    return;
+  }
+  // 指针在卡片上时不关闭：卡片可交互（看详情/点位配置），
+  // 鼠标从锚点移到卡片的过程必然经过一次 leave，关掉就永远点不到卡片里的按钮。
+  if (pointerOnCard) {
+    return;
+  }
+  if (hoveredPointId.value !== undefined && pinnedPointId.value === undefined) {
+    hoveredPointId.value = undefined;
+  }
+}
+
+/** 指针进入卡片：接管 hover（不再跟随锚点离开）。 */
+function onCardPointerEnter(): void {
+  pointerOnCard = true;
+}
+
+/** 指针离开卡片：真正放开 hover。 */
+function onCardPointerLeave(): void {
+  pointerOnCard = false;
+  if (pinnedPointId.value === undefined) {
     hoveredPointId.value = undefined;
   }
 }
@@ -415,6 +534,7 @@ function unpinCard(): void {
   }
   pinnedPointId.value = undefined;
   emit('pinChange', undefined);
+  emit('unpinRequest');
 }
 
 /**
@@ -519,11 +639,12 @@ async function mountEngine(): Promise<void> {
       getModelRoot: () => manager?.getModelRoot(),
       onClick: (result) => {
         if (!result) {
-          // 点空白：取消钉住的卡片（与「点锚点钉住」对称）
           onCanvasBlankClick();
           return;
         }
         if (props.editorMode !== 'place') {
+          // 运行态点到模型表面：等同于点空白（取消钉住）
+          onCanvasBlankClick();
           return;
         }
         // 只有命中模型表面才允许放置；命中已有锚点由锚点层自己处理
@@ -622,6 +743,13 @@ async function loadScene(): Promise<void> {
     cameraRig?.captureHome();
     picker?.resetForNewModel();
     picker?.buildBvh();
+    // 探测「剖切外观」能力（模型里是否真有可隐藏的屋顶/墙体节点）
+    const caps = engine();
+    const canShell = typeof caps?.setShellVisible === 'function';
+    emit('shellSupported', canShell);
+    if (canShell) {
+      caps?.setShellVisible?.(showShell.value);
+    }
     reportRenderStats();
     if (activePointId.value) {
       lastAnchorPx = undefined;
@@ -788,6 +916,24 @@ watch(
   { deep: false },
 );
 
+/**
+ * 是否显示完整外壳（屋顶 + 全部墙体）。
+ *
+ * 默认 `false`（剖切）：演示场景的设备锚点在机柜内部，封闭厂房的屋顶会把它们全挡住
+ * —— 画面上只剩几个彩色圆点悬在白色屋面上，反而比改造前更像 demo。
+ */
+const showShell = ref(false);
+
+/**
+ * 切换剖切/完整外观（父组件的「显示屋顶」开关调用）。
+ *
+ * @param show true = 显示完整外壳
+ */
+function setShellVisible(show: boolean): void {
+  showShell.value = show;
+  engine()?.setShellVisible?.(show);
+}
+
 /** 卡片相对时间刷新（每 5s 一次：人眼不需要更细，省 CPU）。 */
 const ageTimer = setInterval(() => {
   if (activePointId.value) {
@@ -852,6 +998,7 @@ async function focusPoint(pointId: string): Promise<void> {
 defineExpose({
   focusPoint,
   retry,
+  setShellVisible,
   syncPinnedPoint,
   updateAnchorStates,
 });
@@ -872,6 +1019,7 @@ defineExpose({
     <div
       ref="containerRef"
       class="h-full w-full"
+      @pointerdown="onPointerDownDelegated"
       @pointerout="onPointerOutDelegated"
       @pointerover="onPointerOverDelegated"
     ></div>
@@ -886,8 +1034,8 @@ defineExpose({
       @close="unpinCard"
       @open-device="emit('openDevice', activePointId!)"
       @open-point="emit('openPoint', activePointId!)"
-      @pointer-enter="hoveredPointId = activePointId"
-      @pointer-leave="() => {}"
+      @pointer-enter="onCardPointerEnter"
+      @pointer-leave="onCardPointerLeave"
     />
 
     <!-- 加载中：骨架式遮罩（比纯转圈更能说明「正在建模型」） -->

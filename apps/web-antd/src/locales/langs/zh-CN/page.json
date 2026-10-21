@@ -1728,6 +1728,11 @@
       "sceneTypeLabel": "场景类型",
       "selectProperty": "选择属性",
       "selectSceneHint": "从左侧选择一个场景开始",
+      "shell": {
+        "full": "完整外观",
+        "label": "外观",
+        "section": "剖切视图"
+      },
       "sort": "排序",
       "staleBindingHint": "属性在物模型里已不存在（可能是 TSL 重新导入导致），请删除后重新选择",
       "staleCount": "{0} 个属性已失效",

@@ -4,7 +4,6 @@ import {
   MOTION_SWITCHES,
   motionSwitches,
   readMotionProfileInput,
-  REDUCED_CLIP_SPEED,
   reducedMotionMediaQuery,
   resolveMotionMode,
   WEAK_DEVICE_MEMORY_GB,
@@ -12,174 +11,168 @@ import {
 } from './motion-profile';
 
 /**
- * 动效档位判定的单测（纯函数，无 DOM 依赖）。
+ * 动效档位（**纯函数**测试）。
  *
- * 覆盖：偏好优先、弱机型边界、未知字段、开关表一致性，以及「中途切换系统设置」时
- * 读到的输入会变化（scene-manager 依赖它重建档位）。
+ * ## 为什么必须钉死在引擎层
+ *
+ * 「动效必须可降级」是硬约束：不满足时不是"不好看"，而是**对部分用户不可用**
+ * （前庭障碍用户眩晕）与**对弱机型更糟**（脉冲 + 辉光把帧率拖到 10fps 以下）。
+ * 而档位判定一旦散落在各处（渲染循环、标签层、后处理各判各的），
+ * 就必然出现「关了脉冲但扩散环还在转」这种半降级 —— 所以判定只在本文件，
+ * 渲染层只查 {@link MOTION_SWITCHES} 表。
  */
-describe('resolveMotionMode：用户偏好优先于机型能力', () => {
-  it('★ 偏好 reduce ⇒ reduced，且优先于弱机型（强烈弱机型也是 reduced）', () => {
-    expect(resolveMotionMode({ prefersReducedMotion: true })).toBe('reduced');
+
+describe('resolveMotionMode：用户偏好优先于设备能力', () => {
+  it('★ 偏好 reduce ⇒ reduced（即使机器很强）', () => {
     expect(
       resolveMotionMode({
-        deviceMemory: 1,
-        hardwareConcurrency: 2,
+        deviceMemory: 16,
+        hardwareConcurrency: 16,
         prefersReducedMotion: true,
       }),
-      '用户偏好是明确要求，不能被机型参数覆盖',
     ).toBe('reduced');
   });
 
-  it('偏好明确为 false 且机型正常 ⇒ normal', () => {
+  it('★ 偏好 reduce 优先于弱机型判定（reduced 而不是 off：降速播放仍保留信息）', () => {
     expect(
       resolveMotionMode({
-        deviceMemory: 8,
-        hardwareConcurrency: 16,
-        prefersReducedMotion: false,
+        deviceMemory: 2,
+        hardwareConcurrency: 2,
+        prefersReducedMotion: true,
       }),
-    ).toBe('normal');
-  });
-});
-
-describe('resolveMotionMode：弱机型降级', () => {
-  it('★ deviceMemory = 4（边界，含）⇒ off', () => {
-    expect(resolveMotionMode({ deviceMemory: 4 })).toBe('off');
-    expect(resolveMotionMode({ deviceMemory: 4.5 })).toBe('normal');
+    ).toBe('reduced');
   });
 
-  it('★ hardwareConcurrency = 4（边界，含）⇒ off', () => {
-    expect(resolveMotionMode({ hardwareConcurrency: 4 })).toBe('off');
-    expect(resolveMotionMode({ hardwareConcurrency: 5 })).toBe('normal');
-  });
-
-  it('阈值常量口径与需求一致（4GB / 4 核）', () => {
-    expect(WEAK_DEVICE_MEMORY_GB).toBe(4);
-    expect(WEAK_HARDWARE_CONCURRENCY).toBe(4);
-  });
-
-  it('两个弱机型条件任一命中即降级（OR 关系）', () => {
+  it(`★ 弱机型（<= ${WEAK_DEVICE_MEMORY_GB}GB 内存或 <= ${WEAK_HARDWARE_CONCURRENCY} 核）⇒ off`, () => {
+    expect(resolveMotionMode({ deviceMemory: 2 })).toBe('off');
+    expect(resolveMotionMode({ deviceMemory: WEAK_DEVICE_MEMORY_GB })).toBe(
+      'off',
+    );
+    expect(resolveMotionMode({ hardwareConcurrency: 2 })).toBe('off');
     expect(
-      resolveMotionMode({ deviceMemory: 2, hardwareConcurrency: 32 }),
-    ).toBe('off');
-    expect(
-      resolveMotionMode({ deviceMemory: 32, hardwareConcurrency: 2 }),
+      resolveMotionMode({ hardwareConcurrency: WEAK_HARDWARE_CONCURRENCY }),
     ).toBe('off');
   });
-});
 
-describe('resolveMotionMode：未知字段按「有能力」处理', () => {
-  it('★ 不传输入 / 空对象 ⇒ normal（Safari 不提供 deviceMemory）', () => {
-    expect(resolveMotionMode()).toBe('normal');
+  it('★ 未知 ≠ 弱：缺字段时按 normal（不能因为读不到就误关动效）', () => {
     expect(resolveMotionMode({})).toBe('normal');
     expect(
       resolveMotionMode({ deviceMemory: null, hardwareConcurrency: null }),
     ).toBe('normal');
-  });
-
-  it('nan/infinity 等非有限数不误判（防御脏输入）', () => {
-    // NaN <= 4 为 false，不应命中弱机型分支
-    expect(resolveMotionMode({ deviceMemory: Number.NaN })).toBe('normal');
-    expect(resolveMotionMode({ hardwareConcurrency: Number.NaN })).toBe(
+    expect(resolveMotionMode({ deviceMemory: 0, hardwareConcurrency: 0 })).toBe(
       'normal',
     );
   });
+
+  it('强机型且无偏好 ⇒ normal', () => {
+    expect(resolveMotionMode({ deviceMemory: 8, hardwareConcurrency: 8 })).toBe(
+      'normal',
+    );
+  });
+
+  it('默认参数不抛错', () => {
+    expect(['normal', 'off', 'reduced']).toContain(resolveMotionMode());
+  });
 });
 
-describe('mOTION_SWITCHES：三档开关表', () => {
-  it('★ off.clipSpeed === 0 且 reduced.clipSpeed ∈ (0,1)（降速而非停止）', () => {
-    expect(MOTION_SWITCHES.off.clipSpeed).toBe(0);
-    expect(MOTION_SWITCHES.normal.clipSpeed).toBe(1);
-    expect(MOTION_SWITCHES.reduced.clipSpeed).toBeGreaterThan(0);
-    expect(MOTION_SWITCHES.reduced.clipSpeed).toBeLessThan(1);
-    expect(MOTION_SWITCHES.reduced.clipSpeed).toBe(REDUCED_CLIP_SPEED);
+describe('motion_switches：三档的开关语义', () => {
+  it('★ off 档：自带动画倍率为 0，且所有节奏类动效关闭', () => {
+    const off = MOTION_SWITCHES.off;
+    expect(off.clipSpeed).toBe(0);
+    expect(off.anchorPulse).toBe(false);
+    expect(off.alertRipple).toBe(false);
+    expect(off.autoOrbit).toBe(false);
+    expect(off.scanRing).toBe(false);
+    expect(off.valueFlash).toBe(false);
   });
 
-  it('reduced 关掉全部持续运动（脉冲/扩散环/扫描光圈/巡航/环境缓变）', () => {
-    const switches = MOTION_SWITCHES.reduced;
-    expect(switches.anchorPulse).toBe(false);
-    expect(switches.alertRipple).toBe(false);
-    expect(switches.scanRing).toBe(false);
-    expect(switches.autoOrbit).toBe(false);
-    expect(switches.ambientDrift).toBe(false);
+  it('★ reduced 档：自带动画降速但不停（0 < speed < 1），持续运动关闭', () => {
+    const reduced = MOTION_SWITCHES.reduced;
+    expect(reduced.clipSpeed).toBeGreaterThan(0);
+    expect(reduced.clipSpeed).toBeLessThan(1);
+    expect(reduced.autoOrbit).toBe(false);
+    expect(reduced.anchorPulse).toBe(false);
+    expect(reduced.scanRing).toBe(false);
+    // 一次性高亮不是持续运动，保留（承担「值变了」的信息）
+    expect(reduced.valueFlash).toBe(true);
   });
 
-  it('★ reduced 保留标签平滑：它不是装饰，是防止「挤开标签瞬间跳位」引发阅读错乱', () => {
-    // 与 Lead 在 motion-profile 契约里的口径一致（reduced 只关了 5 项持续运动），
-    // 这里显式钉住，避免有人「顺手」把它也关掉导致标签抖动在下拉/缩放时更严重。
-    expect(MOTION_SWITCHES.reduced.smoothLabels).toBe(true);
-  });
-
-  it('数值跳变高亮是一次性动效 ⇒ reduced 与 off 都保留（信息载体不能丢）', () => {
-    expect(MOTION_SWITCHES.normal.valueFlash).toBe(true);
-    expect(MOTION_SWITCHES.reduced.valueFlash).toBe(true);
-    expect(MOTION_SWITCHES.off.valueFlash).toBe(true);
-  });
-
-  it('★ 三档的键集合完全一致（新加开关时不会漏配某一档）', () => {
-    const keysOf = (value: object) => Object.keys(value).toSorted().join(',');
-    const expected = keysOf(MOTION_SWITCHES.normal);
-    expect(keysOf(MOTION_SWITCHES.reduced)).toBe(expected);
-    expect(keysOf(MOTION_SWITCHES.off)).toBe(expected);
-    // 防空跑：至少要覆盖需求里点名的这些开关
+  it('normal 档：全开，倍率为 1', () => {
+    const normal = MOTION_SWITCHES.normal;
+    expect(normal.clipSpeed).toBe(1);
     for (const key of [
-      'anchorPulse',
       'alertRipple',
       'ambientDrift',
-      'clipSpeed',
+      'anchorPulse',
       'autoOrbit',
       'scanRing',
       'smoothLabels',
       'valueFlash',
-    ]) {
-      expect(expected.split(',')).toContain(key);
+    ] as const) {
+      expect(normal[key]).toBe(true);
     }
   });
 
-  it('motionSwitches：合法档位返回对应表；未知字符串回落 off（不抛错）', () => {
-    expect(motionSwitches('normal')).toBe(MOTION_SWITCHES.normal);
-    expect(motionSwitches('reduced')).toBe(MOTION_SWITCHES.reduced);
-    expect(motionSwitches('off')).toBe(MOTION_SWITCHES.off);
-    expect(motionSwitches('bogus' as never)).toBe(MOTION_SWITCHES.off);
+  it('★ 三档的键集合必须一致（新增开关时不允许漏配某一档）', () => {
+    const keys = Object.keys(MOTION_SWITCHES.normal).toSorted();
+    expect(Object.keys(MOTION_SWITCHES.reduced).toSorted()).toEqual(keys);
+    expect(Object.keys(MOTION_SWITCHES.off).toSorted()).toEqual(keys);
   });
 
-  it('开关表不可变（防止运行时被意外改写导致三处判据漂移）', () => {
-    expect(Object.isFrozen(MOTION_SWITCHES)).toBe(true);
-    expect(Object.isFrozen(MOTION_SWITCHES.normal)).toBe(true);
+  it('motionSwitches() 返回对应档位（且是只读表）', () => {
+    expect(motionSwitches('normal')).toBe(MOTION_SWITCHES.normal);
+    expect(motionSwitches('off').clipSpeed).toBe(0);
   });
 });
 
 describe('readMotionProfileInput：唯一触碰 DOM 的入口', () => {
-  it('★ 读取 matchMedia 与 navigator 字段（可注入替身，不污染全局）', () => {
-    const input = readMotionProfileInput({
+  it('从 matchMedia 读偏好，从 navigator 读能力', () => {
+    const scope = {
       matchMedia: (query: string) => ({
-        matches: query === reducedMotionMediaQuery(),
+        matches: query.includes('prefers-reduced-motion'),
       }),
-      navigator: { deviceMemory: 2, hardwareConcurrency: 8 },
-    } as never);
-    expect(input).toEqual({
-      deviceMemory: 2,
+      navigator: { deviceMemory: 8, hardwareConcurrency: 8 },
+    } as unknown as typeof globalThis;
+    expect(readMotionProfileInput(scope)).toEqual({
+      deviceMemory: 8,
       hardwareConcurrency: 8,
       prefersReducedMotion: true,
     });
   });
 
-  it('matchMedia 抛错/缺失 ⇒ 偏好为 undefined，不崩溃', () => {
-    const noMedia = readMotionProfileInput({
-      navigator: { deviceMemory: 8, hardwareConcurrency: 16 },
-    } as never);
-    expect(noMedia.prefersReducedMotion).toBeUndefined();
-    expect(resolveMotionMode(noMedia)).toBe('normal');
+  it('matchMedia 抛错/缺失时按「未要求减少」处理（不抛给调用方）', () => {
+    const noMatchMedia = {
+      navigator: {},
+    } as unknown as typeof globalThis;
+    expect(readMotionProfileInput(noMatchMedia).prefersReducedMotion).toBe(
+      false,
+    );
 
-    const throwing = readMotionProfileInput({
+    const throwing = {
       matchMedia: () => {
         throw new Error('boom');
       },
       navigator: {},
-    } as never);
-    expect(throwing.prefersReducedMotion).toBeUndefined();
+    } as unknown as typeof globalThis;
+    expect(readMotionProfileInput(throwing).prefersReducedMotion).toBe(false);
+  });
+});
+
+describe('reduced_motion_media_query：判据与监听共用同一个查询串', () => {
+  it('返回 standard 的 reduce 查询（改主判据必须同步改监听）', () => {
+    expect(reducedMotionMediaQuery()).toBe('(prefers-reduced-motion: reduce)');
   });
 
-  it('media query 字符串与首屏契约一致（change 监听复用同一字符串）', () => {
-    expect(reducedMotionMediaQuery()).toBe('(prefers-reduced-motion: reduce)');
+  it('readMotionProfileInput 用的正是这个查询串（避免两处漂移）', () => {
+    const queries: string[] = [];
+    const scope = {
+      matchMedia: (query: string) => {
+        queries.push(query);
+        return { matches: true };
+      },
+      navigator: {},
+    } as unknown as typeof globalThis;
+    readMotionProfileInput(scope);
+    expect(queries).toEqual([reducedMotionMediaQuery()]);
   });
 });

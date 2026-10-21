@@ -175,6 +175,26 @@ const liveValues = useTwinLiveValues({ alertCounts });
 /** 渲染统计（底部状态栏）。 */
 const renderStats = ref<{ geometries: number; textures: number }>();
 
+/**
+ * 是否显示完整外壳（屋顶 + 全部墙体）。
+ *
+ * 默认剖切：演示场景的设备锚点在机柜内部，封闭厂房的屋顶会把它们全部挡住
+ * （画面上只剩几个彩色圆点悬在白色屋面上）。开关只在模型**真的**有可隐藏节点时显示
+ * —— 由画布探测后经 `shellSupported` 上报，避免做一个点了没反应的开关。
+ */
+const showShell = ref(false);
+const shellSupported = ref(false);
+
+/**
+ * 切换剖切/完整外观。
+ *
+ * @param show true = 显示屋顶与全部墙体
+ */
+function toggleShell(show: boolean): void {
+  showShell.value = show;
+  canvasRef.value?.setShellVisible(show);
+}
+
 /** 动效档位（引擎层判定后回调；未初始化时 undefined）。 */
 const motionMode = ref<'normal' | 'off' | 'reduced'>();
 
@@ -415,20 +435,32 @@ function onCanvasReady(): void {
  * 与 `onCardPinChange`（画布 → URL）配对；两处都只做「写」，读永远以 URL 为准，
  * 因此不会形成互相触发的环。
  */
-watch(
-  currentPointId,
-  (pointId) => {
-    const canvas = canvasRef.value;
-    if (!canvas) {
-      return;
-    }
-    if (pointId) {
-      void canvas.focusPoint(pointId);
-    } else {
-      canvas.syncPinnedPoint(undefined);
-    }
-  },
-);
+watch(currentPointId, (pointId) => {
+  const canvas = canvasRef.value;
+  if (!canvas) {
+    return;
+  }
+  if (pointId) {
+    void canvas.focusPoint(pointId);
+  } else {
+    canvas.syncPinnedPoint(undefined);
+  }
+});
+
+/**
+ * 画布请求「取消钉住」（用户点击画布空白/按下画布）⇒ 清掉 URL 里的 `pointId`。
+ *
+ * 为什么要单独一条事件而不是复用 `pin-change`：取消钉住必须**无论**它最初是
+ * 由「点击锚点」还是「URL 深链」建立的 —— 从深链进入时本地没有过 pin 事件，
+ * 只靠画布内部状态清不掉 URL（实测 dev：点空白后 URL 仍带 pointId）。
+ */
+async function onUnpinRequest(): Promise<void> {
+  if (!currentPointId.value) {
+    return;
+  }
+  selectPoint(null);
+  await router.replace({ query: { ...route.query, pointId: undefined } });
+}
 
 function onPlaceAnchor(payload: {
   local: { x: number; y: number; z: number };
@@ -519,186 +551,215 @@ async function onOpenPointConfig(pointId: string): Promise<void> {
         :scope-hint="$t('page.iot.twin.kpi.scope')"
       />
       <div class="flex min-h-0 flex-1 gap-3">
-      <!-- 左：场景树 -->
-      <aside
-        class="w-72 shrink-0 overflow-hidden rounded-lg border border-border"
-      >
-        <SceneTree
-          :badges="sceneBadges"
-          :can-add-child="canAddChild"
-          :current-scene-id="currentSceneId"
-          :depth-of="depthOf"
-          :error="sceneError"
-          :loading="sceneLoading"
-          :parent-options="parentOptions"
-          :scenes="scenes"
-          :tree="tree"
-          @enter="enterScene"
-          @refresh="loadScenes"
-        />
-      </aside>
-
-      <!-- 中：画布 -->
-      <section
-        class="relative min-w-0 flex-1 overflow-hidden rounded-lg border border-border"
-      >
-        <Empty
-          v-if="scenes.length === 0 && !sceneLoading"
-          :description="$t('page.iot.twin.noScene')"
-        />
-        <div
-          v-else-if="!currentSceneId"
-          class="flex h-full items-center justify-center text-sm text-muted-foreground"
+        <!-- 左：场景树 -->
+        <aside
+          class="w-72 shrink-0 overflow-hidden rounded-lg border border-border"
         >
-          {{ $t('page.iot.twin.selectSceneHint') }}
-        </div>
-        <TwinCanvas
-          v-else
-          ref="canvasRef"
-          :ancestry="ancestry.chain"
-          :ancestry-broken="ancestry.broken"
-          :anchors="points"
-          :assets="assets"
-          :editor-mode="editorMode"
-          :scene="currentScene"
-          :scene-id="currentSceneId"
-          @fallback="(reason: string) => (fallbackReason = reason)"
-          @open-device="openDeviceDetail"
-          @open-point="onOpenPointConfig"
-          @motion-mode="(mode) => (motionMode = mode)"
-          @pin-change="onCardPinChange"
-          @place="onPlaceAnchor"
-          @ready="onCanvasReady"
-          @render-stats="(stats) => (renderStats = stats)"
-          @select="onSelectAnchor"
-          @state-change="
-            (state: string, error?: string) => {
-              canvasState = state;
-              canvasError = error ?? '';
-            }
-          "
-        />
+          <SceneTree
+            :badges="sceneBadges"
+            :can-add-child="canAddChild"
+            :current-scene-id="currentSceneId"
+            :depth-of="depthOf"
+            :error="sceneError"
+            :loading="sceneLoading"
+            :parent-options="parentOptions"
+            :scenes="scenes"
+            :tree="tree"
+            @enter="enterScene"
+            @refresh="loadScenes"
+          />
+        </aside>
 
-        <!-- 顶部状态条：加载中 / 回退原因 / 画布错误 -->
-        <div class="pointer-events-none absolute left-3 top-3 space-y-2">
-          <div v-if="canvasState === 'loading'" class="pointer-events-auto">
-            <Spin />
-          </div>
-          <Alert
-            v-if="fallbackReason"
-            class="pointer-events-auto max-w-md"
-            closable
-            :message="fallbackReason"
-            type="info"
-            @close="fallbackReason = ''"
-          />
-          <Alert
-            v-if="canvasError"
-            class="pointer-events-auto max-w-md"
-            :message="canvasError"
-            type="error"
-          />
-          <Alert
-            v-if="ancestry.broken && currentScene"
-            class="pointer-events-auto max-w-md"
-            :message="$t('page.iot.twin.ancestryBroken')"
-            type="warning"
-          />
-          <!-- 运行态快照加载失败：锚点会「只是不更新」，必须显式告知（#129） -->
-          <Alert
-            v-if="runtimeError"
-            class="pointer-events-auto max-w-md"
-            closable
-            :message="runtimeError"
-            type="error"
-            @close="runtimeError = ''"
-          />
-          <!-- 实时流断开：数据停止更新但界面看起来「正常」，最容易误判（#129） -->
-          <Alert
-            v-if="realtimeError || realtimeAuthError"
-            class="pointer-events-auto max-w-md"
-            :message="
-              realtimeAuthError
-                ? $t('page.iot.twin.realtimeAuthFailed')
-                : $t('page.iot.twin.realtimeDisconnected')
-            "
-            type="warning"
-          />
-          <Alert
-            v-if="deeplinkNotice"
-            class="pointer-events-auto max-w-md"
-            closable
-            :message="deeplinkNotice"
-            type="info"
-            @close="deeplinkNotice = ''"
-          />
-        </div>
-
-        <RuntimeLegend class="absolute bottom-9 left-3" />
-
-        <!-- 底部状态栏：FPS / 模型数 / 渲染对象数 / 最后更新 / SSE 连接 / 动效档位 -->
-        <TwinStatusBar
-          class="absolute bottom-3 left-3"
-          :last-update-at="lastUpdateAt"
-          :model-count="currentScene?.modelAssetId ? 1 : 0"
-          :motion-mode="motionMode"
-          :realtime-state="String(runtime.realtimeState.value ?? 'closed')"
-          :render-stats="renderStats"
-        />
-
-        <!-- 面包屑 -->
-        <nav
-          v-if="ancestry.chain.length > 0"
-          class="absolute bottom-3 right-3 flex items-center gap-1 rounded bg-background/85 px-2 py-1 text-xs"
+        <!-- 中：画布 -->
+        <section
+          class="relative min-w-0 flex-1 overflow-hidden rounded-lg border border-border"
         >
-          <template v-for="(item, index) in ancestry.chain" :key="item.id">
-            <span v-if="index > 0" class="text-muted-foreground">/</span>
-            <button
-              class="hover:text-primary"
-              type="button"
-              @click="enterScene(item.id)"
-            >
-              {{ item.sceneName }}
-            </button>
-          </template>
-          <button
-            v-if="ancestry.chain.length > 1"
-            class="ml-2 text-primary hover:underline"
-            type="button"
-            @click="goParent"
+          <Empty
+            v-if="scenes.length === 0 && !sceneLoading"
+            :description="$t('page.iot.twin.noScene')"
+          />
+          <div
+            v-else-if="!currentSceneId"
+            class="flex h-full items-center justify-center text-sm text-muted-foreground"
           >
-            {{ $t('page.iot.twin.backParent') }}
-          </button>
-        </nav>
-      </section>
+            {{ $t('page.iot.twin.selectSceneHint') }}
+          </div>
+          <TwinCanvas
+            v-else
+            ref="canvasRef"
+            :ancestry="ancestry.chain"
+            :ancestry-broken="ancestry.broken"
+            :anchors="points"
+            :assets="assets"
+            :editor-mode="editorMode"
+            :scene="currentScene"
+            :scene-id="currentSceneId"
+            @fallback="(reason: string) => (fallbackReason = reason)"
+            @open-device="openDeviceDetail"
+            @open-point="onOpenPointConfig"
+            @motion-mode="(mode) => (motionMode = mode)"
+            @pin-change="onCardPinChange"
+            @place="onPlaceAnchor"
+            @ready="onCanvasReady"
+            @render-stats="(stats) => (renderStats = stats)"
+            @shell-supported="(supported) => (shellSupported = supported)"
+            @unpin-request="onUnpinRequest"
+            @select="onSelectAnchor"
+            @state-change="
+              (state: string, error?: string) => {
+                canvasState = state;
+                canvasError = error ?? '';
+              }
+            "
+          />
 
-      <!-- 右：点位 + 模型 -->
-      <aside class="flex w-80 shrink-0 flex-col gap-3 overflow-hidden">
-        <PointPanel
-          class="min-h-0 flex-1"
-          :editing-point-id="editingPointId"
-          :error="pointsError"
-          :loading="pointsLoading"
-          :pending="hasDraft"
-          :picked-anchor="editorDraft ?? undefined"
-          :place-form-open="placeFormOpen"
-          :placing="editorMode === 'place'"
-          :points="points"
-          :scene-id="currentSceneId"
-          @cancel-placing="cancelPlacing"
-          @dismiss-place="dismissPlaceForm"
-          @open-device="openDeviceDetail"
-          @refresh="reloadAfterPointChange"
-          @select="onSelectAnchor"
-          @start-placing="startPlacing"
-        />
+          <!-- 顶部状态条：加载中 / 回退原因 / 画布错误 -->
+          <div class="pointer-events-none absolute left-3 top-3 space-y-2">
+            <div v-if="canvasState === 'loading'" class="pointer-events-auto">
+              <Spin />
+            </div>
+            <Alert
+              v-if="fallbackReason"
+              class="pointer-events-auto max-w-md"
+              closable
+              :message="fallbackReason"
+              type="info"
+              @close="fallbackReason = ''"
+            />
+            <Alert
+              v-if="canvasError"
+              class="pointer-events-auto max-w-md"
+              :message="canvasError"
+              type="error"
+            />
+            <Alert
+              v-if="ancestry.broken && currentScene"
+              class="pointer-events-auto max-w-md"
+              :message="$t('page.iot.twin.ancestryBroken')"
+              type="warning"
+            />
+            <!-- 运行态快照加载失败：锚点会「只是不更新」，必须显式告知（#129） -->
+            <Alert
+              v-if="runtimeError"
+              class="pointer-events-auto max-w-md"
+              closable
+              :message="runtimeError"
+              type="error"
+              @close="runtimeError = ''"
+            />
+            <!-- 实时流断开：数据停止更新但界面看起来「正常」，最容易误判（#129） -->
+            <Alert
+              v-if="realtimeError || realtimeAuthError"
+              class="pointer-events-auto max-w-md"
+              :message="
+                realtimeAuthError
+                  ? $t('page.iot.twin.realtimeAuthFailed')
+                  : $t('page.iot.twin.realtimeDisconnected')
+              "
+              type="warning"
+            />
+            <Alert
+              v-if="deeplinkNotice"
+              class="pointer-events-auto max-w-md"
+              closable
+              :message="deeplinkNotice"
+              type="info"
+              @close="deeplinkNotice = ''"
+            />
+          </div>
 
-        <ModelPanel
-          class="shrink-0"
-          @assets-loaded="onAssetsLoaded"
-          @refresh="loadScenes"
-        />
-      </aside>
+          <!-- 剖切/完整外观开关（仅在模型有可隐藏屋顶/墙体时出现） -->
+          <div
+            v-if="shellSupported && canvasState === 'ready'"
+            class="absolute right-3 top-3 flex items-center gap-1 rounded bg-background/85 px-2 py-1 text-xs backdrop-blur"
+          >
+            <span class="text-muted-foreground">
+              {{ $t('page.iot.twin.shell.label') }}
+            </span>
+            <button
+              class="rounded px-1.5 py-0.5 transition-colors"
+              :class="
+                showShell
+                  ? 'bg-primary/15 text-primary'
+                  : 'text-muted-foreground hover:text-foreground'
+              "
+              type="button"
+              :aria-pressed="showShell"
+              @click="toggleShell(!showShell)"
+            >
+              {{
+                showShell
+                  ? $t('page.iot.twin.shell.full')
+                  : $t('page.iot.twin.shell.section')
+              }}
+            </button>
+          </div>
+
+          <RuntimeLegend class="absolute bottom-9 left-3" />
+
+          <!-- 底部状态栏：FPS / 模型数 / 渲染对象数 / 最后更新 / SSE 连接 / 动效档位 -->
+          <TwinStatusBar
+            class="absolute bottom-3 left-3"
+            :last-update-at="lastUpdateAt"
+            :model-count="currentScene?.modelAssetId ? 1 : 0"
+            :motion-mode="motionMode"
+            :realtime-state="String(runtime.realtimeState.value ?? 'closed')"
+            :render-stats="renderStats"
+          />
+
+          <!-- 面包屑 -->
+          <nav
+            v-if="ancestry.chain.length > 0"
+            class="absolute bottom-3 right-3 flex items-center gap-1 rounded bg-background/85 px-2 py-1 text-xs"
+          >
+            <template v-for="(item, index) in ancestry.chain" :key="item.id">
+              <span v-if="index > 0" class="text-muted-foreground">/</span>
+              <button
+                class="hover:text-primary"
+                type="button"
+                @click="enterScene(item.id)"
+              >
+                {{ item.sceneName }}
+              </button>
+            </template>
+            <button
+              v-if="ancestry.chain.length > 1"
+              class="ml-2 text-primary hover:underline"
+              type="button"
+              @click="goParent"
+            >
+              {{ $t('page.iot.twin.backParent') }}
+            </button>
+          </nav>
+        </section>
+
+        <!-- 右：点位 + 模型 -->
+        <aside class="flex w-80 shrink-0 flex-col gap-3 overflow-hidden">
+          <PointPanel
+            class="min-h-0 flex-1"
+            :editing-point-id="editingPointId"
+            :error="pointsError"
+            :loading="pointsLoading"
+            :pending="hasDraft"
+            :picked-anchor="editorDraft ?? undefined"
+            :place-form-open="placeFormOpen"
+            :placing="editorMode === 'place'"
+            :points="points"
+            :scene-id="currentSceneId"
+            @cancel-placing="cancelPlacing"
+            @dismiss-place="dismissPlaceForm"
+            @open-device="openDeviceDetail"
+            @refresh="reloadAfterPointChange"
+            @select="onSelectAnchor"
+            @start-placing="startPlacing"
+          />
+
+          <ModelPanel
+            class="shrink-0"
+            @assets-loaded="onAssetsLoaded"
+            @refresh="loadScenes"
+          />
+        </aside>
       </div>
     </div>
   </Page>

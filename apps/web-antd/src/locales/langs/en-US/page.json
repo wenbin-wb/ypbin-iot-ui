@@ -1728,6 +1728,11 @@
       "sceneTypeLabel": "Scene type",
       "selectProperty": "Select property",
       "selectSceneHint": "Select a scene on the left to start",
+      "shell": {
+        "full": "Full",
+        "label": "Shell",
+        "section": "Section"
+      },
       "sort": "Sort",
       "staleBindingHint": "The property no longer exists in the thing model (possibly due to a TSL re-import). Remove and select it again",
       "staleCount": "{0} property binding(s) invalidated",
