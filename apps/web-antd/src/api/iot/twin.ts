@@ -430,6 +430,27 @@ export async function createModelAssetExternal(
   );
 }
 
+/**
+ * 重命名模型资产（**只改名称**，不动文件与存储信息）。
+ *
+ * 为什么单独一个端点而不是复用上传/外链的 PUT：那两者的请求体都带「文件/地址」这类
+ * 必填语义，改成全字段 PUT 会让「只想改名」不得不在前端回传存储信息（既泄露内部字段，
+ * 也容易误改）。后端 `PUT /model-assets/{id}/name` 只接受 `assetName`。
+ *
+ * 幂等语义：改成与当前相同的名称会**直接成功**且不产生 UPDATE
+ * （前端重复点击、网络重试都不该报「改名失败」）。
+ *
+ * @param id 资产主键
+ * @param assetName 新名称（租户内唯一）
+ * @returns 更新后的资产
+ */
+export async function renameModelAsset(id: string, assetName: string) {
+  return requestClient.put<IotTwinApi.ModelAssetResp>(
+    `/iot/twin/model-assets/${id}/name`,
+    { assetName },
+  );
+}
+
 /** 删除模型资产（被场景引用时后端拒绝）。 */
 export async function deleteModelAsset(id: string) {
   return requestClient.delete<null>(`/iot/twin/model-assets/${id}`);

@@ -158,6 +158,30 @@ async function generateRoutes(
    * 2. 将懒加载的组件名称修改为当前路由的名称（如果启用了keep-alive的话）
    */
   resultRoutes = mapTree(resultRoutes, (route, parent) => {
+    // ------------------------------------------------------------------
+    // fork 定制：标签页按 **path** 去重，而不是 fullPath（含 query）。
+    //
+    // 背景（真实线上缺陷）：vben 的 `getTabKey()` 默认用 `fullPath` 作标签 key，
+    // 而 fullPath 含 query ⇒ 页面每改一次 query 就被当成「另一个页面」**新开一个标签**。
+    // 本仓多个页面用 query 表达**页内状态**：
+    //   - `/iot/twin?sceneId=…&pointId=…`（切换场景/选中点位）
+    //   - `/iot/devices?deviceId=…&productId=…&action=create`（打开详情/新建抽屉）
+    //   - `/iot/alerts?deviceId=…`
+    // 现象：切一次场景就多一个「数字孪生」标签，很快就堆满标签栏。
+    //
+    // 为什么可以**默认**开启：全仓没有任何页面依赖「同一 path 不同 query 开多个标签」
+    // （`grep fullPathKey|pageKey` 在 apps 下零命中）；它们都只把 query 当页内状态。
+    // 需要「一个 query 一个标签」的页面可自己把 `meta.fullPathKey` 设回 true
+    // （本处只在**未显式设置**时兜底，不覆盖页面自己的选择）。
+    // ------------------------------------------------------------------
+    // 只用原地赋值：`route.meta = { ...route.meta, fullPathKey: false }` 会触发
+    // TS2322（spread 后丢索引签名推断）；`route.meta = { fullPathKey: false }`
+    // 又缺必填的 `title`。而**有菜单的路由 meta 必然存在**（后端总会带 title），
+    // 无 meta 的路由（纯布局容器）本就不进标签栏，跳过即可。
+    if (route.meta && route.meta.fullPathKey === undefined) {
+      route.meta.fullPathKey = false;
+    }
+
     // 重新包装component，使用与路由名称相同的name以支持keep-alive的条件缓存。
     if (
       route.meta?.keepAlive &&

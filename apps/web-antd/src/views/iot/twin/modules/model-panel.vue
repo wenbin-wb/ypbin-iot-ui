@@ -1,8 +1,6 @@
 <script lang="ts" setup>
 import type { UploadProps } from 'ant-design-vue';
 
-import type { IotTwinApi } from '#/api/iot';
-
 import { computed, onMounted, ref } from 'vue';
 
 import { useAccess } from '@vben/access';
@@ -14,6 +12,7 @@ import {
   Button,
   Empty,
   message,
+  Modal,
   Popconfirm,
   Progress,
   Spin,
@@ -25,6 +24,8 @@ import {
   createModelAssetExternal,
   deleteModelAsset,
   getModelAssetList,
+  IotTwinApi,
+  renameModelAsset,
   uploadModelAsset,
 } from '#/api/iot';
 import { $t } from '#/locales';
@@ -53,6 +54,8 @@ const emit = defineEmits<{
 const { hasAccessByCodes } = useAccess();
 const canCreate = computed(() => hasAccessByCodes(['iot:twin:create']));
 const canDelete = computed(() => hasAccessByCodes(['iot:twin:delete']));
+/** 改名走 update 权限（与后端 `PUT /{id}/name` 的 @SaCheckPermission 一致）。 */
+const canUpdate = computed(() => hasAccessByCodes(['iot:twin:update']));
 
 const assets = ref<IotTwinApi.ModelAssetResp[]>([]);
 const loading = ref(false);
@@ -63,6 +66,85 @@ const externalOpen = ref(false);
 const externalName = ref('');
 const externalUrl = ref('');
 const externalSaving = ref(false);
+
+/** 模型名称长度上限（暴露给模板：`TWIN_LIMITS` 是值不是类型，模板无法直接引 import）。 */
+const MAX_ASSET_NAME_LENGTH = IotTwinApi.TWIN_LIMITS.maxAssetNameLength;
+
+/**
+ * 改名弹窗状态。
+ *
+ * 为什么用**弹窗**而不是行内编辑：行内编辑要在 `v-for` 里切换节点类型，
+ * 实测会与列表刷新/权限判定相互干扰（输入框预填丢失、状态被重置）。
+ * 弹窗是单实例、状态简单，且与仓内其它「编辑单条」的交互一致。
+ */
+const renameOpen = ref(false);
+/** 正在改名的资产（null = 未打开）。 */
+const renameTarget = ref<IotTwinApi.ModelAssetResp | null>(null);
+/** 改名输入框草稿值。 */
+const renameDraft = ref('');
+/** 改名提交中（禁用按钮，避免重复提交）。 */
+const renaming = ref(false);
+
+/**
+ * 打开改名弹窗。
+ *
+ * @param asset 目标资产
+ */
+function startRename(asset: IotTwinApi.ModelAssetResp): void {
+  renameTarget.value = asset;
+  renameDraft.value = asset.assetName;
+  renameOpen.value = true;
+}
+
+/** 取消改名（关闭弹窗，不提交）。 */
+function cancelRename(): void {
+  renameOpen.value = false;
+  renameTarget.value = null;
+  renameDraft.value = '';
+}
+
+/**
+ * 提交改名。
+ *
+ * 后端对「改成同名」是幂等的（直接成功、不发 UPDATE），所以这里不必特判。
+ * 重名会返回后端文案（「模型名称已存在：xxx」），原样展示——那句话已经足够可行动。
+ *
+ * @param asset 目标资产
+ */
+async function submitRename(): Promise<void> {
+  const asset = renameTarget.value;
+  if (!asset) {
+    return;
+  }
+  const next = renameDraft.value.trim();
+  if (!next) {
+    message.warning($t('page.iot.twin.assetNameRequired'));
+    return;
+  }
+  if (next.length > MAX_ASSET_NAME_LENGTH) {
+    message.warning(
+      $t('page.iot.twin.assetNameTooLong', [
+        MAX_ASSET_NAME_LENGTH,
+      ]),
+    );
+    return;
+  }
+  renaming.value = true;
+  try {
+    await renameModelAsset(asset.id, next);
+    message.success($t('common.success'));
+    cancelRename();
+    await load();
+    // 场景可能引用了它 ⇒ 通知父组件刷新场景树（名字变了要同步显示）
+    emit('refresh');
+  } catch (renameError) {
+    message.error(
+      extractErrorMessage(renameError, $t('page.iot.twin.renameFailed')),
+    );
+  } finally {
+    renaming.value = false;
+  }
+}
 
 /** 允许的模型扩展名（与后端 `TwinLimits.allowedModelExtensions` 同值）。 */
 const ALLOWED_EXTENSIONS = ['.glb', '.gltf'] as const;
@@ -271,6 +353,15 @@ onMounted(async () => {
               </span>
             </div>
           </div>
+          <!-- 改名：被场景引用也能改（改名不影响引用关系） -->
+          <Button
+            v-if="canUpdate"
+            size="small"
+            type="link"
+            @click="startRename(asset)"
+          >
+            {{ $t('common.edit') }}
+          </Button>
           <Tooltip
             v-if="asset.sceneCount > 0"
             :title="$t('page.iot.twin.assetInUseHint')"
@@ -292,6 +383,32 @@ onMounted(async () => {
       </ul>
     </div>
 
+    <!-- 改名弹窗 -->
+    <Modal
+      v-model:open="renameOpen"
+      :confirm-loading="renaming"
+      :mask-closable="!renaming"
+      :title="$t('page.iot.twin.renameAssetTitle')"
+      centered
+      @cancel="cancelRename"
+      @ok="() => submitRename()"
+    >
+      <div class="py-2">
+        <Input
+          v-model:value="renameDraft"
+          :disabled="renaming"
+          :maxlength="MAX_ASSET_NAME_LENGTH"
+          :placeholder="$t('page.iot.twin.assetName')"
+          allow-clear
+          autofocus
+          @keyup.enter="submitRename"
+        />
+        <p class="mt-2 text-xs text-muted-foreground">
+          {{ $t('page.iot.twin.renameHint') }}
+        </p>
+      </div>
+    </Modal>
+
     <!-- 外链登记 -->
     <div v-if="externalOpen" class="border-t border-border p-3">
       <Alert
@@ -299,13 +416,13 @@ onMounted(async () => {
         :message="$t('page.iot.twin.externalHint')"
         type="info"
       />
-      <a-input
+      <Input
         v-model:value="externalName"
         :maxlength="128"
         :placeholder="$t('page.iot.twin.assetName')"
         class="mb-2"
       />
-      <a-input
+      <Input
         v-model:value="externalUrl"
         :maxlength="1024"
         :placeholder="$t('page.iot.twin.externalUrl')"

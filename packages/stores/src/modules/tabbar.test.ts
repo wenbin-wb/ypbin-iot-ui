@@ -297,4 +297,40 @@ describe('useAccessStore', () => {
     expect(store.excludeCachedTabs.has('Dashboard')).toBe(false);
     expect(store.renderRouteView).toBe(true);
   });
+
+  it('★ 页内 query 变化不得新开标签（数字孪生切场景 / 设备台账开抽屉）', () => {
+    // 现场：/iot/twin?sceneId=A 切到 ?sceneId=B 会多一个「数字孪生」标签。
+    // 根因：getTabKey 默认用 fullPath（含 query）。修复：路由 meta 统一兜底
+    // fullPathKey: false（见 effects/access/src/accessible.ts 的 fork 定制）。
+    const store = useTabbarStore();
+    const base = {
+      meta: { fullPathKey: false, title: '数字孪生' },
+      name: 'IotDigitalTwin',
+      path: '/iot/twin',
+    };
+    store.addTab({ ...base, fullPath: '/iot/twin?sceneId=1', query: { sceneId: '1' } } as any);
+    store.addTab({ ...base, fullPath: '/iot/twin?sceneId=2', query: { sceneId: '2' } } as any);
+    store.addTab({
+      ...base,
+      fullPath: '/iot/twin?sceneId=2&pointId=9',
+      query: { pointId: '9', sceneId: '2' },
+    } as any);
+
+    expect(store.tabs.length, '同一 path 的不同 query 必须复用同一个标签').toBe(1);
+    // 标签上的 query 应更新为最新值（深链可分享）
+    expect(store.tabs[0]?.query).toEqual({ pointId: '9', sceneId: '2' });
+  });
+
+  it('显式 fullPathKey: true 的页面仍按 query 开多标签（不破坏该能力）', () => {
+    // 兜底只在「未显式设置」时生效；需要「一个 query 一个标签」的页面仍可自行声明。
+    const store = useTabbarStore();
+    const base = {
+      meta: { fullPathKey: true },
+      name: 'Detail',
+      path: '/detail',
+    };
+    store.addTab({ ...base, fullPath: '/detail?id=1', query: { id: '1' } } as any);
+    store.addTab({ ...base, fullPath: '/detail?id=2', query: { id: '2' } } as any);
+    expect(store.tabs.length).toBe(2);
+  });
 });
