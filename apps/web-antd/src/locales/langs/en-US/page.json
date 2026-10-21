@@ -1625,6 +1625,7 @@
       },
       "clickSurfaceHint": "Click the model surface to place a device anchor",
       "create": "Create",
+      "createRootScene": "New root scene",
       "decimals": "Decimals",
       "delete": "Delete",
       "deleteFailed": "Failed to delete",
@@ -1657,6 +1658,16 @@
       "flyFallbackLowMemory": "Detected about {deviceMemory}GB of device memory. Fly-through keeps two scenes resident, so switching was used instead",
       "flyFallbackModelTooLarge": "The model is about {modelMb}MB, exceeding the {limitMb}MB limit. Fly-through needs both parent and child scenes resident, which would exceed GPU memory, so switching was used instead",
       "flyFallbackNoAnchor": "The target scene has no anchor transform (it coincides with the parent origin), so a fly-through would show no positional change. Switching was used instead",
+      "hud": {
+        "animationPaused": "{0} clips · paused",
+        "animationRunning": "{0} clips · playing",
+        "collapse": "Collapse metrics",
+        "expand": "Expand metrics",
+        "live": "Live",
+        "offline": "Disconnected",
+        "reconnecting": "Reconnecting",
+        "unauthorized": "Auth failed"
+      },
       "icon": "Icon key",
       "incompleteBinding": "Some binding rows have no property selected. Please select or remove them",
       "kpi": {

@@ -111,6 +111,19 @@ const emit = defineEmits<{
   ready: [];
   /** 渲染统计（供底部状态栏展示）。 */
   renderStats: [stats: { geometries: number; textures: number }];
+  /** 场景概况（模型体积/动画数/是否在播/动效档位/巡航状态），供画布 HUD 展示。 */
+  sceneSummary: [
+    summary:
+      | undefined
+      | {
+          animationCount: number;
+          animationsRunning: boolean;
+          modelBytes: number;
+          motionMode: 'normal' | 'off' | 'reduced';
+          orbiting: boolean;
+          renderStats: { geometries: number; textures: number };
+        },
+  ];
   /** 点击已有锚点（父组件据此高亮该点位）。 */
   select: [pointId: string];
   /**
@@ -158,6 +171,17 @@ interface EngineOptionalCapabilities {
       };
   /** 动效档位（引擎层判定，页面只展示）。 */
   getMotionMode?: () => 'normal' | 'off' | 'reduced';
+  /** 场景概况（模型体积/动画/巡航/渲染统计）。 */
+  getSceneSummary?: () =>
+    | undefined
+    | {
+        animationCount: number;
+        animationsRunning: boolean;
+        modelBytes: number;
+        motionMode: 'normal' | 'off' | 'reduced';
+        orbiting: boolean;
+        renderStats: { geometries: number; textures: number };
+      };
   getRenderStats?: () => { geometries: number; textures: number };
   projectToScreen?: (world: {
     x: number;
@@ -778,12 +802,14 @@ async function loadScene(): Promise<void> {
   }
 }
 
-/** 上报渲染统计（底部状态栏的显存泄漏观测口，§5.4）。 */
+/** 上报渲染统计（底部状态栏的显存泄漏观测口，§5.4）与场景概况（画布 HUD）。 */
 function reportRenderStats(): void {
-  const stats = engine()?.getRenderStats?.();
+  const caps = engine();
+  const stats = caps?.getRenderStats?.();
   if (stats) {
     emit('renderStats', stats);
   }
+  emit('sceneSummary', caps?.getSceneSummary?.());
 }
 
 /**

@@ -12,7 +12,15 @@ import { useAccess } from '@vben/access';
 import { useVbenDrawer } from '@vben/common-ui';
 import { Plus } from '@vben/icons';
 
-import { Button, Empty, message, Popconfirm, Spin, Tree } from 'ant-design-vue';
+import {
+  Button,
+  Empty,
+  message,
+  Popconfirm,
+  Spin,
+  Tooltip,
+  Tree,
+} from 'ant-design-vue';
 
 import { deleteTwinScene } from '#/api/iot';
 import { $t } from '#/locales';
@@ -198,10 +206,20 @@ defineExpose({ expandNode });
       <span class="text-sm font-medium">{{
         $t('page.iot.twin.sceneTree')
       }}</span>
-      <Button v-if="canCreate" size="small" type="primary" @click="onCreateRoot">
-        <Plus class="size-4" />
-        {{ $t('common.create') }}
-      </Button>
+      <!--
+        新建场景改为**次级图标按钮**：页面里最显眼的动作应该是「看模型」而不是「建场景」。
+        文本按钮在视觉上过重（改造前它是整个左栏唯一的高饱和元素），收成图标 + aria-label。
+      -->
+      <Tooltip v-if="canCreate" :title="$t('page.iot.twin.createRootScene')">
+        <Button
+          :aria-label="$t('page.iot.twin.createRootScene')"
+          size="small"
+          type="text"
+          @click="onCreateRoot"
+        >
+          <Plus class="size-4" />
+        </Button>
+      </Tooltip>
     </div>
 
     <div class="min-h-0 flex-1 overflow-auto p-2">
@@ -228,15 +246,17 @@ defineExpose({ expandNode });
           <div class="group flex items-center justify-between gap-1">
             <span class="flex min-w-0 items-center gap-1">
               <span class="truncate">
-                {{ titleProps.sceneName }}（{{ titleProps.sceneCode }}）
+                {{ titleProps.sceneName }}
+              </span>
+              <!-- 场景编码降到弱化小字：它是配置时的标识，不是日常阅读的重点 -->
+              <span class="shrink-0 text-[10px] text-muted-foreground/70">
+                {{ titleProps.sceneCode }}
               </span>
               <!--
                 角标：点位数 + 告警数。**告警数只有当前场景有实时数据**，
                 其它场景显示为空心点（未加载），绝不显示 0 —— 0 会被读成「没有告警」。
               -->
-              <template
-                v-if="badges && badges.get(String(titleProps.key))"
-              >
+              <template v-if="badges && badges.get(String(titleProps.key))">
                 <span
                   v-if="badges.get(String(titleProps.key))!.pointCount > 0"
                   class="shrink-0 rounded bg-muted px-1 text-[10px] text-muted-foreground"
@@ -263,7 +283,9 @@ defineExpose({ expandNode });
                   {{ badges.get(String(titleProps.key))!.alerts }}
                 </span>
                 <span
-                  v-else-if="badges.get(String(titleProps.key))!.hasModel === false"
+                  v-else-if="
+                    badges.get(String(titleProps.key))!.hasModel === false
+                  "
                   class="size-1.5 shrink-0 rounded-full border border-muted-foreground/50"
                   :title="$t('page.iot.twin.badge.noModel')"
                   aria-hidden="true"
@@ -275,7 +297,9 @@ defineExpose({ expandNode });
                 v-if="canCreate"
                 size="small"
                 type="link"
-                @click.stop="onCreateChild(titleProps as unknown as SceneTreeNode)"
+                @click.stop="
+                  onCreateChild(titleProps as unknown as SceneTreeNode)
+                "
               >
                 {{ $t('common.create') }}
               </Button>

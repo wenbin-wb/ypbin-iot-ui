@@ -12,6 +12,13 @@ import { IconifyIcon } from '@vben/icons';
 import { Button } from 'ant-design-vue';
 
 import { $t } from '#/locales';
+import {
+  TWIN_COLOR_ALERT,
+  TWIN_COLOR_DISABLED,
+  TWIN_COLOR_OFFLINE,
+  TWIN_COLOR_ONLINE,
+  TWIN_COLOR_UNKNOWN,
+} from '#/three/twin/colors';
 
 import { describeAge } from './property-card-model';
 
@@ -64,16 +71,21 @@ const emit = defineEmits<{
   pointerLeave: [];
 }>();
 
-/** 状态 → 左侧色条 + 徽标语义（色值走 CSS 变量，`.vue` 内不写 hex）。 */
+/**
+ * 状态 → 左侧色条颜色。
+ *
+ * 色值统一取引擎层调色板 `three/twin/colors.ts`（与画布锚点、图例**同源**），
+ * 不在 `.vue` 里写调色板色阶类（design-token 门禁禁止）也不写 hex。
+ */
 const statusAccent = computed(() => {
   const map: Record<PropertyCardStatus, string> = {
-    alert: 'bg-destructive',
-    disabled: 'bg-muted-foreground/50',
-    normal: 'bg-emerald-500',
-    offline: 'bg-muted-foreground',
-    unknown: 'bg-amber-500',
+    alert: TWIN_COLOR_ALERT,
+    disabled: TWIN_COLOR_DISABLED,
+    normal: TWIN_COLOR_ONLINE,
+    offline: TWIN_COLOR_OFFLINE,
+    unknown: TWIN_COLOR_UNKNOWN,
   };
-  return map[props.card.cardStatus];
+  return { backgroundColor: map[props.card.cardStatus] };
 });
 
 /** 卡片宽度（与定位算法共享同一常量，避免两处漂移）。 */
@@ -129,7 +141,7 @@ function timestampText(ts: number | undefined): string | undefined {
     <!-- 左侧状态色条 -->
     <div
       class="absolute inset-y-1 left-0 w-0.5 rounded-full"
-      :class="statusAccent"
+      :style="statusAccent"
       aria-hidden="true"
     ></div>
 
@@ -150,8 +162,16 @@ function timestampText(ts: number | undefined): string | undefined {
               {{ $t('page.iot.twin.card.pinned') }}
             </span>
           </div>
-          <div class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-            <span :class="card.cardStatus === 'alert' ? 'text-destructive' : 'text-muted-foreground'">
+          <div
+            class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs"
+          >
+            <span
+              :class="
+                card.cardStatus === 'alert'
+                  ? 'text-destructive'
+                  : 'text-muted-foreground'
+              "
+            >
               {{ $t(`page.iot.twin.card.status.${card.cardStatus}`) }}
             </span>
             <span
@@ -225,8 +245,12 @@ function timestampText(ts: number | undefined): string | undefined {
                     :class="{
                       'text-muted-foreground/60': row.quality === 'missing',
                       'text-destructive': row.quality === 'bad',
-                      'text-amber-500': row.quality === 'stale',
                     }"
+                    :style="
+                      row.quality === 'stale'
+                        ? { color: TWIN_COLOR_UNKNOWN }
+                        : undefined
+                    "
                   >
                     {{ row.valueText ?? '--' }}
                   </span>
@@ -246,7 +270,8 @@ function timestampText(ts: number | undefined): string | undefined {
                 </div>
                 <div
                   v-else-if="row.quality === 'stale'"
-                  class="text-[10px] text-amber-500"
+                  class="text-[10px]"
+                  :style="{ color: TWIN_COLOR_UNKNOWN }"
                 >
                   {{ $t('page.iot.twin.card.stale') }}
                 </div>
@@ -254,7 +279,9 @@ function timestampText(ts: number | undefined): string | undefined {
                   v-else-if="row.quality === 'bad'"
                   class="text-[10px] text-destructive"
                 >
-                  {{ $t('page.iot.twin.card.badQuality', [row.qualityCode ?? '']) }}
+                  {{
+                    $t('page.iot.twin.card.badQuality', [row.qualityCode ?? ''])
+                  }}
                 </div>
                 <div
                   v-if="row.bindingStale"
