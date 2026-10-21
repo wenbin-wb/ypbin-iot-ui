@@ -2,6 +2,11 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 import { $t } from '#/locales';
+import {
+  TWIN_COLOR_ALERT,
+  TWIN_COLOR_ONLINE,
+  TWIN_COLOR_UNKNOWN,
+} from '#/three/twin/colors';
 
 /**
  * 画布底部状态栏（**运行态观测窗**）。
@@ -76,19 +81,19 @@ onBeforeUnmount(() => {
   }
 });
 
-/** FPS 档位（用于着色：>=50 正常，30~49 偏低，<30 告警）。 */
-const fpsTone = computed(() => {
+/** FPS 档位 → 颜色（>=50 正常，30~49 偏低，<30 告警）。 */
+const fpsStyle = computed(() => {
   const value = fps.value;
   if (value === undefined) {
-    return 'text-muted-foreground';
+    return undefined;
   }
   if (value >= 50) {
-    return 'text-emerald-500';
+    return { color: TWIN_COLOR_ONLINE };
   }
   if (value >= 30) {
-    return 'text-amber-500';
+    return { color: TWIN_COLOR_UNKNOWN };
   }
-  return 'text-destructive';
+  return { color: TWIN_COLOR_ALERT };
 });
 
 /** 实时连接状态文案。 */
@@ -106,21 +111,21 @@ const realtimeLabel = computed(() => {
   return $t(`page.iot.twin.status.realtime.${state}`);
 });
 
-/** 实时连接状态色。 */
-const realtimeTone = computed(() => {
+/** 实时连接状态色（与画布锚点状态色同源）。 */
+const realtimeStyle = computed(() => {
   switch (props.realtimeState) {
     case 'connecting':
     case 'reconnecting': {
-      return 'text-amber-500';
+      return { color: TWIN_COLOR_UNKNOWN };
     }
     case 'live': {
-      return 'text-emerald-500';
+      return { color: TWIN_COLOR_ONLINE };
     }
     case 'unauthorized': {
-      return 'text-destructive';
+      return { color: TWIN_COLOR_ALERT };
     }
     default: {
-      return 'text-muted-foreground';
+      return undefined;
     }
   }
 });
@@ -138,18 +143,13 @@ const lastUpdateText = computed(() => {
   );
   return $t('page.iot.twin.status.updatedAgo', [seconds]);
 });
-
-/** 动效档位只在非 normal 时显示（normal 是默认态，不需要占位）。 */
-const showMotion = computed(
-  () => props.motionMode !== undefined && props.motionMode !== 'normal',
-);
 </script>
 
 <template>
   <div
-    class="pointer-events-none flex items-center gap-3 rounded bg-background/75 px-2 py-0.5 text-[10px] tabular-nums text-muted-foreground backdrop-blur"
+    class="pointer-events-none flex items-center gap-2.5 whitespace-nowrap rounded-lg border border-border/50 bg-background/70 px-2 py-1 text-[10px] tabular-nums text-muted-foreground shadow backdrop-blur"
   >
-    <span :class="fpsTone" data-status="fps">
+    <span :style="fpsStyle" data-status="fps">
       {{ $t('page.iot.twin.status.fps') }} {{ fps ?? '--' }}
     </span>
     <span data-status="models">
@@ -159,15 +159,9 @@ const showMotion = computed(
       Geo {{ renderStats.geometries }} / Tex {{ renderStats.textures }}
     </span>
     <span data-status="updated"> {{ lastUpdateText }} </span>
-    <span :class="realtimeTone" data-status="realtime">
+    <span :style="realtimeStyle" data-status="realtime">
       {{ realtimeLabel }}
     </span>
-    <span
-      v-if="showMotion"
-      class="rounded bg-muted px-1 text-muted-foreground"
-      data-status="motion"
-    >
-      {{ $t(`page.iot.twin.status.motion.${motionMode}`) }}
-    </span>
+    <!-- 动效档位已由画布 HUD 的 chip 展示（同页只留一处，省宽度防折行） -->
   </div>
 </template>

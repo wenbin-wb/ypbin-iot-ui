@@ -306,6 +306,9 @@ export class TwinSceneManager {
     { x: number; y: number; z: number }
   >();
 
+  /** 当前模型自带的动画数（HUD 展示「有动画但未播放」时要用原始数量）。 */
+  private animationCount = 0;
+
   private animationFrameId = 0;
 
   /**
@@ -396,6 +399,9 @@ export class TwinSceneManager {
    * textContent 全为空、childNodes 为 0。
    */
   private lastAnchorStates?: Map<string, AnchorRuntimeState>;
+
+  /** 当前模型的字节数（来自 `SceneLoadRequest.modelBytes`，未知为 0）。 */
+  private modelBytes = 0;
 
   private modelRoot?: THREE_NS.Group;
 
@@ -722,6 +728,53 @@ export class TwinSceneManager {
     return {
       geometries: memory?.geometries ?? 0,
       textures: memory?.textures ?? 0,
+    };
+  }
+
+  /**
+   * 场景概况（供画布 HUD 展示；**纯读取，不渲染任何东西**）。
+   *
+   * ## 为什么放引擎层而不是页面自己拼
+   *
+   * 这几个字段（动画是否真在播、是否在巡航、动效档位）都必须与**画布内部的实际状态同源**：
+   * 页面若自己拼（例如用「有 clip 数 > 0」判断「动画播放中」），在弱机型档位（clipSpeed=0，
+   * mixer 每帧不 update）上就会显示「播放中」而画面完全静止 —— 这正是最典型的
+   * 「说的和做的不一致」。因此统一由引擎层给出。
+   *
+   * ## 为什么返回 undefined 而不是全 0
+   *
+   * 「没有模型」与「模型 0 字节 / 0 动画」语义完全不同：前者 HUD 应显示「暂无模型」，
+   * 后者是合法的「模型没有动画」。返回 undefined 让调用方能把两者区分开。
+   *
+   * @returns 场景概况；未加载模型（或管理器未初始化）时 undefined
+   */
+  getSceneSummary():
+    | {
+        /** 当前模型里可用的动画数（GLB 自带 clip 数量）。 */
+        animationCount: number;
+        /** 动画是否**真的在推进**（有 clip 且 `clipSpeed>0`）。 */
+        animationsRunning: boolean;
+        /** 模型文件字节数（未知为 0）。 */
+        modelBytes: number;
+        /** 当前动效档位。 */
+        motionMode: TwinMotionMode;
+        /** 相机是否在自动巡航。 */
+        orbiting: boolean;
+        /** 渲染统计（geometries/textures）。 */
+        renderStats: { geometries: number; textures: number };
+      }
+    | undefined {
+    // 没有模型就不给数字：调用方据此显示「暂无模型」而不是「0 字节 / 0 动画」
+    if (!this.modelRoot || this.disposed) {
+      return undefined;
+    }
+    return {
+      animationCount: this.animationCount,
+      animationsRunning: this.animator?.isRunning() ?? false,
+      modelBytes: this.modelBytes,
+      motionMode: this.motionMode,
+      orbiting: this.orbit?.isOrbiting() ?? false,
+      renderStats: this.getRenderStats(),
     };
   }
 
@@ -1314,6 +1367,13 @@ export class TwinSceneManager {
     }
     const root = loaded.scene;
     this.modelRoot = root;
+    // HUD 要展示「模型体积 / 动画数」：在这里记一次（纯读，不影响渲染）
+    this.modelBytes =
+      typeof request.modelBytes === 'number' &&
+      Number.isFinite(request.modelBytes)
+        ? Math.max(0, request.modelBytes)
+        : 0;
+    this.animationCount = loaded.animations.length;
 
     // 锚点变换：**把整条祖先链建成嵌套 Group**，而不是只设自身变换。
     //
@@ -1479,6 +1539,9 @@ export class TwinSceneManager {
     // 外壳节点缓存指向即将 dispose 的模型：必须清掉（否则下次 setShellVisible 会摸到
     // 已释放的对象）
     this.shellNodes = undefined;
+    // HUD 概况同步归零：模型已不在，残留数字会让 HUD 显示上一个场景的动画数
+    this.animationCount = 0;
+    this.modelBytes = 0;
     if (this.modelRoot) {
       // 先回收模型根的 GPU 资源，再从最深那级 pivot 上摘下来
       disposeSubtree(this.modelRoot);

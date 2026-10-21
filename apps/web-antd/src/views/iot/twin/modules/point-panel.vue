@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue';
 
 import { useAccess } from '@vben/access';
-import { Plus } from '@vben/icons';
+import { IconifyIcon, Plus } from '@vben/icons';
 
 import {
   Button,
@@ -10,7 +10,6 @@ import {
   message,
   Popconfirm,
   Spin,
-  Tag,
   Tooltip,
 } from 'ant-design-vue';
 
@@ -236,13 +235,14 @@ function primaryText(point: IotTwinApi.PointResp): string {
           "
         >
           <Button
+            :aria-label="$t('common.create')"
             :disabled="!sceneId || pointLimitReached"
+            :title="$t('common.create')"
             size="small"
             type="primary"
             @click="onCreate"
           >
-            <Plus class="size-4" />
-            {{ $t('common.create') }}
+            <Plus class="size-3.5" />
           </Button>
         </Tooltip>
       </div>
@@ -270,63 +270,79 @@ function primaryText(point: IotTwinApi.PointResp): string {
         v-else-if="points.length === 0"
         :description="$t('page.iot.twin.noPoint')"
       />
-      <ul v-else class="space-y-2">
+      <!--
+        紧凑列表（本轮布局改版）：
+        · 每行主信息 = 设备名 +「主属性 · 当前值」一行，次信息（节点名/Tag）降为小字；
+        · 三个文字按钮改为 **hover/选中才出现** 的图标操作 —— 常态下每行只有一个信息块，
+          视觉噪声从「一屏 18 个按钮」降到 0（可用性靠 hover + 键盘 Tab 保证）；
+        · 选中行用左侧色条 + 轻底色标识，不再用粗边框（边框会与卡片边界打架）。
+      -->
+      <ul v-else class="space-y-0.5">
         <li
           v-for="point in points"
           :key="point.id"
           :data-twin-point-row="point.id"
-          class="cursor-pointer rounded border border-border p-2 text-xs hover:border-primary"
-          :class="{ 'border-primary': point.id === editingPointId }"
+          class="group relative cursor-pointer rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-muted/50"
+          :class="{ 'bg-muted/60': point.id === editingPointId }"
           @click="emit('select', point.id)"
         >
-          <div class="flex items-start justify-between gap-2">
+          <span
+            v-if="point.id === editingPointId"
+            class="absolute inset-y-1 left-0 w-0.5 rounded-full bg-primary"
+            aria-hidden="true"
+          ></span>
+          <div class="flex items-center gap-2">
             <div class="min-w-0 flex-1">
-              <div class="truncate font-medium">
-                {{ point.deviceIdName ?? point.deviceId }}
-              </div>
-              <div class="mt-1 truncate text-muted-foreground">
-                {{ primaryText(point) }}
-              </div>
-              <div class="mt-1 flex flex-wrap gap-1">
-                <Tag v-if="point.bindings.length > 1">
-                  +{{ point.bindings.length - 1 }}
-                </Tag>
-                <Tag v-if="point.nodeName" color="blue">
-                  {{ point.nodeName }}
-                </Tag>
-                <Tag
+              <div class="flex items-center gap-1.5">
+                <span class="truncate font-medium">
+                  {{ point.deviceIdName ?? point.deviceId }}
+                </span>
+                <span
                   v-if="staleCountByPoint.get(point.id)"
-                  color="red"
+                  class="size-1.5 shrink-0 rounded-full bg-destructive"
                   :title="$t('page.iot.twin.staleBindingHint')"
+                ></span>
+              </div>
+              <div
+                class="mt-0.5 flex items-center gap-1 truncate text-muted-foreground"
+              >
+                <span class="truncate">{{ primaryText(point) }}</span>
+                <span
+                  v-if="point.bindings.length > 1"
+                  class="shrink-0 text-[10px] opacity-70"
                 >
-                  {{
-                    $t('page.iot.twin.staleCount', [
-                      staleCountByPoint.get(point.id) ?? 0,
-                    ])
-                  }}
-                </Tag>
+                  +{{ point.bindings.length - 1 }}
+                </span>
+                <span
+                  v-if="point.nodeName"
+                  class="shrink-0 truncate text-[10px] opacity-60"
+                >
+                  · {{ point.nodeName }}
+                </span>
               </div>
             </div>
-            <!--
-              操作区必须 shrink-0 且不换行：此前未给 shrink-0 时，窄屏（1600 宽 + 右栏 320px）
-              下三个 type="link" 按钮被 flex 压成三行竖排（实测截图），把行高撑到 3 倍。
-            -->
-            <div class="flex shrink-0 items-center gap-1">
-              <!-- 运行态下钻：从锚点直接跳到设备详情（工单 #127） -->
+            <!-- 操作：默认隐藏，hover/键盘聚焦时出现；图标按钮带 aria-label -->
+            <div
+              class="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100"
+            >
               <Button
+                :aria-label="$t('page.iot.twin.openDevice')"
+                :title="$t('page.iot.twin.openDevice')"
                 size="small"
-                type="link"
+                type="text"
                 @click.stop="emit('openDevice', point.id)"
               >
-                {{ $t('page.iot.twin.openDevice') }}
+                <IconifyIcon class="size-3.5" icon="lucide:external-link" />
               </Button>
               <Button
                 v-if="canUpdate"
+                :aria-label="$t('common.edit')"
+                :title="$t('common.edit')"
                 size="small"
-                type="link"
+                type="text"
                 @click.stop="onEdit(point)"
               >
-                {{ $t('common.edit') }}
+                <IconifyIcon class="size-3.5" icon="lucide:pencil" />
               </Button>
               <Popconfirm
                 v-if="canDelete"
@@ -337,8 +353,15 @@ function primaryText(point: IotTwinApi.PointResp): string {
                 "
                 @confirm="onDelete(point)"
               >
-                <Button danger size="small" type="link" @click.stop>
-                  {{ $t('common.delete') }}
+                <Button
+                  :aria-label="$t('common.delete')"
+                  :title="$t('common.delete')"
+                  danger
+                  size="small"
+                  type="text"
+                  @click.stop
+                >
+                  <IconifyIcon class="size-3.5" icon="lucide:trash-2" />
                 </Button>
               </Popconfirm>
             </div>

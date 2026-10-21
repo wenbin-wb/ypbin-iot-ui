@@ -1625,6 +1625,7 @@
       },
       "clickSurfaceHint": "点击模型表面放置设备锚点",
       "create": "新增",
+      "createRootScene": "新建根场景",
       "decimals": "小数位",
       "delete": "删除",
       "deleteFailed": "删除失败",
@@ -1657,6 +1658,16 @@
       "flyFallbackLowMemory": "检测到设备内存约 {deviceMemory}GB，飞行下钻需要双场景驻留显存，已自动改为切换加载",
       "flyFallbackModelTooLarge": "模型约 {modelMb}MB，超过 {limitMb}MB 上限：飞行下钻需要父子场景同时驻留，显存不够，已自动改为切换加载",
       "flyFallbackNoAnchor": "目标场景没有锚点变换（与父场景原点重合），飞行过去看不出位置变化，已改为切换加载",
+      "hud": {
+        "animationPaused": "动画 ×{0}（已暂停）",
+        "animationRunning": "动画 ×{0} 播放中",
+        "collapse": "收起指标",
+        "expand": "展开指标",
+        "live": "实时数据",
+        "offline": "未连接",
+        "reconnecting": "重连中",
+        "unauthorized": "鉴权失败"
+      },
       "icon": "图标标识",
       "incompleteBinding": "有尚未选择属性的绑定行，请先选择或删除",
       "kpi": {

@@ -56,6 +56,15 @@ export interface TwinAnimator {
   setClipSpeed: (speed: number) => void;
   /** 是否有动画在播放（供状态栏/调试）。 */
   hasClips: () => boolean;
+  /**
+   * 动画当前是否**真的在推进**（有 clip 且播放倍率 > 0）。
+   *
+   * 与 {@link hasClips} 的区别：`hasClips` 只说明「模型带了动画、action 已创建」，
+   * 而 `clipSpeed=0`（弱机型档位）时 mixer 每帧都不 update ⇒ 画面是静止的。
+   * HUD/状态栏要展示「动画是否在动」必须用这个，否则会在弱机型上显示「播放中」而实际静止
+   * ——这正是「说的和做的不一致」。
+   */
+  isRunning: () => boolean;
   /** 播放的 clip 名（调试/日志用）。 */
   getActiveClipNames: () => string[];
   /** 停止全部 action 并解绑（**切场景/销毁必须调用**）。 */
@@ -160,6 +169,7 @@ export function createTwinAnimator(
     getActiveClipNames: () => selected.map((clip) => clip.name),
     getClipSpeed: () => speed,
     hasClips: () => selected.length > 0,
+    isRunning: () => !disposed && speed > 0 && selected.length > 0,
     setClipSpeed: (next: number) => {
       speed = Number.isFinite(next) ? Math.max(0, next) : 0;
     },

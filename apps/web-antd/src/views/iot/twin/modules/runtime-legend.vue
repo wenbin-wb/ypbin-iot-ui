@@ -28,17 +28,21 @@ const items = computed<LegendItem[]>(() => [
   { color: TWIN_COLOR_OFFLINE, label: $t('page.iot.twin.legendOffline') },
   { color: TWIN_COLOR_UNKNOWN, label: $t('page.iot.twin.legendUnknown') },
   { color: TWIN_COLOR_DISABLED, label: $t('page.iot.twin.legendDisabled') },
-  { blink: true, color: TWIN_COLOR_ALERT, label: $t('page.iot.twin.legendAlert') },
+  {
+    blink: true,
+    color: TWIN_COLOR_ALERT,
+    label: $t('page.iot.twin.legendAlert'),
+  },
 ]);
 </script>
 
 <template>
   <ul
-    class="flex items-center gap-3 rounded bg-background/80 px-2 py-1 text-xs backdrop-blur"
+    class="flex items-center gap-2 whitespace-nowrap rounded-lg border border-border/50 bg-background/70 px-2 py-1 text-[10px] shadow backdrop-blur"
   >
     <li v-for="item in items" :key="item.label" class="flex items-center gap-1">
       <span
-        class="inline-block size-2.5 rounded-full"
+        class="inline-block size-1.5 rounded-full"
         :class="{ 'animate-pulse': item.blink }"
         :style="{ backgroundColor: item.color }"
       ></span>

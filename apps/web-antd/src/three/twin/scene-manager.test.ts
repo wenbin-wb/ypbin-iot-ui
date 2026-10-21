@@ -114,13 +114,153 @@ describe('sceneManager：锚点层就绪前的状态缓存', () => {
       },
     ]);
     // 内部应已记住（通过行为验证：attachAnchorLayer 后不报错、且后续可重放）
-    expect(() => manager.attachAnchorLayer({
-      attach: () => undefined,
-      detach: () => undefined,
-      render: () => undefined,
-      resize: () => undefined,
-      update: () => undefined,
-    })).not.toThrow();
+    expect(() =>
+      manager.attachAnchorLayer({
+        attach: () => undefined,
+        detach: () => undefined,
+        render: () => undefined,
+        resize: () => undefined,
+        update: () => undefined,
+      }),
+    ).not.toThrow();
     manager.dispose();
+  });
+});
+
+/**
+ * `getSceneSummary()`：画布 HUD 的上下文数据。
+ *
+ * ## 为什么这些用例值得写
+ *
+ * HUD 上每个字段都是「用户看到的一句话」，错一个就是一句假话：
+ * - `animationsRunning` 若用「有 clip」判断，弱机型（clipSpeed=0，mixer 不 update）会显示
+ *   「动画播放中」而画面完全静止；
+ * - `modelBytes`/`animationCount` 若在切场景时不清零，会显示上一个场景的数字；
+ * - 未加载模型时若返回全 0，调用方无法区分「没有模型」与「模型 0 字节」。
+ *
+ * 本文件用**属性注入**的方式构造最小状态（不跑 WebGL）：`getSceneSummary` 是纯读取方法，
+ * 它读的都是私有字段，因此在测试里直接把这些字段按生产时的形态摆好即可。
+ */
+describe('sceneManager：getSceneSummary（HUD 概况）', () => {
+  /** 造一个最小管理器并注入内部状态。 */
+  async function createManagerWith(state: {
+    animationCount?: number;
+    animator?: { isRunning: () => boolean };
+    modelBytes?: number;
+    modelLoaded?: boolean;
+    motionMode?: 'normal' | 'off' | 'reduced';
+    orbiting?: boolean;
+  }) {
+    const { TwinSceneManager } = await import('./scene-manager');
+    const container = document.createElement('div');
+    Object.defineProperty(container, 'clientWidth', { value: 800 });
+    Object.defineProperty(container, 'clientHeight', { value: 600 });
+    const manager = new TwinSceneManager({
+      container,
+      errorMessages: { downloadFailed: (d) => d, parseFailed: (d) => d },
+      onStateChange: () => undefined,
+    });
+    const internals = manager as unknown as Record<string, unknown>;
+    // 模型根替身：`dispose()` 会走 `disposeSubtree`（需要 traverse/removeFromParent）
+    internals.modelRoot =
+      state.modelLoaded === false
+        ? undefined
+        : {
+            children: [],
+            removeFromParent: () => undefined,
+            traverse: () => undefined,
+            userData: {},
+          };
+    // 动画器替身：除了被断言的 isRunning，dispose 也必须存在（manager.dispose 会调用）
+    internals.animator = state.animator
+      ? { ...state.animator, dispose: () => undefined }
+      : undefined;
+    internals.animationCount = state.animationCount ?? 0;
+    internals.modelBytes = state.modelBytes ?? 0;
+    internals.motionMode = state.motionMode ?? 'normal';
+    internals.orbit =
+      state.orbiting === undefined
+        ? undefined
+        : {
+            dispose: () => undefined,
+            isOrbiting: () => state.orbiting,
+            notifyInteraction: () => undefined,
+            pause: () => undefined,
+            resume: () => undefined,
+            update: () => undefined,
+          };
+    return manager;
+  }
+
+  it('★ 未加载模型 ⇒ 返回 undefined（与「模型 0 字节」区分开）', async () => {
+    const manager = await createManagerWith({ modelLoaded: false });
+    expect(manager.getSceneSummary()).toBeUndefined();
+    manager.dispose();
+  });
+
+  it('★ 已加载模型 ⇒ 字段齐全且类型正确', async () => {
+    const manager = await createManagerWith({
+      animationCount: 3,
+      animator: { isRunning: () => true },
+      modelBytes: 2_097_152,
+      motionMode: 'reduced',
+      orbiting: true,
+    });
+    const summary = manager.getSceneSummary();
+    expect(summary).toBeDefined();
+    expect(summary?.animationCount).toBe(3);
+    expect(summary?.modelBytes).toBe(2_097_152);
+    expect(summary?.motionMode).toBe('reduced');
+    expect(summary?.orbiting).toBe(true);
+    expect(summary?.animationsRunning).toBe(true);
+    expect(summary?.renderStats).toEqual({ geometries: 0, textures: 0 });
+    manager.dispose();
+  });
+
+  it('★ 动画停止（弱机型 clipSpeed=0）⇒ animationsRunning=false，但 animationCount 仍如实反映模型', async () => {
+    // 关键区分：模型**有** 3 个动画，但当前**没有在播**（弱机型档位）
+    const manager = await createManagerWith({
+      animationCount: 3,
+      animator: { isRunning: () => false },
+      modelBytes: 1024,
+      motionMode: 'off',
+    });
+    const summary = manager.getSceneSummary();
+    expect(
+      summary?.animationsRunning,
+      '★ 不能让 HUD 显示「播放中」而画面静止',
+    ).toBe(false);
+    expect(summary?.animationCount).toBe(3);
+    expect(summary?.motionMode).toBe('off');
+    manager.dispose();
+  });
+
+  it('★ 无动画器（模型没带 clip）⇒ animationsRunning=false、animationCount=0', async () => {
+    const manager = await createManagerWith({
+      animationCount: 0,
+      modelBytes: 512,
+    });
+    const summary = manager.getSceneSummary();
+    expect(summary?.animationsRunning).toBe(false);
+    expect(summary?.animationCount).toBe(0);
+    expect(summary?.orbiting, '没有巡航控制器时也不应报 true').toBe(false);
+    manager.dispose();
+  });
+
+  it('未初始化渲染器时 renderStats 返回 0（不返回 null/undefined）', async () => {
+    const manager = await createManagerWith({ modelBytes: 1 });
+    const summary = manager.getSceneSummary();
+    expect(summary?.renderStats).toEqual({ geometries: 0, textures: 0 });
+    manager.dispose();
+  });
+
+  it('dispose 之后返回 undefined（不返回上一个场景的残留数据）', async () => {
+    const manager = await createManagerWith({
+      animationCount: 5,
+      modelBytes: 9,
+    });
+    expect(manager.getSceneSummary()).toBeDefined();
+    manager.dispose();
+    expect(manager.getSceneSummary()).toBeUndefined();
   });
 });

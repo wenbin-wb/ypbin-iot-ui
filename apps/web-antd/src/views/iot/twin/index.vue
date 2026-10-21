@@ -27,9 +27,9 @@ import PointPanel from './modules/point-panel.vue';
 import RuntimeLegend from './modules/runtime-legend.vue';
 import { computeSceneBadges } from './modules/scene-badges';
 import SceneTree from './modules/scene-tree.vue';
+import TwinCanvasHud from './modules/twin-canvas-hud.vue';
 import TwinCanvas from './modules/twin-canvas.vue';
 import { computeTwinKpi } from './modules/twin-kpi';
-import TwinKpiBar from './modules/twin-kpi-bar.vue';
 import TwinStatusBar from './modules/twin-status-bar.vue';
 
 /**
@@ -100,6 +100,7 @@ const {
   authError: realtimeAuthError,
   error: runtimeError,
   realtimeError,
+  realtimeState,
 } = runtime;
 
 /** 模型资产列表（由模型面板块加载后共享给画布）。 */
@@ -176,6 +177,21 @@ const liveValues = useTwinLiveValues({ alertCounts });
 const renderStats = ref<{ geometries: number; textures: number }>();
 
 /**
+ * 引擎层场景概况（画布 HUD 的模型/动画/动效信息）。
+ *
+ * 由画布在模型加载完成后回调（`@scene-summary`），**不由页面主动轮询**：
+ * 这些数字只在「模型变了」时才有意义，每帧刷新纯属浪费。
+ */
+const sceneSummary = ref<{
+  animationCount: number;
+  animationsRunning: boolean;
+  modelBytes: number;
+  motionMode: 'normal' | 'off' | 'reduced';
+  orbiting: boolean;
+  renderStats: { geometries: number; textures: number };
+}>();
+
+/**
  * 是否显示完整外壳（屋顶 + 全部墙体）。
  *
  * 默认剖切：演示场景的设备锚点在机柜内部，封闭厂房的屋顶会把它们全部挡住
@@ -204,6 +220,74 @@ const lastUpdateAt = ref<number>();
 /** 告警事件到达 ⇒ 共享域重拉一次（去抖在共享域内，见 use-twin-alert-counts）。 */
 liveValues.onAlertReload(() => {
   void alertCounts.refresh();
+});
+
+/**
+ * 画布上的告警/提示（**聚合成一个列表**渲染，模板里不再铺 6 段 Alert）。
+ *
+ * 只有真正需要用户注意的才进这个列表；空列表时左上角不留任何占位（避免常态占白）。
+ */
+const alerts = computed(() => {
+  const list: Array<{
+    close?: () => void;
+    dismissible: boolean;
+    message: string;
+    type: 'error' | 'info' | 'warning';
+  }> = [];
+  if (fallbackReason.value) {
+    list.push({
+      dismissible: true,
+      message: fallbackReason.value,
+      type: 'info',
+      close: () => {
+        fallbackReason.value = '';
+      },
+    });
+  }
+  if (canvasError.value) {
+    list.push({
+      dismissible: false,
+      message: canvasError.value,
+      type: 'error',
+    });
+  }
+  if (ancestry.value.broken) {
+    list.push({
+      dismissible: false,
+      message: $t('page.iot.twin.ancestryBroken'),
+      type: 'warning',
+    });
+  }
+  if (runtimeError.value) {
+    list.push({
+      dismissible: true,
+      message: runtimeError.value,
+      type: 'error',
+      close: () => {
+        runtimeError.value = '';
+      },
+    });
+  }
+  if (realtimeError.value || realtimeAuthError.value) {
+    list.push({
+      dismissible: false,
+      message: realtimeAuthError.value
+        ? $t('page.iot.twin.realtimeAuthFailed')
+        : $t('page.iot.twin.realtimeDisconnected'),
+      type: 'warning',
+    });
+  }
+  if (deeplinkNotice.value) {
+    list.push({
+      dismissible: true,
+      message: deeplinkNotice.value,
+      type: 'info',
+      close: () => {
+        deeplinkNotice.value = '';
+      },
+    });
+  }
+  return list;
 });
 
 /** 顶部 KPI（全部来自已有数据，不新增接口）。 */
@@ -542,136 +626,112 @@ async function onOpenPointConfig(pointId: string): Promise<void> {
       :title="$t('page.iot.twin.sceneLoadFailed')"
       @retry="loadScenes"
     />
-    <div v-else class="flex h-full min-h-0 flex-col gap-2">
-      <!-- 顶部 KPI 条：当前场景的设备/在线率/告警/点位 + 全局模型数 -->
-      <TwinKpiBar
-        v-if="currentSceneId"
-        :global-hint="$t('page.iot.twin.kpi.global')"
-        :kpi="kpi"
-        :scope-hint="$t('page.iot.twin.kpi.scope')"
-      />
-      <div class="flex min-h-0 flex-1 gap-3">
-        <!-- 左：场景树 -->
-        <aside
-          class="w-72 shrink-0 overflow-hidden rounded-lg border border-border"
+    <!--
+      布局（本轮改版的核心）：
+      · 画布是**唯一视觉主体**，占满可用区域，不再被顶部 KPI 条挤压；
+      · KPI / 场景上下文 / 操作提示全部做成**画布内浮层**（HUD）；
+      · 左右两栏是「工具车道」：窄、分区清晰、视觉降噪（操作 hover 才出现）。
+      栅格：`minmax(0,1fr)` 中间 + 固定窄车道两侧；间距统一 3（12px）→ 与全站一致。
+    -->
+    <div v-else class="flex h-full min-h-0 gap-3">
+      <!-- ═══ 左车道：场景导航 ═══ -->
+      <aside
+        class="flex w-64 shrink-0 flex-col overflow-hidden rounded-xl border border-border/70 bg-card"
+      >
+        <SceneTree
+          :badges="sceneBadges"
+          :can-add-child="canAddChild"
+          :current-scene-id="currentSceneId"
+          :depth-of="depthOf"
+          :error="sceneError"
+          :loading="sceneLoading"
+          :parent-options="parentOptions"
+          :scenes="scenes"
+          :tree="tree"
+          @enter="enterScene"
+          @refresh="loadScenes"
+        />
+      </aside>
+
+      <!-- ═══ 中：主画布（唯一视觉主体） ═══ -->
+      <section
+        class="relative min-w-0 flex-1 overflow-hidden rounded-xl border border-border/70 bg-card"
+      >
+        <Empty
+          v-if="scenes.length === 0 && !sceneLoading"
+          :description="$t('page.iot.twin.noScene')"
+        />
+        <div
+          v-else-if="!currentSceneId"
+          class="flex h-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground"
         >
-          <SceneTree
-            :badges="sceneBadges"
-            :can-add-child="canAddChild"
-            :current-scene-id="currentSceneId"
-            :depth-of="depthOf"
-            :error="sceneError"
-            :loading="sceneLoading"
-            :parent-options="parentOptions"
-            :scenes="scenes"
-            :tree="tree"
-            @enter="enterScene"
-            @refresh="loadScenes"
-          />
-        </aside>
+          <span>{{ $t('page.iot.twin.selectSceneHint') }}</span>
+        </div>
+        <TwinCanvas
+          v-else
+          ref="canvasRef"
+          :ancestry="ancestry.chain"
+          :ancestry-broken="ancestry.broken"
+          :anchors="points"
+          :assets="assets"
+          :editor-mode="editorMode"
+          :scene="currentScene"
+          :scene-id="currentSceneId"
+          @fallback="(reason: string) => (fallbackReason = reason)"
+          @motion-mode="
+            (mode: 'normal' | 'off' | 'reduced') => (motionMode = mode)
+          "
+          @open-device="openDeviceDetail"
+          @open-point="onOpenPointConfig"
+          @pin-change="onCardPinChange"
+          @place="onPlaceAnchor"
+          @ready="onCanvasReady"
+          @render-stats="(stats) => (renderStats = stats)"
+          @scene-summary="(summary) => (sceneSummary = summary)"
+          @select="onSelectAnchor"
+          @shell-supported="(supported) => (shellSupported = supported)"
+          @state-change="
+            (state: string, error?: string) => {
+              canvasState = state;
+              canvasError = error ?? '';
+            }
+          "
+          @unpin-request="onUnpinRequest"
+        />
 
-        <!-- 中：画布 -->
-        <section
-          class="relative min-w-0 flex-1 overflow-hidden rounded-lg border border-border"
+        <!-- ═══ 画布 HUD：场景上下文 + KPI（浮层，不占布局） ═══ -->
+        <TwinCanvasHud
+          v-if="currentSceneId && canvasState !== 'loading'"
+          :ancestry="ancestry.chain"
+          :kpi="kpi"
+          :realtime-state="String(realtimeState)"
+          :summary="sceneSummary"
+          @enter="enterScene"
+        />
+
+        <!-- 画布 HUD：左上角告警提示（有内容才出现，避免常态占位） -->
+        <div
+          v-if="alerts.length > 0"
+          class="pointer-events-none absolute left-4 top-28 z-10 w-80 space-y-2"
         >
-          <Empty
-            v-if="scenes.length === 0 && !sceneLoading"
-            :description="$t('page.iot.twin.noScene')"
+          <Alert
+            v-for="(item, index) in alerts"
+            :key="index"
+            class="pointer-events-auto shadow-lg backdrop-blur"
+            :message="item.message"
+            :type="item.type"
+            :closable="item.dismissible"
+            @close="item.close?.()"
           />
-          <div
-            v-else-if="!currentSceneId"
-            class="flex h-full items-center justify-center text-sm text-muted-foreground"
-          >
-            {{ $t('page.iot.twin.selectSceneHint') }}
-          </div>
-          <TwinCanvas
-            v-else
-            ref="canvasRef"
-            :ancestry="ancestry.chain"
-            :ancestry-broken="ancestry.broken"
-            :anchors="points"
-            :assets="assets"
-            :editor-mode="editorMode"
-            :scene="currentScene"
-            :scene-id="currentSceneId"
-            @fallback="(reason: string) => (fallbackReason = reason)"
-            @open-device="openDeviceDetail"
-            @open-point="onOpenPointConfig"
-            @motion-mode="(mode) => (motionMode = mode)"
-            @pin-change="onCardPinChange"
-            @place="onPlaceAnchor"
-            @ready="onCanvasReady"
-            @render-stats="(stats) => (renderStats = stats)"
-            @shell-supported="(supported) => (shellSupported = supported)"
-            @unpin-request="onUnpinRequest"
-            @select="onSelectAnchor"
-            @state-change="
-              (state: string, error?: string) => {
-                canvasState = state;
-                canvasError = error ?? '';
-              }
-            "
-          />
+        </div>
 
-          <!-- 顶部状态条：加载中 / 回退原因 / 画布错误 -->
-          <div class="pointer-events-none absolute left-3 top-3 space-y-2">
-            <div v-if="canvasState === 'loading'" class="pointer-events-auto">
-              <Spin />
-            </div>
-            <Alert
-              v-if="fallbackReason"
-              class="pointer-events-auto max-w-md"
-              closable
-              :message="fallbackReason"
-              type="info"
-              @close="fallbackReason = ''"
-            />
-            <Alert
-              v-if="canvasError"
-              class="pointer-events-auto max-w-md"
-              :message="canvasError"
-              type="error"
-            />
-            <Alert
-              v-if="ancestry.broken && currentScene"
-              class="pointer-events-auto max-w-md"
-              :message="$t('page.iot.twin.ancestryBroken')"
-              type="warning"
-            />
-            <!-- 运行态快照加载失败：锚点会「只是不更新」，必须显式告知（#129） -->
-            <Alert
-              v-if="runtimeError"
-              class="pointer-events-auto max-w-md"
-              closable
-              :message="runtimeError"
-              type="error"
-              @close="runtimeError = ''"
-            />
-            <!-- 实时流断开：数据停止更新但界面看起来「正常」，最容易误判（#129） -->
-            <Alert
-              v-if="realtimeError || realtimeAuthError"
-              class="pointer-events-auto max-w-md"
-              :message="
-                realtimeAuthError
-                  ? $t('page.iot.twin.realtimeAuthFailed')
-                  : $t('page.iot.twin.realtimeDisconnected')
-              "
-              type="warning"
-            />
-            <Alert
-              v-if="deeplinkNotice"
-              class="pointer-events-auto max-w-md"
-              closable
-              :message="deeplinkNotice"
-              type="info"
-              @close="deeplinkNotice = ''"
-            />
-          </div>
-
-          <!-- 剖切/完整外观开关（仅在模型有可隐藏屋顶/墙体时出现） -->
+        <!-- 画布 HUD：右上工具簇（外观切换 / 返回上级），在 KPI 簇下方一行 -->
+        <div
+          class="pointer-events-none absolute right-4 top-16 z-10 flex items-center gap-2"
+        >
           <div
             v-if="shellSupported && canvasState === 'ready'"
-            class="absolute right-3 top-3 flex items-center gap-1 rounded bg-background/85 px-2 py-1 text-xs backdrop-blur"
+            class="pointer-events-auto flex items-center gap-1 rounded-lg border border-border/60 bg-background/70 px-2 py-1 text-xs shadow backdrop-blur"
           >
             <span class="text-muted-foreground">
               {{ $t('page.iot.twin.shell.label') }}
@@ -694,73 +754,62 @@ async function onOpenPointConfig(pointId: string): Promise<void> {
               }}
             </button>
           </div>
+          <button
+            v-if="ancestry.chain.length > 1"
+            class="pointer-events-auto rounded-lg border border-border/60 bg-background/70 px-2 py-1 text-xs text-muted-foreground shadow backdrop-blur transition-colors hover:text-foreground"
+            type="button"
+            @click="goParent"
+          >
+            {{ $t('page.iot.twin.backParent') }}
+          </button>
+        </div>
 
-          <RuntimeLegend class="absolute bottom-9 left-3" />
+        <!-- 画布 HUD：左下只放图例（状态栏移到右下与工具簇同行，避免三者挤在一起） -->
+        <div class="pointer-events-none absolute bottom-4 left-4 z-10">
+          <RuntimeLegend />
+        </div>
 
-          <!-- 底部状态栏：FPS / 模型数 / 渲染对象数 / 最后更新 / SSE 连接 / 动效档位 -->
+        <!-- 画布 HUD：右下（状态栏 + 外观开关 + 返回上级，同一行右对齐） -->
+        <div
+          class="pointer-events-none absolute bottom-4 right-4 z-10 flex items-center gap-2"
+        >
           <TwinStatusBar
-            class="absolute bottom-3 left-3"
             :last-update-at="lastUpdateAt"
             :model-count="currentScene?.modelAssetId ? 1 : 0"
             :motion-mode="motionMode"
-            :realtime-state="String(runtime.realtimeState.value ?? 'closed')"
+            :realtime-state="String(realtimeState)"
             :render-stats="renderStats"
           />
+        </div>
+      </section>
 
-          <!-- 面包屑 -->
-          <nav
-            v-if="ancestry.chain.length > 0"
-            class="absolute bottom-3 right-3 flex items-center gap-1 rounded bg-background/85 px-2 py-1 text-xs"
-          >
-            <template v-for="(item, index) in ancestry.chain" :key="item.id">
-              <span v-if="index > 0" class="text-muted-foreground">/</span>
-              <button
-                class="hover:text-primary"
-                type="button"
-                @click="enterScene(item.id)"
-              >
-                {{ item.sceneName }}
-              </button>
-            </template>
-            <button
-              v-if="ancestry.chain.length > 1"
-              class="ml-2 text-primary hover:underline"
-              type="button"
-              @click="goParent"
-            >
-              {{ $t('page.iot.twin.backParent') }}
-            </button>
-          </nav>
-        </section>
+      <!-- ═══ 右车道：设备点位 + 模型资产 ═══ -->
+      <aside class="flex w-80 shrink-0 flex-col gap-3 overflow-hidden">
+        <PointPanel
+          class="min-h-0 flex-1"
+          :editing-point-id="editingPointId"
+          :error="pointsError"
+          :loading="pointsLoading"
+          :pending="hasDraft"
+          :picked-anchor="editorDraft ?? undefined"
+          :place-form-open="placeFormOpen"
+          :placing="editorMode === 'place'"
+          :points="points"
+          :scene-id="currentSceneId"
+          @cancel-placing="cancelPlacing"
+          @dismiss-place="dismissPlaceForm"
+          @open-device="openDeviceDetail"
+          @refresh="reloadAfterPointChange"
+          @select="onSelectAnchor"
+          @start-placing="startPlacing"
+        />
 
-        <!-- 右：点位 + 模型 -->
-        <aside class="flex w-80 shrink-0 flex-col gap-3 overflow-hidden">
-          <PointPanel
-            class="min-h-0 flex-1"
-            :editing-point-id="editingPointId"
-            :error="pointsError"
-            :loading="pointsLoading"
-            :pending="hasDraft"
-            :picked-anchor="editorDraft ?? undefined"
-            :place-form-open="placeFormOpen"
-            :placing="editorMode === 'place'"
-            :points="points"
-            :scene-id="currentSceneId"
-            @cancel-placing="cancelPlacing"
-            @dismiss-place="dismissPlaceForm"
-            @open-device="openDeviceDetail"
-            @refresh="reloadAfterPointChange"
-            @select="onSelectAnchor"
-            @start-placing="startPlacing"
-          />
-
-          <ModelPanel
-            class="shrink-0"
-            @assets-loaded="onAssetsLoaded"
-            @refresh="loadScenes"
-          />
-        </aside>
-      </div>
+        <ModelPanel
+          class="shrink-0"
+          @assets-loaded="onAssetsLoaded"
+          @refresh="loadScenes"
+        />
+      </aside>
     </div>
   </Page>
 </template>
