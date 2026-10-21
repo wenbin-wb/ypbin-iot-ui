@@ -5,6 +5,7 @@ import type { TwinEnvironment } from './environment';
 import type { LoadedModel, LoadModelOptions } from './model-loader';
 import type { TwinMotionMode } from './motion-profile';
 import type { TwinPostOptions, TwinRendererOptions } from './renderer-options';
+import type { ShellNodes } from './shell-visibility';
 import type { TwinAnimator } from './twin-animator';
 import type {
   AnchorDescriptor,
@@ -44,6 +45,7 @@ import {
   resolveRendererOptions,
   resolveShadowCamera,
 } from './renderer-options';
+import { applyShellVisibility, collectShellNodes } from './shell-visibility';
 import { createTwinAnimator } from './twin-animator';
 
 /**
@@ -416,6 +418,22 @@ export class TwinSceneManager {
   private resizeObserver?: ResizeObserver;
 
   private scene?: THREE_NS.Scene;
+
+  /**
+   * 当前模型的「外壳」节点（roof/wall/truss）。
+   *
+   * 切场景时必须重新收集（否则缓存指向已 dispose 的旧模型 ⇒ 悬空引用），
+   * dispose 时清空。
+   */
+  private shellNodes?: ShellNodes;
+
+  /**
+   * 「剖切 / 完整」状态（true = 完整显示外壳）。
+   *
+   * **默认剖切**：演示场景的锚点在机柜内部，封闭厂房会把它们全部挡住。
+   * 切场景后按该状态重新应用（否则切回来屋顶又冒出来）。
+   */
+  private shellVisible = false;
 
   private state: TwinSceneState = 'disposed';
 
@@ -875,7 +893,25 @@ export class TwinSceneManager {
     this.setState('disposed');
   }
 
-  // ---------- 公共：集成契约（hover 卡片 / 状态栏 / 聚焦） ----------
+  /**
+   * 当前模型是否支持剖切（真的找到了可隐藏的 roof/wall/truss 节点）。
+   *
+   * 页面据此决定是否显示「外观：剖切/完整」开关 —— 避免做一个「点了没反应」的开关。
+   *
+   * @returns 是否命中 ≥1 个可隐藏节点
+   */
+  isShellSupported(): boolean {
+    return (this.shellNodes?.nodes.length ?? 0) > 0;
+  }
+
+  /**
+   * 当前是否为剖切视图（页面开关据此显示选中态）。
+   *
+   * @returns true = 剖切（外壳已隐藏）
+   */
+  isShellVisible(): boolean {
+    return this.shellVisible;
+  }
 
   /**
    * 把世界坐标投到容器像素坐标（相对画布容器左上角）。
@@ -910,6 +946,8 @@ export class TwinSceneManager {
       y <= height;
     return { visible, x, y };
   }
+
+  // ---------- 公共：集成契约（hover 卡片 / 状态栏 / 聚焦） ----------
 
   /**
    * 批量更新锚点运行态（由页面在 rAF 合并后调用）。
@@ -966,6 +1004,21 @@ export class TwinSceneManager {
     // 转发给锚点层：hover 的点位不参与避让（否则鼠标放上去它就被挤走），
     // 且暂停该点位的脉冲/扩散环（避免干扰读数）
     this.anchorLayer?.setHovered?.(pointId);
+  }
+
+  /**
+   * 设置「剖切 / 完整」外观（按节点名隐藏屋顶与近侧墙）。
+   *
+   * 默认为剖切（{@link shellVisible} 初始 false）：演示场景的锚点在机柜内部，
+   * 完整封闭厂房会把它们**全部挡住**（dev 实测：画面只有几个圆点挂在白色屋面上）。
+   *
+   * @param show true = 完整（显示屋顶/墙/桁架）；false = 剖切（隐藏它们）
+   */
+  setShellVisible(show: boolean): void {
+    this.shellVisible = show;
+    if (this.shellNodes) {
+      applyShellVisibility(this.shellNodes, show, this.modelRoot);
+    }
   }
 
   updateAnchorStates(states: Map<string, AnchorRuntimeState>): void {
@@ -1308,6 +1361,13 @@ export class TwinSceneManager {
     this.applyLightingToModel(root);
     this.rebuildEnvironment(root);
 
+    // ---- 剖切：收集外壳节点并按当前状态应用 ----
+    // 必须在 applyView 之前？不需要：visible 不影响包围盒（three 的 Box3.setFromObject
+    // 会忽略 invisible 吗？实测**不会**忽略，因此相机自适应仍是「完整模型」的构图，
+    // 剖切只改可见性，不会让相机突然拉近/推远）。
+    this.shellNodes = collectShellNodes(root);
+    applyShellVisibility(this.shellNodes, this.shellVisible, root);
+
     // 先把相机位姿定下来，再建锚点位置缓存（缓存依赖最终的世界矩阵）
     this.applyView(request.view);
     this.refreshAnchorPositionCache();
@@ -1392,6 +1452,9 @@ export class TwinSceneManager {
     this.animator = undefined;
     disposeEnvironment(this.environment as never);
     this.environment = undefined;
+    // 外壳节点缓存指向即将 dispose 的模型：必须清掉（否则下次 setShellVisible 会摸到
+    // 已释放的对象）
+    this.shellNodes = undefined;
     if (this.modelRoot) {
       // 先回收模型根的 GPU 资源，再从最深那级 pivot 上摘下来
       disposeSubtree(this.modelRoot);

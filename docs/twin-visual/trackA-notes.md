@@ -257,6 +257,37 @@ RoomEnvironment…）**根本不存在**；每一个都是 three 自己 `example
 （model-panel/picker/scene-manager/twin-canvas），它们**不是**静态 import，而是
 rolldown 生成的 `__vitePreload` 动态映射（实测 grep `from"./three-core-` 为空）。
 
+## 8.5 剖切视图（`1751b6c`，用户拍板的 B 方案）
+
+**问题**：演示厂房是完整封闭厂房，6 个锚点在机柜内部（y=3.2），相机在外俯视 ⇒ 锚点全被
+屋顶挡住，画面只有几个圆点挂在白色屋面上。
+
+**接口**（`scene-manager`）：
+```ts
+setShellVisible(show: boolean): void;   // true=完整，false=剖切（默认 false）
+isShellSupported(): boolean;            // 命中 ≥1 个可隐藏节点才 true（页面据此决定是否显示开关）
+isShellVisible(): boolean;              // 当前是否剖切（开关选中态）
+```
+
+**命名约定**（`shell-visibility.ts` 的 `SHELL_HIDDEN_NAME_PREFIXES`，忽略大小写，**唯一真相**）：
+`Roof*` / `Ceiling*` / `Wall_{North,South,East,West}*` / `Wall_Wainscot*` /
+`Wall_RollUpDoors*` / `Wall_DoorHazardBands*` / `Truss*`。
+> 桁架也隐藏：屋顶没了之后它是俯视时最大的遮挡源（参考图正是这样才看得见内部）。
+
+**实现要点**：
+- 只改 `visible`，**不 dispose**（随时切回完整）；
+- 只取「最外层命中前缀」的节点（隐藏父级即可，不逐个收子网格）；
+- 排除 `userData.isTwinAnchor`（锚点绝不能被当外壳）；
+- **挂在将被隐藏的外壳下的锚点会被 reparent 到模型根**（不改变世界坐标 —— `attach` 用的
+  就是模型局部坐标），避免「设备凭空消失」；
+- `attachModel` 后按当前状态重新应用（切场景屋顶不会再冒出来）；`clearCurrentModelSync`
+  清空缓存（避免指向已释放模型）。
+
+**验证**：`shell-visibility.test.ts` 13 个用例（完整厂房替身树：剖切后只有 roof/wall/truss
+不可见、机柜与锚点不受影响、切回全部恢复、无外壳节点时 `isShellSupported=false`、
+挂在 `Roof_Panel` 下的锚点被救出）。
+**反向变异**：去掉 `isTwinAnchor` 排除 ⇒ 1 红；隐藏时不 reparent 锚点 ⇒ 1 红。
+
 ## 9. 浏览器实测（待 Lead 部署）
 
 脚本：`apps/web-antd/scratch/twin-verify/screenshot.mjs`
