@@ -112,6 +112,24 @@ onHoverAnchor?: (pointId: string | undefined) => void;  // 进入 = pointId，�
 // 实例额外暴露：setMotionMode(mode) / setHovered(pointId?) / getLabelScreenPosition(pointId?)
 ```
 
+### hover 判定：两条路径并存（**线上缺陷修复，commit 47acd68**）
+
+**根因**：CSS2DRenderer 的 domElement 是 `pointer-events:none`，子元素必须自己设
+`pointer-events:auto` 才能成为命中目标。改造时把标签拆成「外层 + 胶囊」两层，
+**外层漏了 auto** ⇒ 鼠标事件整条穿透到 canvas，标签上的 `pointerenter` 永不触发；
+而 DOM 层面看不出异常（`elementFromPoint` 仍返回标签外层 div）。
+
+**修复（两层保险）**：
+1. 外层 `.twin-anchor-label` 显式 `pointer-events: auto`（修根因）；
+2. **几何命中**（不依赖 DOM 命中测试）：容器上监听 `pointermove`（节流 ~30Hz）与
+   `pointerleave`，用锚点屏幕坐标（从 CSS2D 写好的 transform 解析）做距离检测，
+   **命中半径 = 圆点半径 7 + 容差 6 = 13px**；命中 ⇒ `onHoverAnchor(pointId)`，
+   离开 ⇒ `onHoverAnchor(undefined)`。CSS2D 每帧重写 transform、任何层级改
+   pointer-events 都不影响这条路径。
+
+> 集成方不需要额外做什么：`twin-canvas.vue` 里 `onHoverAnchor: (id) => { manager.setInteractionHover(id); onHoverAnchor(id); }` 即可。
+> views 层的 DOM 委托兜底可以留着（无害），但**不再是必要路径**。
+
 ⚠️ **`getMotionMode()` 的返回类型包含 `'off'`**（Lead 消息里写的是 `'normal' | 'reduced'`）：
 弱机型档位是 `motion-profile.ts` 契约规定的第三档，去掉它会让「弱机型」无法上报。
 页面状态栏若只做二态展示，请自行把 `'off'` 归到「降级」。
