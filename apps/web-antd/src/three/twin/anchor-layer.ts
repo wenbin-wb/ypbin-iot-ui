@@ -150,6 +150,12 @@ export const VALUE_FLASH_MS = 600;
 /** hover 时标签的放大倍数。 */
 const HOVER_SCALE = 1.12;
 
+/** `pointermove` 的节流间隔（毫秒，约 30Hz：hover 判定不需要跟满帧率）。 */
+export const POINTER_MOVE_THROTTLE_MS = 33;
+
+/** 几何命中的容差（像素）：命中半径 = 圆点半径 + 该容差（手指/触控板更好点中）。 */
+export const HOVER_HIT_TOLERANCE_PX = 6;
+
 /** CSS2D 模块的最小接口（由调用方动态 import 后传入）。 */
 export interface Css2dModule {
   CSS2DObject: new (element: HTMLElement) => THREE_NS.Object3D;
@@ -230,6 +236,10 @@ export function createAnchorLayer(
    */
   let ripplePhaseSeconds = 0;
   let hoveredPointId: string | undefined;
+  /** 上一次处理 `pointermove` 的时间（节流用）。 */
+  let lastPointerMoveAt = Number.NEGATIVE_INFINITY;
+  /** 容器当前的鼠标位置（相对容器左上角；用于几何命中）。 */
+  const pointer = { active: false, x: 0, y: 0 };
   let containerSize = {
     height: container.clientHeight || 600,
     width: container.clientWidth || 800,
@@ -252,15 +262,24 @@ export function createAnchorLayer(
   // 图标贴图：canvas 现画圆底 + 内圈，按状态由材质 color 染色（一张贴图表现全部状态色）
   const iconTexture = createIconTexture(THREE);
 
+  // ---- hover 判定：容器上的 pointermove + 几何命中（不依赖标签 DOM 命中测试） ----
+  // 用 `passive`：只监听不阻止默认行为（否则会拖慢画布拖拽/滚动）
+  const listenerOptions = { passive: true } as const;
+  container.addEventListener('pointermove', onPointerMove, listenerOptions);
+  container.addEventListener('pointerleave', onPointerLeave, listenerOptions);
+
   // ---- 共享样式：一次性注入 <style>（每个标签一行内联样式既冗余又难统一维护） ----
   const styleElement = document.createElement('style');
   styleElement.textContent = `
 .twin-anchor-label {
   /* 外层：只负责「挂点位置」与悬停热区，**不画任何视觉**。
+     ⚠️ pointer-events 必须显式 auto：CSS2DRenderer 的 domElement 是 pointer-events:none，
+     子元素只有自己设 auto 才能重新成为命中目标（否则鼠标事件穿透到底下的 canvas）。 */
      层级：position(0,0) → CSS2DRenderer 的 translate(-50%,-50%) + translate(x,y)
      → 本层的 left/top（左上角 = 圆点中心）
      → 内层胶囊的 translate(-圆点半径, -100% - 间距)（把胶囊挂到圆点正上方） */
   position: absolute;
+  pointer-events: auto;
   cursor: pointer;
   user-select: none;
   transition: opacity 160ms ease-out;
@@ -451,6 +470,8 @@ export function createAnchorLayer(
    */
   function detach(): void {
     clearFlashTimers();
+    pointer.active = false;
+    hoveredPointId = undefined;
     for (const node of nodes.values()) {
       node.sprite.removeFromParent();
       node.sprite.material.dispose();
@@ -782,6 +803,78 @@ export function createAnchorLayer(
     void size;
   }
 
+  /**
+   * 由鼠标位置找最近的锚点（**纯几何，不依赖 DOM 命中测试**）。
+   *
+   * 为什么必须有这条路径（线上实测）：CSS2DRenderer 每帧重写标签的 `transform`，
+   * 而它的 domElement 是 `pointer-events:none`；一旦有任何父级（标签外层/胶囊）
+   * 忘记恢复 `pointer-events:auto`，鼠标事件就整条穿透到 canvas 上 ——
+   * 于是「悬停标签出卡片」静默失效，且 DOM 层面完全看不出来。
+   * 用屏幕坐标做距离检测与 DOM 布局无关，最稳。
+   *
+   * @param screenX 相对容器左上角的 X
+   * @param screenY 相对容器左上角的 Y
+   * @returns 命中的点位与距离；未命中 undefined
+   */
+  function hitTestAnchor(
+    screenX: number,
+    screenY: number,
+  ): undefined | { distance: number; pointId: string } {
+    const radius = DOT_DIAMETER_PX / 2 + HOVER_HIT_TOLERANCE_PX;
+    let best: undefined | { distance: number; pointId: string };
+    for (const node of nodes.values()) {
+      if (!node.descriptor.labelVisible) {
+        continue;
+      }
+      const screen = node.lastScreen;
+      if (!screen) {
+        continue;
+      }
+      const dx = screen.x - screenX;
+      const dy = screen.y - screenY;
+      const distance = Math.hypot(dx, dy);
+      if (distance > radius) {
+        continue;
+      }
+      if (!best || distance < best.distance) {
+        best = { distance, pointId: node.descriptor.pointId };
+      }
+    }
+    return best;
+  }
+
+  /**
+   * 处理 `pointermove`（节流到 ~30Hz + 几何命中）。
+   *
+   * 节流只限制「跑几何检测」的频率：位置每次都记录（否则最后一次移动会被丢掉，
+   * 鼠标停在标签上不动时 hover 判定就永远停留在旧位置）。
+   */
+  function onPointerMove(event: MouseEvent | PointerEvent): void {
+    updatePointerPosition(event);
+    const nowMs =
+      typeof performance === 'undefined' ? Date.now() : performance.now();
+    if (nowMs - lastPointerMoveAt < POINTER_MOVE_THROTTLE_MS) {
+      return;
+    }
+    lastPointerMoveAt = nowMs;
+    const hit = hitTestAnchor(pointer.x, pointer.y);
+    setHovered(hit?.pointId);
+  }
+
+  /** 把指针位置换算成「相对画布容器左上角」的坐标。 */
+  function updatePointerPosition(event: MouseEvent | PointerEvent): void {
+    const rect = container.getBoundingClientRect();
+    pointer.active = true;
+    pointer.x = event.clientX - rect.left;
+    pointer.y = event.clientY - rect.top;
+  }
+
+  /** 指针离开画布：解除 hover（否则卡片会一直挂着）。 */
+  function onPointerLeave(): void {
+    pointer.active = false;
+    setHovered(undefined);
+  }
+
   /** 设置 hover 点位（内部与外部共用）。 */
   function setHovered(pointId?: string): void {
     if (hoveredPointId === pointId) {
@@ -854,6 +947,8 @@ export function createAnchorLayer(
 
   function dispose(): void {
     detach();
+    container.removeEventListener('pointermove', onPointerMove);
+    container.removeEventListener('pointerleave', onPointerLeave);
     if (blinkTimer !== undefined) {
       globalThis.clearInterval(blinkTimer);
       blinkTimer = undefined;

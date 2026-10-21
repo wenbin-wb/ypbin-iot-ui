@@ -543,3 +543,132 @@ describe('createAnchorLayer：DOM 契约（hover 卡片依赖）', () => {
 beforeEach(() => {
   document.body.innerHTML = '';
 });
+
+/**
+ * hover 判定走**几何命中**（容器 pointermove + 屏幕距离），不依赖标签 DOM 的命中测试。
+ *
+ * 线上实测的缺陷：CSS2DRenderer 每帧重写标签 transform，其 domElement 是
+ * `pointer-events:none`；一旦标签外层忘了 `pointer-events:auto`，鼠标事件整条穿透到
+ * canvas ⇒ `onHoverAnchor` 永远不触发、属性卡片出不来，而 DOM 层面完全看不出异常。
+ * 几何命中的路径与 DOM 样式无关，因此这里直接派发 `pointermove` 断言回调。
+ */
+describe('createAnchorLayer：几何命中 hover（不依赖 DOM 命中测试）', () => {
+  /** 造一个「相对容器左上角」的鼠标事件。 */
+  function pointerMove(x: number, y: number, rectLeft = 0, rectTop = 0): Event {
+    const event = new Event('pointermove');
+    Object.defineProperties(event, {
+      clientX: { value: rectLeft + x },
+      clientY: { value: rectTop + y },
+    });
+    return event;
+  }
+
+  it('★ 指针进入锚点圆点半径内 ⇒ 回调一次该 pointId；移出 ⇒ 回调 undefined', () => {
+    vi.useFakeTimers();
+    const fake = fakeThree();
+    const container = document.createElement('div');
+    // 让容器有可测的定位原点（模拟画布在页面里的偏移）
+    Object.defineProperty(container, 'getBoundingClientRect', {
+      value: () => ({
+        height: 600,
+        left: 100,
+        top: 50,
+        width: 800,
+        x: 100,
+        y: 50,
+      }),
+    });
+    const hovers: Array<string | undefined> = [];
+    const layer = createAnchorLayer(
+      fake as never,
+      fakeCss2d() as never,
+      container,
+      {
+        onClickAnchor: () => undefined,
+        onHoverAnchor: (pointId) => hovers.push(pointId),
+      },
+    );
+    layer.attach(new (fakeThree().Group)() as never, [anchor('p1', '泵')]);
+    // 制造屏幕坐标：CSS2DRenderer 的 transform 里解析出 (400, 300)
+    const label = document.querySelector<HTMLElement>(
+      '.twin-anchor-label[data-point-id="p1"]',
+    );
+    expect(label).toBeTruthy();
+    if (label) {
+      label.style.transform = 'translate(-50%,-50%) translate(400px,300px)';
+    }
+    // 先触发一次布局（render 内部按 ~10Hz 重排；这里直接连调两次绕过节流）
+    layer.render({} as never, {} as never);
+    layer.render({} as never, {} as never);
+
+    // 容器左上角在 (100,50)，锚点在容器内 (400,300) ⇒ 页面坐标 (500,350)
+    container.dispatchEvent(pointerMove(400, 300, 100, 50));
+    expect(hovers, '★ 指针在圆点半径内必须触发 hover').toEqual(['p1']);
+
+    // 再在同一位置移动（**推进过 33ms 节流窗口**）：不重复回调（去抖）
+    vi.advanceTimersByTime(50);
+    container.dispatchEvent(pointerMove(401, 301, 100, 50));
+    expect(hovers).toEqual(['p1']);
+
+    // 移出半径（> 圆点半径 7 + 容差 6 = 13px）
+    vi.advanceTimersByTime(50);
+    container.dispatchEvent(pointerMove(400 + 60, 300, 100, 50));
+    expect(hovers, '★ 指针离开必须回调 undefined').toEqual(['p1', undefined]);
+
+    layer.dispose();
+    vi.useRealTimers();
+  });
+
+  it('★ 容器 pointerleave ⇒ 立即回调 undefined（卡片不会挂着不消失）', () => {
+    vi.useFakeTimers();
+    const fake = fakeThree();
+    const container = document.createElement('div');
+    Object.defineProperty(container, 'getBoundingClientRect', {
+      value: () => ({ height: 600, left: 0, top: 0, width: 800, x: 0, y: 0 }),
+    });
+    const hovers: Array<string | undefined> = [];
+    const layer = createAnchorLayer(
+      fake as never,
+      fakeCss2d() as never,
+      container,
+      {
+        onClickAnchor: () => undefined,
+        onHoverAnchor: (pointId) => hovers.push(pointId),
+      },
+    );
+    layer.attach(new (fakeThree().Group)() as never, [anchor('p1', '泵')]);
+    const label = document.querySelector<HTMLElement>(
+      '.twin-anchor-label[data-point-id="p1"]',
+    );
+    if (label) {
+      label.style.transform = 'translate(-50%,-50%) translate(200px,150px)';
+    }
+    layer.render({} as never, {} as never);
+    layer.render({} as never, {} as never);
+    container.dispatchEvent(pointerMove(200, 150));
+    expect(hovers).toEqual(['p1']);
+    container.dispatchEvent(new Event('pointerleave'));
+    expect(hovers).toEqual(['p1', undefined]);
+    layer.dispose();
+    vi.useRealTimers();
+  });
+
+  it('dispose 移除容器事件监听（不泄漏）', () => {
+    const fake = fakeThree();
+    const container = document.createElement('div');
+    const hovers: Array<string | undefined> = [];
+    const layer = createAnchorLayer(
+      fake as never,
+      fakeCss2d() as never,
+      container,
+      {
+        onClickAnchor: () => undefined,
+        onHoverAnchor: (pointId) => hovers.push(pointId),
+      },
+    );
+    layer.attach(new (fakeThree().Group)() as never, [anchor('p1', '泵')]);
+    layer.dispose();
+    container.dispatchEvent(pointerMove(0, 0));
+    expect(hovers).toEqual([]);
+  });
+});

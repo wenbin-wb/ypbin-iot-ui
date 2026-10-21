@@ -67,3 +67,11 @@ datalog
 captcha-bg.b64.json
 captcha-bg.jpg
 captcha-tpl.png
+
+# 本地一次性排障脚本（不属于交付物）
+apps/web-antd/scratch/twin-verify/diag.mjs
+apps/web-antd/scratch/twin-verify/probe.mjs
+apps/web-antd/scratch/twin-verify/shot.mjs
+apps/web-antd/scratch/twin-verify/after-shot.mjs
+apps/web-antd/scratch/twin-verify/diag*.mjs
+apps/web-antd/scratch/twin-verify/hover-test.mjs
