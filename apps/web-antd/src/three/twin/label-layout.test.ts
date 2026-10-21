@@ -3,6 +3,7 @@ import type { LabelInput, ScreenRect } from './label-layout';
 import { describe, expect, it } from 'vitest';
 
 import {
+  clampLabelRect,
   LABEL_LAYOUT_SPATIAL_GRID_THRESHOLD,
   LABEL_OVERLAP_TOLERANCE,
   layoutLabels,
@@ -341,5 +342,79 @@ describe('smoothOffset：帧率无关的平滑', () => {
       previous = current.x;
     }
     expect(current).toEqual({ x: 25, y: 0 });
+  });
+});
+
+/**
+ * 夹回画布（`clampLabelRect`）。
+ *
+ * 线上实测的缺陷形态：演示场景 6 个锚点纵向跨度很大（机柜两排），避让把首尾标签一直
+ * 往上/往下推，最后**整条**落在画布外（画布 710×716，胶囊 y 实测 704~1072），
+ * 屏幕上只剩圆点、没有名字与数值。
+ */
+describe('★ clampLabelRect：标签必须整条落在画布内', () => {
+  /** 画布尺寸（dev 实测）。 */
+  const BOUNDS = { height: 716, width: 710 };
+
+  it('★ 纵向跨度 600px 的 6 个锚点 ⇒ 夹紧后没有任何矩形完全落在画布外', () => {
+    // 6 个锚点沿纵向排布，跨度超过画布高度（模拟「机柜两排 + 相机俯视」的极端投影）
+    const inputs = Array.from({ length: 6 }, (_, index) =>
+      input(`p${index}`, 100 + index * 20, 40 + index * 140),
+    );
+    const layouts = layoutLabels(inputs, BOUNDS);
+    // 先确认「避让本身」确实会把部分标签推到画布外（否则这个用例测不到东西）
+    const rawOutside = layouts.filter(
+      (layout) =>
+        layout.rect.y + layout.rect.height > BOUNDS.height ||
+        layout.rect.y < 0 ||
+        layout.rect.x < 0 ||
+        layout.rect.x + layout.rect.width > BOUNDS.width,
+    );
+    expect(rawOutside.length, '构造的输入必须真的会溢出画布').toBeGreaterThan(
+      0,
+    );
+
+    for (const layout of layouts) {
+      const clamped = clampLabelRect(layout.rect, BOUNDS);
+      expect(
+        clamped.y,
+        `${layout.pointId} 的 y 必须在 [4, ${BOUNDS.height - 22 - 4}]`,
+      ).toBeGreaterThanOrEqual(4);
+      expect(clamped.y).toBeLessThanOrEqual(BOUNDS.height - 22 - 4);
+      expect(
+        clamped.x,
+        `${layout.pointId} 的 x 必须 >= 4`,
+      ).toBeGreaterThanOrEqual(4);
+      expect(clamped.x).toBeLessThanOrEqual(BOUNDS.width - clamped.width - 4);
+      // 整条矩形都在画布内
+      expect(clamped.y + clamped.height).toBeLessThanOrEqual(BOUNDS.height);
+      expect(clamped.x + clamped.width).toBeLessThanOrEqual(BOUNDS.width);
+    }
+  });
+
+  it('已经在画布内的矩形不被改动', () => {
+    const rect = { height: 22, width: 200, x: 100, y: 100 };
+    expect(clampLabelRect(rect, BOUNDS)).toEqual(rect);
+  });
+
+  it('极端：标签比画布还宽 ⇒ 仍返回有限的非负坐标（不产生负数/NaN）', () => {
+    const clamped = clampLabelRect(
+      { height: 22, width: 900, x: 500, y: 500 },
+      BOUNDS,
+    );
+    expect(Number.isFinite(clamped.x)).toBe(true);
+    expect(Number.isFinite(clamped.y)).toBe(true);
+    expect(clamped.x).toBe(4);
+    expect(clamped.y).toBeLessThanOrEqual(BOUNDS.height);
+  });
+
+  it('自定留边（margin=0 ⇒ 贴边）', () => {
+    const clamped = clampLabelRect(
+      { height: 22, width: 100, x: -50, y: -50 },
+      BOUNDS,
+      0,
+    );
+    expect(clamped.x).toBe(0);
+    expect(clamped.y).toBe(0);
   });
 });

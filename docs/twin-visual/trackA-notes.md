@@ -288,6 +288,32 @@ isShellVisible(): boolean;              // 当前是否剖切（开关选中态�
 挂在 `Roof_Panel` 下的锚点被救出）。
 **反向变异**：去掉 `isTwinAnchor` 排除 ⇒ 1 红；隐藏时不 reparent 锚点 ⇒ 1 红。
 
+## 8.6 标签被推出画布（`8990e39`，**根因是坐标系叠加，不是避让溢出**）
+
+**现象**（dev 实测）：6 个胶囊矩形 y=704~1072、画布 y 167.5~883 ⇒ 全部在画布下方之外，
+屏幕上只剩 6 个圆点，没有名字/数值。
+
+**根因（两层）**：
+1. **主因**：`CSS2DRenderer` 每帧已把标签摆到投影位置 —— 元素是 `position:absolute`、
+   `left/top` 默认 `auto`，并用 `transform: translate(-50%,-50%) translate(tx,ty)` 定位。
+   我们又额外写了 `left/top` ⇒ **两个位移叠加**，标签整体多偏移了一次投影坐标，
+   于是整排落到画布下方。
+2. **次要**：`layoutLabels` 的边界判定是「允许部分探出」（对避让是正确的），
+   不保证整条可见。
+
+**修复**：
+- 位移改用元素自身 `translate`（CSS 变量 `--twin-dx/--twin-dy`），**绝不写 left/top**；
+  水平右移半个圆点、垂直上移 `LABEL_LIFT_PX + 半径`；
+- 新增纯函数 `clampLabelRect`（`label-layout.ts`）：`relayout` 里把矩形夹回画布（留边 4px），
+  并把修正量并入 `currentOffset`、同步 `node.layoutRect`（平滑过渡与胶囊矩形缓存同一套坐标）。
+
+> **如果页面 DOM 兜底也要算标签位置**：请用 `getBoundingClientRect()` 实测，
+> 不要再用「投影坐标 + 固定偏移」推算。
+
+**验证**：`label-layout.test.ts` 4 个新用例（画布 710×716、6 个锚点纵向跨度超出画布 ⇒
+夹紧后每个矩形 `y ∈ [4, 716-22-4]`、`x ∈ [4, 710-w-4]` 且整条在画布内）。
+**反向变异**：`clampLabelRect` 改成原样返回 ⇒ **3 红**。
+
 ## 9. 浏览器实测（待 Lead 部署）
 
 脚本：`apps/web-antd/scratch/twin-verify/screenshot.mjs`

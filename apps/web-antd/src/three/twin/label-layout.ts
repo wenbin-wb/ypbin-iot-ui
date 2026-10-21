@@ -271,3 +271,40 @@ export function smoothOffset(
     y: Math.abs(target.y - nextY) < 0.05 ? target.y : nextY,
   };
 }
+
+/**
+ * 把标签矩形夹进画布（**纯函数**；避免整条标签被推出可视区）。
+ *
+ * ## 为什么需要（在「避让」之外再加一道）
+ *
+ * `layoutLabels` 的边界判定是「允许部分探出」——这对**避让**是正确的（标签可以略微贴边），
+ * 但它不保证「完整可见」。演示场景 6 个锚点在纵向上跨度很大（机柜两排），避让把上方的
+ * 标签往上推、下方的往下推，极端情况下**整条**会落在画布外：屏幕上只剩圆点、没有名字
+ * 和数值。夹紧保证每个标签的完整矩形始终落在可视区内。
+ *
+ * ## 与避让的关系
+ *
+ * 夹紧是**事后修正**：可能让两个标签重新重叠（把 A 夹回来正好撞上 B）。这里的选择是
+ * 「宁可轻微重叠，也不让标签完全看不见」——完全看不见是功能缺失，轻微重叠只是观感问题。
+ * 调用方应把夹紧量并入该标签的 `offset`，让平滑过渡与胶囊矩形缓存保持一致。
+ *
+ * @param rect 原始矩形
+ * @param bounds 可视区尺寸
+ * @param margin 四周留边（像素）
+ * @returns 夹紧后的矩形（尺寸不变）
+ */
+export function clampLabelRect(
+  rect: ScreenRect,
+  bounds: { height: number; width: number },
+  margin = 4,
+): ScreenRect {
+  // 画布比「标签 + 两端留边」还小时，max 会小于 min ⇒ 用 margin 兜底，保证不出现负范围
+  const maxX = Math.max(margin, bounds.width - margin - rect.width);
+  const maxY = Math.max(margin, bounds.height - margin - rect.height);
+  return {
+    height: rect.height,
+    width: rect.width,
+    x: Math.min(Math.max(rect.x, margin), maxX),
+    y: Math.min(Math.max(rect.y, margin), maxY),
+  };
+}

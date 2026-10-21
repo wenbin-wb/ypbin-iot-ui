@@ -27,7 +27,7 @@ import {
   TWIN_COLOR_UNKNOWN,
 } from './colors';
 import { colorForRatio, toRenderMode } from './display';
-import { layoutLabels, smoothOffset } from './label-layout';
+import { clampLabelRect, layoutLabels, smoothOffset } from './label-layout';
 import { motionSwitches } from './motion-profile';
 
 /**
@@ -290,15 +290,20 @@ export function createAnchorLayer(
 .twin-anchor-label {
   /* 外层：只负责「挂点位置」与悬停热区，**不画任何视觉**。
      ⚠️ pointer-events 必须显式 auto：CSS2DRenderer 的 domElement 是 pointer-events:none，
-     子元素只有自己设 auto 才能重新成为命中目标（否则鼠标事件穿透到底下的 canvas）。 */
-     层级：position(0,0) → CSS2DRenderer 的 translate(-50%,-50%) + translate(x,y)
-     → 本层的 left/top（左上角 = 圆点中心）
-     → 内层胶囊的 translate(-圆点半径, -100% - 间距)（把胶囊挂到圆点正上方） */
+     子元素只有自己设 auto 才能重新成为命中目标（否则鼠标事件穿透到底下的 canvas）。
+     ⚠️ **绝不能再写 left/top**：CSS2DRenderer 每帧已经把元素摆到投影位置
+     （translate(-50%,-50%) translate(tx,ty)），它是 absolute 定位、left/top 默认 auto；
+     一旦我们写 left/top，它会**叠加**在 CSS2D 的位移之上 —— 线上实测：整排标签被
+     推到画布下方、屏幕只剩圆点。避让位移只能通过本元素自身的 translate 叠加。 */
   position: absolute;
   pointer-events: auto;
   cursor: pointer;
   user-select: none;
   transition: opacity 160ms ease-out;
+}
+/* 外层自身只做「相对投影点的偏移」：偏移量由 JS 写进 --twin-dx/--twin-dy（CSS 像素）。 */
+.twin-anchor-label {
+  translate: var(--twin-dx, 0px) var(--twin-dy, 0px);
 }
 .twin-anchor-capsule {
   position: absolute;
@@ -774,12 +779,22 @@ export function createAnchorLayer(
         continue;
       }
       const { node } = entry;
-      node.layoutRect = layout.rect;
-      const target = layout.offset;
+      // **夹回画布**：避让只保证「互不重叠」，不保证「整条都在可视区内」。
+      // 演示场景的锚点纵向跨度大，避让会把首尾标签推出画布（线上实测：6 个胶囊的
+      // y 全在画布底边之外，屏幕上只剩圆点）。夹紧后把「修正量」并入 offset，
+      // 这样平滑过渡与胶囊矩形缓存都基于同一套坐标。
+      const clamped = clampLabelRect(layout.rect, bounds);
+      const clampedOffset = {
+        x: layout.offset.x + (clamped.x - layout.rect.x),
+        y: layout.offset.y + (clamped.y - layout.rect.y),
+      };
+      node.layoutRect = clamped;
+      node.labelElement.dataset.collapsed = String(layout.collapsed);
+      node.collapsed = layout.collapsed;
       node.currentOffset = smooth
-        ? smoothOffset(node.currentOffset, target, deltaSeconds)
-        : { ...target };
-      applyLabelTransform(node, entry.screen, layout);
+        ? smoothOffset(node.currentOffset, clampedOffset, deltaSeconds)
+        : { ...clampedOffset };
+      applyLabelTransform(node, clampedOffset);
     }
     // 写完样式后统一读一次胶囊矩形（**所有写操作都已结束**，只触发一次布局重算）。
     // 这一步是 hover 命中的依据：标签是 200~300px 宽的胶囊，热区必须与之一致，
@@ -855,28 +870,25 @@ export function createAnchorLayer(
    */
   function applyLabelTransform(
     node: AnchorNode,
-    screen: { x: number; y: number },
-    layout: LabelLayout,
+    offset: { x: number; y: number },
   ): void {
     const element = node.labelElement;
-    const size = measureLabel(node);
-    // 标签以「圆点中心」为锚：圆点在胶囊左侧，所以左边距 = 圆点半径
-    // 说明：CSS2DRenderer 每帧会把 element 放到 (screen.x, screen.y) 并写
-    // `transform: translate(-50%,-50%)`。因此这里用 `left/top` 指定「圆心」，
-    // 再配合 CSS 里的 `translate(-DOT/2, -100%-LIFT)` 把胶囊挂到圆点正上方。
-    const left = screen.x - DOT_DIAMETER_PX / 2 + node.currentOffset.x;
-    const top = screen.y - LABEL_LIFT_PX + node.currentOffset.y;
-    element.style.left = `${left}px`;
-    element.style.top = `${top}px`;
-    element.dataset.collapsed = String(layout.collapsed);
-    node.collapsed = layout.collapsed;
+    // CSS2DRenderer 已把元素摆到投影点、并做了 `translate(-50%,-50%)` ⇒ 元素**中心**落在
+    // (screen.x, screen.y)。我们只叠加「相对投影点」的偏移（CSS 像素）：
+    //   - 水平：圆点中心对齐投影点 ⇒ 整体右移半个圆点（胶囊从圆点右侧展开）；
+    //   - 垂直：胶囊挂在圆点正上方 ⇒ 上移 LABEL_LIFT_PX + 半径。
+    // ⚠️ 偏移必须用 `translate`（本元素自身），**不能写 left/top**：那会与 CSS2D 的位移
+    //    叠加，把标签推到画布外（线上实测的缺陷）。
+    const dx = offset.x + DOT_DIAMETER_PX / 2;
+    const dy = offset.y - LABEL_LIFT_PX - DOT_DIAMETER_PX / 2;
+    element.style.setProperty('--twin-dx', `${dx}px`);
+    element.style.setProperty('--twin-dy', `${dy}px`);
     // hover 放大：用 CSS 变量变换叠加（**不能写 transform**：CSS2DRenderer 每帧重写它，
     // 会把缩放覆盖掉，表现为「hover 没反应」）
     element.style.setProperty(
       '--twin-hover-scale',
-      String(node.hovered && !layout.collapsed ? HOVER_SCALE : 1),
+      String(node.hovered && !node.collapsed ? HOVER_SCALE : 1),
     );
-    void size;
   }
 
   /**
