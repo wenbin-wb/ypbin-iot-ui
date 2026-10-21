@@ -2,6 +2,7 @@
 import type { DataNode } from 'ant-design-vue/es/tree';
 
 import type { SceneTreeNode } from '../composables/use-twin-scene';
+import type { SceneBadge } from './scene-badges';
 
 import type { IotTwinApi } from '#/api/iot';
 
@@ -29,6 +30,13 @@ import SceneForm from './scene-form.vue';
  * 后端字段 `id`/`sceneName` 原样保留在节点对象上。
  */
 const props = defineProps<{
+  /**
+   * 场景角标（点位数 / 告警数 / 是否有模型）。
+   *
+   * 由父组件用 `computeSceneBadges` 算好传入：本组件只渲染，不自己统计
+   * （统计口径要能单测，且必须与 KPI 条同源）。
+   */
+  badges?: Map<string, SceneBadge>;
   /** 是否还能给该场景加子场景（深度上限）。 */
   canAddChild: (sceneId: string) => boolean;
   /** 当前场景 ID。 */
@@ -210,15 +218,64 @@ defineExpose({ expandNode });
         block-node
         @select="onSelect"
       >
-        <template #title="{ sceneCode, sceneName, ...node }">
+        <template #title="titleProps">
+          <!--
+            注意：这里**不能**用插值解构（`{ key, sceneCode, ...node }`）：
+            解构后 `node` 会丢掉行内操作需要的业务字段（`id`/`pointCount` 等），
+            且 Vue 模板解构不会生成新对象，`as unknown as SceneTreeNode` 会丢失字段。
+            统一用 `titleProps` 取字段，类型安全且行为可预测。
+          -->
           <div class="group flex items-center justify-between gap-1">
-            <span class="truncate">{{ sceneName }}（{{ sceneCode }}）</span>
+            <span class="flex min-w-0 items-center gap-1">
+              <span class="truncate">
+                {{ titleProps.sceneName }}（{{ titleProps.sceneCode }}）
+              </span>
+              <!--
+                角标：点位数 + 告警数。**告警数只有当前场景有实时数据**，
+                其它场景显示为空心点（未加载），绝不显示 0 —— 0 会被读成「没有告警」。
+              -->
+              <template
+                v-if="badges && badges.get(String(titleProps.key))"
+              >
+                <span
+                  v-if="badges.get(String(titleProps.key))!.pointCount > 0"
+                  class="shrink-0 rounded bg-muted px-1 text-[10px] text-muted-foreground"
+                  :title="
+                    $t('page.iot.twin.badge.points', [
+                      badges.get(String(titleProps.key))!.pointCount,
+                    ])
+                  "
+                >
+                  {{ badges.get(String(titleProps.key))!.pointCount }}
+                </span>
+                <span
+                  v-if="
+                    badges.get(String(titleProps.key))!.alerts !== undefined &&
+                    badges.get(String(titleProps.key))!.alerts! > 0
+                  "
+                  class="shrink-0 rounded bg-destructive/15 px-1 text-[10px] text-destructive"
+                  :title="
+                    $t('page.iot.twin.badge.alerts', [
+                      badges.get(String(titleProps.key))!.alerts!,
+                    ])
+                  "
+                >
+                  {{ badges.get(String(titleProps.key))!.alerts }}
+                </span>
+                <span
+                  v-else-if="badges.get(String(titleProps.key))!.hasModel === false"
+                  class="size-1.5 shrink-0 rounded-full border border-muted-foreground/50"
+                  :title="$t('page.iot.twin.badge.noModel')"
+                  aria-hidden="true"
+                ></span>
+              </template>
+            </span>
             <span class="hidden shrink-0 gap-1 group-hover:flex">
               <Button
                 v-if="canCreate"
                 size="small"
                 type="link"
-                @click.stop="onCreateChild(node as unknown as SceneTreeNode)"
+                @click.stop="onCreateChild(titleProps as unknown as SceneTreeNode)"
               >
                 {{ $t('common.create') }}
               </Button>
@@ -226,7 +283,7 @@ defineExpose({ expandNode });
                 v-if="canUpdate"
                 size="small"
                 type="link"
-                @click.stop="onEdit(node as unknown as SceneTreeNode)"
+                @click.stop="onEdit(titleProps as unknown as SceneTreeNode)"
               >
                 {{ $t('common.edit') }}
               </Button>
@@ -234,10 +291,10 @@ defineExpose({ expandNode });
                 v-if="canDelete"
                 :title="
                   $t('ui.actionMessage.deleteConfirm', [
-                    String(sceneName ?? ''),
+                    String(titleProps.sceneName ?? ''),
                   ])
                 "
-                @confirm="onDelete(node as unknown as SceneTreeNode)"
+                @confirm="onDelete(titleProps as unknown as SceneTreeNode)"
               >
                 <Button danger size="small" type="link">
                   {{ $t('common.delete') }}

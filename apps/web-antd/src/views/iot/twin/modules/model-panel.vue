@@ -353,32 +353,35 @@ onMounted(async () => {
               </span>
             </div>
           </div>
-          <!-- 改名：被场景引用也能改（改名不影响引用关系） -->
-          <Button
-            v-if="canUpdate"
-            size="small"
-            type="link"
-            @click="startRename(asset)"
-          >
-            {{ $t('common.edit') }}
-          </Button>
-          <Tooltip
-            v-if="asset.sceneCount > 0"
-            :title="$t('page.iot.twin.assetInUseHint')"
-          >
-            <Button disabled size="small" type="link">
-              {{ $t('common.delete') }}
+          <!-- 操作区必须 shrink-0：窄屏时否则会被 flex 挤压成竖排（实测 1600×900 挤成 3 行） -->
+          <div class="flex shrink-0 items-center gap-1">
+            <!-- 改名：被场景引用也能改（改名不影响引用关系） -->
+            <Button
+              v-if="canUpdate"
+              size="small"
+              type="link"
+              @click="startRename(asset)"
+            >
+              {{ $t('common.edit') }}
             </Button>
-          </Tooltip>
-          <Popconfirm
-            v-else-if="canDelete"
-            :title="$t('ui.actionMessage.deleteConfirm', [asset.assetName])"
-            @confirm="onDelete(asset)"
-          >
-            <Button danger size="small" type="link">
-              {{ $t('common.delete') }}
-            </Button>
-          </Popconfirm>
+            <Tooltip
+              v-if="asset.sceneCount > 0"
+              :title="$t('page.iot.twin.assetInUseHint')"
+            >
+              <Button disabled size="small" type="link">
+                {{ $t('common.delete') }}
+              </Button>
+            </Tooltip>
+            <Popconfirm
+              v-else-if="canDelete"
+              :title="$t('ui.actionMessage.deleteConfirm', [asset.assetName])"
+              @confirm="onDelete(asset)"
+            >
+              <Button danger size="small" type="link">
+                {{ $t('common.delete') }}
+              </Button>
+            </Popconfirm>
+          </div>
         </li>
       </ul>
     </div>

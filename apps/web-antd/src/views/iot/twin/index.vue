@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import type { TwinKpiResult } from './modules/twin-kpi';
+
 import type { IotTwinApi } from '#/api/iot';
 import type { AnchorRuntimeState } from '#/three/twin/types';
 
@@ -7,22 +9,28 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
 
-import { Alert, Empty, Modal, Spin } from 'ant-design-vue';
+import { Alert, Empty, Modal } from 'ant-design-vue';
 
 import { getTwinPointList } from '#/api/iot';
 import { $t } from '#/locales';
 import { extractErrorMessage } from '#/utils/error';
 
 import ListErrorAlert from '../shared/list-error-alert.vue';
+import { useTwinAlertCounts } from './composables/use-twin-alert-counts';
 import { useTwinEditor } from './composables/use-twin-editor';
+import { useTwinLiveValues } from './composables/use-twin-live-values';
 import { useTwinRuntime } from './composables/use-twin-runtime';
 import { useTwinScene } from './composables/use-twin-scene';
 import { buildDeviceDetailTarget } from './modules/device-detail-link';
 import ModelPanel from './modules/model-panel.vue';
 import PointPanel from './modules/point-panel.vue';
 import RuntimeLegend from './modules/runtime-legend.vue';
+import { computeSceneBadges } from './modules/scene-badges';
 import SceneTree from './modules/scene-tree.vue';
 import TwinCanvas from './modules/twin-canvas.vue';
+import { computeTwinKpi } from './modules/twin-kpi';
+import TwinKpiBar from './modules/twin-kpi-bar.vue';
+import TwinStatusBar from './modules/twin-status-bar.vue';
 
 /**
  * 数字孪生页（宿主：只做编排 + 布局）。
@@ -82,6 +90,7 @@ const runtime = useTwinRuntime({
     // 存一份最新的：画布可能还没装配好（`canvasRef.value` 为 null），
     // 就绪后由 `onCanvasReady` 补推，否则首屏状态永久丢失 ⇒ 标签全空。
     latestAnchorStates = states;
+    lastUpdateAt.value = Date.now();
     canvasRef.value?.updateAnchorStates(states);
   },
 });
@@ -156,6 +165,71 @@ const bindingsByPointId = computed(() => {
 const canvasState = ref<string>('disposed');
 const canvasError = ref('');
 const fallbackReason = ref('');
+
+/** 活动告警数（**单一数据源**：KPI 条 / 场景树角标 / 卡片 共用，避免三处三个数）。 */
+const alertCounts = useTwinAlertCounts();
+
+/** 卡片实时值域（**旁路**：全量原值、不节流、不驱动 3D 重绘）。 */
+const liveValues = useTwinLiveValues({ alertCounts });
+
+/** 渲染统计（底部状态栏）。 */
+const renderStats = ref<{ geometries: number; textures: number }>();
+
+/** 动效档位（引擎层判定后回调；未初始化时 undefined）。 */
+const motionMode = ref<'normal' | 'off' | 'reduced'>();
+
+/** 最近一次运行态提交时刻（底部状态栏的「N 秒前更新」）。 */
+const lastUpdateAt = ref<number>();
+
+/** 告警事件到达 ⇒ 共享域重拉一次（去抖在共享域内，见 use-twin-alert-counts）。 */
+liveValues.onAlertReload(() => {
+  void alertCounts.refresh();
+});
+
+/** 顶部 KPI（全部来自已有数据，不新增接口）。 */
+const kpi = computed<TwinKpiResult>(() =>
+  computeTwinKpi({
+    assetCount: assets.value.length,
+    points: points.value,
+    runtimePoints: runtime.snapshot.value?.points ?? [],
+    scenes: scenes.value,
+    sharedAlertCounts: alertCounts.counts.value,
+    truncated: runtime.snapshot.value?.truncated ?? false,
+  }),
+);
+
+/** 场景树角标。 */
+const sceneBadges = computed(() =>
+  computeSceneBadges({
+    currentPoints: points.value,
+    currentRuntimePoints: runtime.snapshot.value?.points ?? [],
+    currentSceneId: currentSceneId.value,
+    sharedAlertCounts: alertCounts.counts.value,
+    scenes: scenes.value,
+  }),
+);
+
+/**
+ * 钉住态变化（用户点锚点 / 关闭卡片）⇒ 同步 URL 与选中态。
+ *
+ * URL 是唯一真相：写回 `?pointId=` 后，`currentPointId` 的 watch 会同步到画布，
+ * 因此这里是**单向**（用户操作 → URL），画布内部不再反向驱动 URL，避免环。
+ *
+ * @param pointId 点位 ID（undefined = 取消钉住）
+ */
+async function onCardPinChange(pointId?: string): Promise<void> {
+  if (pointId) {
+    selectPoint(pointId);
+    if (currentPointId.value !== pointId) {
+      await router.replace({ query: { ...route.query, pointId } });
+    }
+    return;
+  }
+  if (currentPointId.value) {
+    selectPoint(null);
+    await router.replace({ query: { ...route.query, pointId: undefined } });
+  }
+}
 
 /**
  * 进入某场景（只写 URL；数据加载由 watch 统一处理）。
@@ -265,6 +339,11 @@ watch(
       return;
     }
     await loadPoints(sceneId);
+    // 卡片旁路的快照与主运行态**并行**拉（两个独立数据域，互不阻塞）：
+    // 主运行态决定画布锚点，卡片旁路决定悬浮卡片里的逐属性值。
+    void liveValues.load(sceneId);
+    // 告警域的设备集合随场景切换（设备集合来自刚拉到的点位）
+    alertCounts.setDevices(points.value.map((point) => point.deviceId));
     // ⚠️ 必须等一次渲染刷新再读 `bindingsByPointId`（computed 的失效是**异步**的）：
     // `loadPoints` 里刚 `points.value = data`，同一 tick 内 computed 仍返回**旧缓存**，
     // 于是 `loadSnapshot` 拿到空的绑定映射 ⇒ 主展示属性解析不出来 ⇒
@@ -272,6 +351,9 @@ watch(
     await nextTick();
     try {
       await runtime.loadSnapshot(sceneId, bindingsByPointId.value);
+      // 首屏就要有告警数（不能等第一条 alert 事件，否则 KPI 长期显示 0 = 假绿）
+      alertCounts.setDevices(points.value.map((point) => point.deviceId));
+      void alertCounts.refreshNow();
     } catch {
       // 失败原因已写入 runtime.error，模板渲染错误态；此处不重复提示
     }
@@ -292,10 +374,12 @@ async function reloadAfterPointChange(): Promise<void> {
   // 保存/删除后退出放置态：草稿已落库，留着会让用户以为还要再点一次
   resetEditor();
   await loadPoints(currentSceneId.value);
+  alertCounts.setDevices(points.value.map((point) => point.deviceId));
   await nextTick();
   if (currentSceneId.value) {
     try {
       await runtime.loadSnapshot(currentSceneId.value, bindingsByPointId.value);
+      void alertCounts.refreshNow();
     } catch {
       // 同上
     }
@@ -321,7 +405,30 @@ function onCanvasReady(): void {
   if (latestAnchorStates) {
     canvasRef.value?.updateAnchorStates(latestAnchorStates);
   }
+  // 画布就绪后同步当前钉住态（深链 `?pointId=` 刷新进入时，卡片要直接出现）
+  canvasRef.value?.syncPinnedPoint(currentPointId.value || undefined);
 }
+
+/**
+ * 深链/列表选中变化 ⇒ 画布卡片跟着钉住（URL → 画布，单向）。
+ *
+ * 与 `onCardPinChange`（画布 → URL）配对；两处都只做「写」，读永远以 URL 为准，
+ * 因此不会形成互相触发的环。
+ */
+watch(
+  currentPointId,
+  (pointId) => {
+    const canvas = canvasRef.value;
+    if (!canvas) {
+      return;
+    }
+    if (pointId) {
+      void canvas.focusPoint(pointId);
+    } else {
+      canvas.syncPinnedPoint(undefined);
+    }
+  },
+);
 
 function onPlaceAnchor(payload: {
   local: { x: number; y: number; z: number };
@@ -372,6 +479,21 @@ async function openDeviceDetail(pointId: string): Promise<void> {
 function onAssetsLoaded(list: IotTwinApi.ModelAssetResp[]): void {
   assets.value = list;
 }
+
+/**
+ * 卡片里点「点位配置」⇒ 选中该点位（右侧列表高亮并滚动到它）。
+ *
+ * 为什么不直接打开编辑弹窗：编辑是**写操作**，用户只是「想看看这个点怎么配的」时
+ * 弹出表单会让人误以为要改配置（与点锚点=查看、点列表「修改」=编辑的既有分工一致）。
+ *
+ * @param pointId 点位 ID
+ */
+async function onOpenPointConfig(pointId: string): Promise<void> {
+  await onSelectAnchor(pointId);
+  document
+    .querySelector(`[data-twin-point-row="${pointId}"]`)
+    ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
 </script>
 
 <template>
@@ -388,12 +510,21 @@ function onAssetsLoaded(list: IotTwinApi.ModelAssetResp[]): void {
       :title="$t('page.iot.twin.sceneLoadFailed')"
       @retry="loadScenes"
     />
-    <div v-else class="flex h-full min-h-0 gap-3">
+    <div v-else class="flex h-full min-h-0 flex-col gap-2">
+      <!-- 顶部 KPI 条：当前场景的设备/在线率/告警/点位 + 全局模型数 -->
+      <TwinKpiBar
+        v-if="currentSceneId"
+        :global-hint="$t('page.iot.twin.kpi.global')"
+        :kpi="kpi"
+        :scope-hint="$t('page.iot.twin.kpi.scope')"
+      />
+      <div class="flex min-h-0 flex-1 gap-3">
       <!-- 左：场景树 -->
       <aside
         class="w-72 shrink-0 overflow-hidden rounded-lg border border-border"
       >
         <SceneTree
+          :badges="sceneBadges"
           :can-add-child="canAddChild"
           :current-scene-id="currentSceneId"
           :depth-of="depthOf"
@@ -432,8 +563,13 @@ function onAssetsLoaded(list: IotTwinApi.ModelAssetResp[]): void {
           :scene="currentScene"
           :scene-id="currentSceneId"
           @fallback="(reason: string) => (fallbackReason = reason)"
+          @open-device="openDeviceDetail"
+          @open-point="onOpenPointConfig"
+          @motion-mode="(mode) => (motionMode = mode)"
+          @pin-change="onCardPinChange"
           @place="onPlaceAnchor"
           @ready="onCanvasReady"
+          @render-stats="(stats) => (renderStats = stats)"
           @select="onSelectAnchor"
           @state-change="
             (state: string, error?: string) => {
@@ -498,7 +634,17 @@ function onAssetsLoaded(list: IotTwinApi.ModelAssetResp[]): void {
           />
         </div>
 
-        <RuntimeLegend class="absolute bottom-3 left-3" />
+        <RuntimeLegend class="absolute bottom-9 left-3" />
+
+        <!-- 底部状态栏：FPS / 模型数 / 渲染对象数 / 最后更新 / SSE 连接 / 动效档位 -->
+        <TwinStatusBar
+          class="absolute bottom-3 left-3"
+          :last-update-at="lastUpdateAt"
+          :model-count="currentScene?.modelAssetId ? 1 : 0"
+          :motion-mode="motionMode"
+          :realtime-state="String(runtime.realtimeState.value ?? 'closed')"
+          :render-stats="renderStats"
+        />
 
         <!-- 面包屑 -->
         <nav
@@ -553,6 +699,7 @@ function onAssetsLoaded(list: IotTwinApi.ModelAssetResp[]): void {
           @refresh="loadScenes"
         />
       </aside>
+      </div>
     </div>
   </Page>
 </template>

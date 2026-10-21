@@ -1578,9 +1578,51 @@
       "assetNameRequired": "请填写模型名称",
       "assetNameTooLong": "模型名称长度不能超过 {0}",
       "backParent": "返回上级",
+      "badge": {
+        "alerts": "{0} 条告警",
+        "noModel": "未绑定模型",
+        "points": "{0} 个点位"
+      },
       "bindingLimit": "最多 {0} 个",
       "bindings": "属性绑定",
       "cancelPlace": "取消放置",
+      "card": {
+        "age": {
+          "day": "{0} 天前",
+          "hour": "{0} 小时前",
+          "minute": "{0} 分钟前",
+          "second": "{0} 秒前"
+        },
+        "alertCount": "{0} 条活动告警",
+        "badQuality": "数据质量异常（{0}）",
+        "bindingStale": "属性已失效，请重新绑定",
+        "close": "关闭卡片",
+        "editPoint": "点位配置",
+        "hint": "悬停查看更多 · 点击固定",
+        "noBinding": "该点位未绑定任何属性",
+        "noData": "暂无上报",
+        "openDevice": "设备详情",
+        "pinned": "已固定",
+        "primaryHint": "主展示属性（画布标签显示该值）",
+        "property": "属性",
+        "quality": {
+          "bad": "质量异常",
+          "good": "正常",
+          "missing": "无数据",
+          "stale": "数据已失效",
+          "unknown": "质量未知"
+        },
+        "stale": "数据已失效（缓存值）",
+        "status": {
+          "alert": "告警中",
+          "disabled": "已停用",
+          "normal": "在线",
+          "offline": "离线",
+          "unknown": "未知（未收到连接事件）"
+        },
+        "updatedAt": "更新",
+        "value": "当前值"
+      },
       "clickSurfaceHint": "点击模型表面放置设备锚点",
       "create": "新增",
       "decimals": "小数位",
@@ -1617,6 +1659,16 @@
       "flyFallbackNoAnchor": "目标场景没有锚点变换（与父场景原点重合），飞行过去看不出位置变化，已改为切换加载",
       "icon": "图标标识",
       "incompleteBinding": "有尚未选择属性的绑定行，请先选择或删除",
+      "kpi": {
+        "alerts": "告警",
+        "devices": "设备",
+        "global": "全部",
+        "models": "模型",
+        "onlineRate": "在线率",
+        "points": "点位",
+        "scenes": "场景",
+        "scope": "当前场景"
+      },
       "labelVisible": "常显标签",
       "legendAlert": "告警",
       "legendDisabled": "停用",
@@ -1679,6 +1731,22 @@
       "sort": "排序",
       "staleBindingHint": "属性在物模型里已不存在（可能是 TSL 重新导入导致），请删除后重新选择",
       "staleCount": "{0} 个属性已失效",
+      "status": {
+        "fps": "FPS",
+        "models": "已加载模型",
+        "motion": {
+          "off": "动效已关闭（弱机型）",
+          "reduced": "动效已减弱"
+        },
+        "realtime": {
+          "closed": "实时未连接",
+          "connecting": "实时连接中",
+          "live": "实时",
+          "reconnecting": "实时重连中",
+          "unauthorized": "实时鉴权失败"
+        },
+        "updatedAgo": "{0} 秒前更新"
+      },
       "title": "数字孪生",
       "unitOverride": "单位覆盖",
       "unmapped": "未配置采集",
