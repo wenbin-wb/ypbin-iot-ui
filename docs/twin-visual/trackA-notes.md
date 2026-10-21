@@ -119,13 +119,20 @@ onHoverAnchor?: (pointId: string | undefined) => void;  // 进入 = pointId，�
 **外层漏了 auto** ⇒ 鼠标事件整条穿透到 canvas，标签上的 `pointerenter` 永不触发；
 而 DOM 层面看不出异常（`elementFromPoint` 仍返回标签外层 div）。
 
-**修复（两层保险）**：
+**修复（三层，前两层是 `47acd68`，第三层是 `518609b`）**：
 1. 外层 `.twin-anchor-label` 显式 `pointer-events: auto`（修根因）；
 2. **几何命中**（不依赖 DOM 命中测试）：容器上监听 `pointermove`（节流 ~30Hz）与
-   `pointerleave`，用锚点屏幕坐标（从 CSS2D 写好的 transform 解析）做距离检测，
-   **命中半径 = 圆点半径 7 + 容差 6 = 13px**；命中 ⇒ `onHoverAnchor(pointId)`，
-   离开 ⇒ `onHoverAnchor(undefined)`。CSS2D 每帧重写 transform、任何层级改
-   pointer-events 都不影响这条路径。
+   `pointerleave`，用锚点屏幕坐标（从 CSS2D 写好的 transform 解析）做判定；
+3. **命中区域 = 胶囊矩形，不是圆点圆**（`518609b` 修的第二个缺陷）：标签是
+   200~300px 宽的胶囊，只判「圆点周围 13px」时真实鼠标（落在文字区域、距圆点
+   50~100px）**永远不命中** —— 表现就是「合成事件能弹出卡片、真实鼠标不行」。
+   现在：
+   - 每轮 ~10Hz 重排后、**所有样式写完之后**读一次
+     `.twin-anchor-capsule` 的 `getBoundingClientRect()` 换算到容器坐标，
+     缓存为 `lastCapsuleRect`（不在每帧读，避免 layout thrash）；
+   - 命中顺序：胶囊矩形（4px 容差，多命中取中心最近）→ 回退圆点 13px 圆
+     （折叠成「只剩圆点」的标签没有可见胶囊，必须走这条）；
+   - 重叠本不该发生（避让保证），hover 放大 1.12 倍时边缘可能轻微重叠 ⇒ 取最近者。
 
 > 集成方不需要额外做什么：`twin-canvas.vue` 里 `onHoverAnchor: (id) => { manager.setInteractionHover(id); onHoverAnchor(id); }` 即可。
 > views 层的 DOM 委托兜底可以留着（无害），但**不再是必要路径**。
