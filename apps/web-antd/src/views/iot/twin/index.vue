@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { CameraPresetId } from './modules/camera-presets';
 import type { TwinKpiResult } from './modules/twin-kpi';
 
 import type { IotTwinApi } from '#/api/iot';
@@ -21,6 +22,7 @@ import { useTwinEditor } from './composables/use-twin-editor';
 import { useTwinLiveValues } from './composables/use-twin-live-values';
 import { useTwinRuntime } from './composables/use-twin-runtime';
 import { useTwinScene } from './composables/use-twin-scene';
+import { CAMERA_PRESET_IDS } from './modules/camera-presets';
 import { buildDeviceDetailTarget } from './modules/device-detail-link';
 import ModelPanel from './modules/model-panel.vue';
 import PointPanel from './modules/point-panel.vue';
@@ -200,6 +202,19 @@ const sceneSummary = ref<{
  */
 const showShell = ref(false);
 const shellSupported = ref(false);
+
+/** 当前相机预设（按钮组高亮用；用户自由旋转后清空）。 */
+const activeCameraPreset = ref<CameraPresetId | undefined>();
+
+/**
+ * 切到相机预设机位。
+ *
+ * @param presetId 预设 ID
+ */
+function applyCameraPreset(presetId: CameraPresetId): void {
+  activeCameraPreset.value = presetId;
+  canvasRef.value?.applyCameraPreset(presetId);
+}
 
 /**
  * 切换剖切/完整外观。
@@ -729,6 +744,31 @@ async function onOpenPointConfig(pointId: string): Promise<void> {
         <div
           class="pointer-events-none absolute right-4 top-16 z-10 flex items-center gap-2"
         >
+          <!-- 视角预设：一键回到可复现的构图（俯视/等轴/侧视） -->
+          <div
+            class="pointer-events-auto flex items-center rounded-lg border border-border/60 bg-background/70 text-xs shadow backdrop-blur"
+            role="group"
+            :aria-label="$t('page.iot.twin.camera.label')"
+          >
+            <span class="px-2 text-muted-foreground">
+              {{ $t('page.iot.twin.camera.label') }}
+            </span>
+            <button
+              v-for="preset in CAMERA_PRESET_IDS"
+              :key="preset"
+              class="px-1.5 py-1 transition-colors first-of-type:rounded-none last:rounded-r-lg"
+              :class="
+                activeCameraPreset === preset
+                  ? 'bg-primary/15 text-primary'
+                  : 'text-muted-foreground hover:text-foreground'
+              "
+              type="button"
+              :aria-pressed="activeCameraPreset === preset"
+              @click="applyCameraPreset(preset)"
+            >
+              {{ $t(`page.iot.twin.camera.${preset}`) }}
+            </button>
+          </div>
           <div
             v-if="shellSupported && canvasState === 'ready'"
             class="pointer-events-auto flex items-center gap-1 rounded-lg border border-border/60 bg-background/70 px-2 py-1 text-xs shadow backdrop-blur"

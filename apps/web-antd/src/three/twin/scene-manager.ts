@@ -650,6 +650,34 @@ export class TwinSceneManager {
   }
 
   /**
+   * 当前相机位姿（供「视角预设」判断选中态）。
+   *
+   * @returns 位姿；未初始化时 undefined
+   */
+  getCameraPose():
+    | undefined
+    | {
+        position: { x: number; y: number; z: number };
+        target: { x: number; y: number; z: number };
+      } {
+    if (!this.camera || !this.controls) {
+      return undefined;
+    }
+    return {
+      position: {
+        x: this.camera.position.x,
+        y: this.camera.position.y,
+        z: this.camera.position.z,
+      },
+      target: {
+        x: this.controls.target.x,
+        y: this.controls.target.y,
+        z: this.controls.target.z,
+      },
+    };
+  }
+
+  /**
    * OrbitControls（供拾取器在拖拽期间临时禁用以避免「拖拽带着相机转」）。
    *
    * @returns 控制器（未初始化时为 undefined）
@@ -1024,8 +1052,6 @@ export class TwinSceneManager {
     return { visible, x, y };
   }
 
-  // ---------- 公共：集成契约（hover 卡片 / 状态栏 / 聚焦） ----------
-
   /**
    * 批量更新锚点运行态（由页面在 rAF 合并后调用）。
    *
@@ -1053,6 +1079,31 @@ export class TwinSceneManager {
     if (this.lastAnchorStates && this.lastAnchorStates.size > 0) {
       this.anchorLayer?.update(this.lastAnchorStates);
     }
+  }
+
+  // ---------- 公共：集成契约（hover 卡片 / 状态栏 / 聚焦） ----------
+
+  /**
+   * 立即切到指定机位（**无动画**：预设是构图选择，不是导航）。
+   *
+   * 同时把「初始视角」更新为这里：否则用户点完预设后再点「重置」会跳回加载时
+   * 自适应算出的旧机位（用户会以为预设没生效）。
+   *
+   * @param pose 机位
+   */
+  setCameraPose(pose: {
+    position: { x: number; y: number; z: number };
+    target: { x: number; y: number; z: number };
+  }): void {
+    if (!this.camera || !this.controls) {
+      return;
+    }
+    // 用户主动选机位 ⇒ 巡航必须让位（否则 20s 后被转走）
+    this.orbit?.notifyInteraction();
+    this.camera.position.set(pose.position.x, pose.position.y, pose.position.z);
+    this.controls.target.set(pose.target.x, pose.target.y, pose.target.z);
+    this.controls.update();
+    this.defaultTarget = { ...pose.target };
   }
 
   /**

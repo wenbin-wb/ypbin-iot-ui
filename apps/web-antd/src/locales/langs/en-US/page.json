@@ -1585,6 +1585,12 @@
       },
       "bindingLimit": "Up to {0}",
       "bindings": "Property bindings",
+      "camera": {
+        "iso": "Iso",
+        "label": "View",
+        "side": "Side",
+        "top": "Top"
+      },
       "cancelPlace": "Cancel placing",
       "card": {
         "age": {

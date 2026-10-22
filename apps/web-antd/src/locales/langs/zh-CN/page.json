@@ -1585,6 +1585,12 @@
       },
       "bindingLimit": "最多 {0} 个",
       "bindings": "属性绑定",
+      "camera": {
+        "iso": "等轴",
+        "label": "视角",
+        "side": "侧视",
+        "top": "俯视"
+      },
       "cancelPlace": "取消放置",
       "card": {
         "age": {
