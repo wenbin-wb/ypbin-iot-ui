@@ -137,7 +137,7 @@ const DEFAULT_HEMI_INTENSITY = 1.15;
 const DEFAULT_FILL_INTENSITY = 0.35;
 
 /** 主方向光相对模型尺寸的距离倍数。 */
-const SUN_DISTANCE_RATIO = 2.2;
+const SUN_DISTANCE_RATIO = 1.6;
 
 /**
  * 生成背景渐变纹理（顶部略亮 → 底部更暗的深冷灰蓝）。
@@ -1548,8 +1548,12 @@ export class TwinSceneManager {
     camera.right = shadow.extent;
     camera.top = shadow.extent;
     camera.bottom = -shadow.extent;
-    camera.near = Math.max(0.01, safe * 0.01);
-    camera.far = shadow.far;
+    // 深度精度：near 尽量贴近「光到模型的距离」，far 只到「光到模型背面」再多一点。
+    // 旧实现 far = extent*6（园区上 ≈ 1600m），near/far 跨度极大 ⇒ 阴影贴图深度精度不足，
+    // 表现为墙面/地面出现随相机游走的暗斑（「楼也在闪」）。
+    const sunToCenter = sun.position.distanceTo(center);
+    camera.near = Math.max(0.01, sunToCenter - shadow.extent * 1.2);
+    camera.far = sunToCenter + shadow.extent * 1.2;
     camera.updateProjectionMatrix();
     sun.shadow.bias = shadow.bias;
     sun.shadow.normalBias = shadow.normalBias;
@@ -1717,9 +1721,13 @@ export class TwinSceneManager {
       );
       this.controls.target.copy(center);
       // 近远裁剪面按模型尺寸调整：建筑模型的坐标尺度可能是米或毫米，
-      // 固定 0.1/5000 在毫米级模型上会整片被裁掉
-      this.camera.near = Math.max(0.001, maxDimension / 10_000);
-      this.camera.far = maxDimension * 100;
+      // 固定 0.1/5000 在毫米级模型上会整片被裁掉。
+      //
+      // ⚠️ 但 near/far 跨度也不能太大（实测「楼和地面都在闪」）：深度缓冲是非线性的，
+      // far/near 比值越大，远处的深度精度越差 ⇒ 远处墙面与阴影贴图互相打架。
+      // 园区 380m：旧 near≈0.038 / far≈38000（比值 1e6）；现在 near≈模型/2000、far=相机到中心距离×4。
+      this.camera.near = Math.max(0.001, maxDimension / 2000);
+      this.camera.far = distance * 4 + maxDimension * 2;
       this.camera.updateProjectionMatrix();
     }
     this.defaultTarget = {

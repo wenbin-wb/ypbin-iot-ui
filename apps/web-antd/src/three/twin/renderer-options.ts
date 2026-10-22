@@ -63,9 +63,11 @@ export interface TwinRendererOptions {
 export const DEFAULT_RENDERER_OPTIONS: Readonly<TwinRendererOptions> =
   Object.freeze({
     outputColorSpace: 'srgb',
-    shadowBias: -0.0005,
-    shadowCameraScale: 0.9,
+    // 世界单位的深度偏移（three 默认 -0.0005 数量级；PCFSoft 下再调大会漏光）
+    shadowBias: -0.0006,
+    shadowCameraScale: 1,
     shadowMapEnabled: true,
+    // 园区 380m 跨度：2048 贴合后每像素 ≈ extent*2/2048 ≈ 0.27m，足以消掉墙面暗斑
     shadowMapSize: 2048,
     shadowMapType: 2,
     shadowNormalBias: 0.02,
@@ -176,9 +178,14 @@ export function resolveShadowCamera(
     safe * 0.5,
   );
   return {
-    // bias/normalBias 与场景尺度成正比：模型放大 10 倍，偏移也要放大 10 倍，
-    // 否则小模型上正常的参数在大模型上出焦斑（反之亦然）
-    bias: options.shadowBias * safe,
+    // ⚠️ bias 是**阴影贴图深度单位**（世界单位），**不随模型尺寸放大**。
+    //
+    // 旧实现写成 `shadowBias * safe`：380m 园区上 bias = -0.0005 × 380 = **-0.19m**，
+    // 比建筑薄墙/楼板还厚 ⇒ 阴影深度被系统性推偏，墙面/楼面出现**游走的暗斑**，
+    // 相机一动就不断变化，看起来就是「楼和地面都在闪」（用户实测）。
+    bias: options.shadowBias,
+    // normalBias 才是「按模型尺度」的东西（沿法线推开采样点，避免自阴影条纹）
+
     extent,
     // 光源在数倍模型尺寸之外，远面要给足
     far: extent * 6,
