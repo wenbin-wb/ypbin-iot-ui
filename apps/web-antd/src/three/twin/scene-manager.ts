@@ -205,6 +205,12 @@ export interface AnchorLayer {
   setMotionMode?: (mode: TwinMotionMode) => void;
   /** 可选：设置 hover 点位（hover 的标签不参与避让，避免鼠标放上去它被挤走）。 */
   setHovered?: (pointId?: string) => void;
+  /**
+   * 可选：按主题切换标签配色（浅色底 ⇒ 白底深字）。
+   *
+   * 可选是为了向后兼容：旧装配/单测的替身对象没有它时，`?.` 调用不崩。
+   */
+  setLightTheme?: (light: boolean) => void;
 }
 
 /** 场景管理器构造选项。 */
@@ -1200,6 +1206,8 @@ export class TwinSceneManager {
     if (this.modelRoot) {
       this.rebuildEnvironment(this.modelRoot);
     }
+    // 标签胶囊同样要跟随：浅底上「深色药丸」比模型还重，信息层级会反过来
+    this.anchorLayer?.setLightTheme?.(light && !this.hasExplicitBackground);
   }
 
   /**
@@ -1577,6 +1585,10 @@ export class TwinSceneManager {
     }
     // 动效档位也要下发一次：锚点层可能是本次新建的（拿不到初始值）
     this.anchorLayer?.setMotionMode?.(this.motionMode);
+    // 标签配色跟随主题（切场景会重建标签，必须重新下发，否则又回到暗色药丸）
+    this.anchorLayer?.setLightTheme?.(
+      this.lightCanvas && !this.hasExplicitBackground,
+    );
 
     // ---- GLB 自带动画（「模型自己会动」那一档） ----
     this.animator?.dispose();

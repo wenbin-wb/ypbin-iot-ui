@@ -11,17 +11,23 @@ import {
   TWIN_COLOR_ALERT_RIPPLE,
   TWIN_COLOR_DISABLED,
   TWIN_COLOR_DOT_NEUTRAL,
+  TWIN_COLOR_DOT_RING_LIGHT,
   TWIN_COLOR_ICON_BASE,
   TWIN_COLOR_ICON_INNER,
   TWIN_COLOR_LABEL_BG,
+  TWIN_COLOR_LABEL_BG_LIGHT,
   TWIN_COLOR_LABEL_BORDER,
   TWIN_COLOR_LABEL_BORDER_ALERT,
+  TWIN_COLOR_LABEL_BORDER_LIGHT,
   TWIN_COLOR_LABEL_CAPSULE_BORDER,
   TWIN_COLOR_LABEL_CAPSULE_BORDER_HOVER,
   TWIN_COLOR_LABEL_GLOW,
   TWIN_COLOR_LABEL_SHADOW,
+  TWIN_COLOR_LABEL_SHADOW_LIGHT,
   TWIN_COLOR_LABEL_TEXT,
+  TWIN_COLOR_LABEL_TEXT_LIGHT,
   TWIN_COLOR_LABEL_TEXT_MUTED,
+  TWIN_COLOR_LABEL_TEXT_MUTED_LIGHT,
   TWIN_COLOR_OFFLINE,
   TWIN_COLOR_ONLINE,
   TWIN_COLOR_UNKNOWN,
@@ -245,6 +251,14 @@ export interface AnchorLayerInstance extends AnchorLayer {
   setMotionMode: (mode: TwinMotionMode) => void;
   /** 设置 hover 点位（hover 卡片打开时由 manager 转发，用于阻止对应标签被降级）。 */
   setHovered: (pointId?: string) => void;
+  /**
+   * 按主题切换标签配色（亮色底 ⇒ 白底深字，避免一排深色药丸压在浅色画布上）。
+   *
+   * 只改 CSS 变量、不重建标签：重建会丢 hover/避让状态，还会闪一帧。
+   *
+   * @param light 是否浅色底
+   */
+  setLightTheme: (light: boolean) => void;
 }
 
 /** 锚点层交互回调。 */
@@ -390,10 +404,10 @@ export function createAnchorLayer(
   box-sizing: border-box;
   padding: 0 8px 0 3px;
   border-radius: 999px;
-  background: ${TWIN_COLOR_LABEL_BG};
-  border: 1px solid ${TWIN_COLOR_LABEL_CAPSULE_BORDER};
-  box-shadow: 0 2px 8px ${TWIN_COLOR_LABEL_SHADOW};
-  color: ${TWIN_COLOR_LABEL_TEXT};
+  background: var(--twin-label-bg, ${TWIN_COLOR_LABEL_BG});
+  border: 1px solid var(--twin-label-border, ${TWIN_COLOR_LABEL_CAPSULE_BORDER});
+  box-shadow: 0 2px 8px var(--twin-label-shadow, ${TWIN_COLOR_LABEL_SHADOW});
+  color: var(--twin-label-text, ${TWIN_COLOR_LABEL_TEXT});
   font-size: 12px;
   line-height: 16px;
   white-space: nowrap;
@@ -415,7 +429,7 @@ export function createAnchorLayer(
   width: ${DOT_DIAMETER_PX}px;
   height: ${DOT_DIAMETER_PX}px;
   border-radius: 50%;
-  border: 2px solid rgba(255,255,255,.92);
+  border: 2px solid var(--twin-dot-ring, ${TWIN_COLOR_DOT_RING_LIGHT});
   box-sizing: border-box;
   box-shadow: 0 0 6px currentColor;
   background: currentColor;
@@ -433,15 +447,15 @@ export function createAnchorLayer(
   opacity: 0.75;
 }
 .twin-anchor-name {
-  color: ${TWIN_COLOR_LABEL_TEXT};
+  color: var(--twin-label-text, ${TWIN_COLOR_LABEL_TEXT});
 }
 .twin-anchor-value {
-  color: ${TWIN_COLOR_LABEL_TEXT};
+  color: var(--twin-label-value, ${TWIN_COLOR_LABEL_TEXT});
   font-variant-numeric: tabular-nums;
   transition: color 160ms ease-out, text-shadow 160ms ease-out;
 }
 .twin-anchor-value[data-muted='true'] {
-  color: ${TWIN_COLOR_LABEL_TEXT_MUTED};
+  color: var(--twin-label-muted, ${TWIN_COLOR_LABEL_TEXT_MUTED});
 }
 .twin-anchor-value[data-flash='true'] {
   color: #fff;
@@ -1320,6 +1334,38 @@ export function createAnchorLayer(
     }
   }
 
+  /**
+   * 按主题切换标签配色（改 CSS 变量，不重建节点）。
+   *
+   * @param light 是否浅色底
+   */
+  function setLightTheme(light: boolean): void {
+    const style = css2dRenderer.domElement.style;
+    if (light) {
+      style.setProperty('--twin-label-bg', TWIN_COLOR_LABEL_BG_LIGHT);
+      style.setProperty('--twin-label-border', TWIN_COLOR_LABEL_BORDER_LIGHT);
+      style.setProperty('--twin-label-shadow', TWIN_COLOR_LABEL_SHADOW_LIGHT);
+      style.setProperty('--twin-label-text', TWIN_COLOR_LABEL_TEXT_LIGHT);
+      style.setProperty('--twin-label-value', TWIN_COLOR_LABEL_TEXT_LIGHT);
+      style.setProperty(
+        '--twin-label-muted',
+        TWIN_COLOR_LABEL_TEXT_MUTED_LIGHT,
+      );
+      return;
+    }
+    // 暗色：清掉变量 ⇒ 回落到 <style> 里编译期的暗色调色板
+    for (const name of [
+      '--twin-label-bg',
+      '--twin-label-border',
+      '--twin-label-shadow',
+      '--twin-label-text',
+      '--twin-label-value',
+      '--twin-label-muted',
+    ]) {
+      style.removeProperty(name);
+    }
+  }
+
   function dispose(): void {
     detach();
     container.removeEventListener('pointermove', onPointerMove);
@@ -1333,10 +1379,12 @@ export function createAnchorLayer(
     styleElement.remove();
   }
 
+  // 初始按暗色（与 <style> 编译期默认一致）；切场景后由 scene-manager 重新下发
   return {
     attach,
     detach,
     dispose,
+    setLightTheme,
     getLabelScreenPosition: (pointId) => {
       const node = nodes.get(pointId);
       if (!node) {
