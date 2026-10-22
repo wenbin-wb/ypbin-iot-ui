@@ -1638,11 +1638,29 @@
       "depthLimit": "场景层级已达上限（4 层）：房间级展示请在楼层场景内做区域标注",
       "device": "设备",
       "deviceMissingForPoint": "该点位对应的设备已被删除，无法打开设备详情",
+      "devicePanel": {
+        "dragHint": "拖拽调整位置",
+        "dragToPlace": "拖动到画布放置设备",
+        "dropHere": "松开以放置",
+        "notFoundNode": "该点位未绑定模型节点，无法在模型上高亮",
+        "presetNew": "选定设备（新点位）",
+        "saved": "位置已保存",
+        "selectHint": "点击设备查看详情",
+        "unsaved": "有未保存的位置修改"
+      },
       "devicePlaceholder": "搜索设备名称或编码",
       "deviceRequired": "请选择设备",
       "deviceSearchFailed": "设备搜索失败",
       "deviceWithoutProduct": "该设备未绑定产品，无法配置属性：请先在设备台账里为其选择产品",
       "discardAndSwitch": "丢弃并切换",
+      "display": {
+        "exit": "退出投屏",
+        "exitHint": "退出投屏（Esc）",
+        "noScene": "未指定场景",
+        "openDisplay": "投屏模式",
+        "realtimePaused": "实时数据已暂停",
+        "title": "数字孪生投屏"
+      },
       "displayRole": {
         "primary": "主展示",
         "secondary": "次展示"

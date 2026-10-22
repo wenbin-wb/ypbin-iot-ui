@@ -15,16 +15,38 @@ const dynamicRouteFiles = import.meta.glob('./modules/**/*.ts', {
 /** 动态路由 */
 const dynamicRoutes: RouteRecordRaw[] = mergeRouteModules(dynamicRouteFiles);
 
+/**
+ * 静态路由（不走权限菜单）：投屏 / 大屏展示这类「不需要菜单入口」的页面。
+ *
+ * 为什么放静态路由而不是加菜单：
+ * - 菜单由后端 `sys_menu` 驱动，加一个菜单要改 SQL（属新契约）；
+ * - 投屏页**不是独立功能**，而是孪生页的另一种呈现（同一份数据、同一权限码
+ *   `iot:twin:list`），从孪生页按钮或深链进入即可；
+ * - 页面自身仍走鉴权接口，无权限时由接口 401/403 + 页面错误态兜底。
+ */
+const displayRoute: RouteRecordRaw = {
+  component: () => import('#/views/iot/twin/display.vue'),
+  meta: {
+    hideInBreadcrumb: true,
+    hideInMenu: true,
+    hideInTab: true,
+    title: 'Digital Twin Display',
+  },
+  name: 'IotTwinDisplay',
+  path: '/iot/twin-display',
+};
+
 /** 外部路由列表，访问这些页面可以不需要Layout，可能用于内嵌在别的系统(不会显示在菜单中) */
 // const externalRoutes: RouteRecordRaw[] = mergeRouteModules(externalRouteFiles);
 // const staticRoutes: RouteRecordRaw[] = mergeRouteModules(staticRouteFiles);
-const staticRoutes: RouteRecordRaw[] = [];
+const staticRoutes: RouteRecordRaw[] = [displayRoute];
 const externalRoutes: RouteRecordRaw[] = [];
 
 /** 路由列表，由基本路由、外部路由和404兜底路由组成
  *  无需走权限验证（会一直显示在菜单中） */
 const routes: RouteRecordRaw[] = [
   ...coreRoutes,
+  displayRoute,
   ...externalRoutes,
   fallbackNotFoundRoute,
 ];

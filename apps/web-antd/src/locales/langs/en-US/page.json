@@ -1638,11 +1638,29 @@
       "depthLimit": "Maximum scene depth (4) reached: represent rooms as zones inside a floor scene",
       "device": "Device",
       "deviceMissingForPoint": "The device for this point has been deleted, so its details cannot be opened",
+      "devicePanel": {
+        "dragHint": "Drag to reposition",
+        "dragToPlace": "Drag to the canvas",
+        "dropHere": "Release to place",
+        "notFoundNode": "No model node bound; cannot highlight",
+        "presetNew": "Device selected (new point)",
+        "saved": "Position saved",
+        "selectHint": "Click a device for details",
+        "unsaved": "Unsaved position changes"
+      },
       "devicePlaceholder": "Search by device name or code",
       "deviceRequired": "Please select a device",
       "deviceSearchFailed": "Failed to search devices",
       "deviceWithoutProduct": "This device has no product bound, so properties cannot be configured. Bind a product in the device ledger first",
       "discardAndSwitch": "Discard and switch",
+      "display": {
+        "exit": "Exit",
+        "exitHint": "Exit display (Esc)",
+        "noScene": "No scene selected",
+        "openDisplay": "Display mode",
+        "realtimePaused": "Realtime paused",
+        "title": "Digital Twin Display"
+      },
       "displayRole": {
         "primary": "Primary",
         "secondary": "Secondary"

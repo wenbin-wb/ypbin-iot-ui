@@ -212,6 +212,23 @@ const shellSupported = ref(false);
  */
 const { isDark } = usePreferences();
 
+/**
+ * 打开投屏模式（同一场景、只读大屏视图）。
+ *
+ * 新窗口打开而不是同页跳转：投屏常用于「会议室大屏 + 本机继续编辑」同时进行，
+ * 同页跳转会把编辑现场挤掉。
+ */
+function openDisplayMode(): void {
+  if (!currentSceneId.value) {
+    return;
+  }
+  const href = router.resolve({
+    path: '/iot/twin-display',
+    query: { sceneId: currentSceneId.value },
+  }).href;
+  globalThis.open(href, '_blank', 'noopener');
+}
+
 /** 当前相机预设（按钮组高亮用；用户自由旋转后清空）。 */
 const activeCameraPreset = ref<CameraPresetId | undefined>();
 
@@ -819,6 +836,13 @@ async function onOpenPointConfig(pointId: string): Promise<void> {
             @click="goParent"
           >
             {{ $t('page.iot.twin.backParent') }}
+          </button>
+          <button
+            class="pointer-events-auto rounded-lg border border-border/60 bg-background/70 px-2 py-1 text-xs text-muted-foreground shadow backdrop-blur transition-colors hover:text-foreground"
+            type="button"
+            @click="openDisplayMode"
+          >
+            {{ $t('page.iot.twin.display.openDisplay') }}
           </button>
         </div>
 
