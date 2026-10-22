@@ -142,8 +142,14 @@ describe('resolveShadowCamera：阴影范围按模型尺度自适应', () => {
     expect(building.extent).toBeGreaterThan(10);
     expect(cabinet.extent).toBeLessThan(1);
     expect(building.extent / cabinet.extent).toBeCloseTo(100, 0);
-    // 双向偏移随尺度缩放：大模型用小 bias 会出焦斑，小模型用大 bias 会阴影漏光
-    expect(Math.abs(building.bias)).toBeGreaterThan(Math.abs(cabinet.bias));
+    // ★ bias 是**阴影贴图深度单位（世界单位）**，必须**不随模型尺寸放大**。
+    //
+    // 回归的是实测缺陷：旧实现 `bias = shadowBias * safe`，380m 园区上 bias 达 -0.19m
+    // （比楼板还厚）⇒ 墙面/楼面出现随相机游走的暗斑，用户看到的就是「楼和地面都在闪」。
+    expect(building.bias).toBe(cabinet.bias);
+    expect(Math.abs(building.bias)).toBeLessThan(0.01);
+    // normalBias 才按尺度缩放（沿法线推开采样点，防自阴影条纹）
+    expect(building.normalBias).toBeGreaterThan(cabinet.normalBias);
     expect(building.normalBias).toBeGreaterThan(cabinet.normalBias);
   });
 
