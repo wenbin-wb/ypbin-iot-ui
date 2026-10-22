@@ -1,9 +1,12 @@
 import type * as THREE_NS from 'three';
 
 import {
+  isLightBackground,
   TWIN_COLOR_GRID_LINE,
+  TWIN_COLOR_GRID_LINE_LIGHT,
   TWIN_COLOR_GRID_LINE_MINOR,
   TWIN_COLOR_GROUND,
+  TWIN_COLOR_GROUND_LIGHT,
   TWIN_COLOR_SCAN_LINE,
   TWIN_COLOR_SCAN_RING,
 } from './colors';
@@ -84,6 +87,17 @@ export interface BuildEnvironmentOptions {
   box: THREE_NS.Box3;
   /** 是否创建扫描光圈（`motionSwitches(mode).scanRing`；reduced/off 时传 false）。 */
   createScanRings: boolean;
+  /**
+   * 实际生效的背景色（CSS 颜色串）。
+   *
+   * 由 scene-manager 传入 `scene.background` 的真实值：
+   * - 场景配置了 `viewJson.background` ⇒ 用它；
+   * - 否则用主题默认的渐变（深色）。
+   *
+   * 为什么传颜色而不是布尔：浅色判定要有单一真相（`isLightBackground`），
+   * 两处各自判断一次就会出现「背景是浅的、地面还是深的」这种半截主题。
+   */
+  background?: string;
 }
 
 /**
@@ -149,7 +163,8 @@ export function buildEnvironment(
     ? options.box.min.y
     : center.y - safeDimension / 2;
 
-  const groundTexture = createGroundTexture(THREE);
+  const light = isLightBackground(options.background);
+  const groundTexture = createGroundTexture(THREE, light);
   // 贴图在水平面重复：每 1/4 地面尺寸重复一次，保证细碎纹理在不同尺度模型上都清晰
   groundTexture.wrapS = THREE.RepeatWrapping;
   groundTexture.wrapT = THREE.RepeatWrapping;
@@ -157,7 +172,7 @@ export function buildEnvironment(
   groundTexture.repeat.set(repeats, repeats);
 
   const groundMaterial = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(TWIN_COLOR_GROUND),
+    color: new THREE.Color(light ? TWIN_COLOR_GROUND_LIGHT : TWIN_COLOR_GROUND),
     // 粗糙度高（混凝土），金属度极低：地面不该有镜面反射（真实感来自阴影与漫反射）
     metalness: 0.05,
     roughness: 0.92,
@@ -179,7 +194,7 @@ export function buildEnvironment(
   group.name = '__twin_environment__';
   group.add(ground);
 
-  const grid = createGrid(THREE, safeDimension, groundSize);
+  const grid = createGrid(THREE, safeDimension, groundSize, light);
   grid.position.set(center.x, groundY + safeDimension * 0.0005, center.z);
   group.add(grid);
 
@@ -252,14 +267,17 @@ export function buildEnvironment(
  * @param THREE three 命名空间
  * @returns 贴图（已标 `SRGBColorSpace`）
  */
-function createGroundTexture(THREE: typeof THREE_NS): THREE_NS.Texture {
+function createGroundTexture(
+  THREE: typeof THREE_NS,
+  light = false,
+): THREE_NS.Texture {
   const canvas = document.createElement('canvas');
   canvas.width = GROUND_TEXTURE_SIZE;
   canvas.height = GROUND_TEXTURE_SIZE;
   const context = canvas.getContext('2d');
   if (context) {
     // 底色：极深的冷灰（地面本体颜色由材质 color 叠乘）
-    context.fillStyle = TWIN_COLOR_GROUND;
+    context.fillStyle = light ? TWIN_COLOR_GROUND_LIGHT : TWIN_COLOR_GROUND;
     context.fillRect(0, 0, GROUND_TEXTURE_SIZE, GROUND_TEXTURE_SIZE);
     // 斜向扫描线：45°，线宽 2px、间距 16px、透明度约 4%（需求要求 <5%）
     context.strokeStyle = TWIN_COLOR_SCAN_LINE;
@@ -299,6 +317,7 @@ function createGrid(
   THREE: typeof THREE_NS,
   modelDimension: number,
   groundSize: number,
+  light = false,
 ): THREE_NS.Object3D {
   const majorStep = modelDimension * GRID_MAJOR_RATIO;
   const minorStep = majorStep * GRID_MINOR_RATIO;
@@ -352,8 +371,17 @@ function createGrid(
     lines.renderOrder = 1;
     group.add(lines);
   };
-  build(minorPositions, TWIN_COLOR_GRID_LINE_MINOR, 0.28);
-  build(majorPositions, TWIN_COLOR_GRID_LINE, 0.45);
+  // 浅色底：网格用深色线且更实（浅底上深色线才有对比度）
+  build(
+    minorPositions,
+    light ? TWIN_COLOR_GRID_LINE_LIGHT : TWIN_COLOR_GRID_LINE_MINOR,
+    light ? 0.35 : 0.28,
+  );
+  build(
+    majorPositions,
+    light ? TWIN_COLOR_GRID_LINE_LIGHT : TWIN_COLOR_GRID_LINE,
+    light ? 0.55 : 0.45,
+  );
   // 地面是透明的：网格要在它之上绘制，但不写深度（避免地面透明排序把网格盖掉）
   return group;
 }
