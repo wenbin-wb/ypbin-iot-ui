@@ -319,6 +319,9 @@ export function createAnchorLayer(
    * 才允许清除这个标记。
    */
   let hoverFromDom = false;
+
+  /** 上一个 hover 的点位（其标签保持「立即到位」，避免刚移开就漂走）。 */
+  let lastHoveredId: string | undefined;
   /** 「待定关闭」定时器（几何未命中时排的延时清除；任何命中都会取消它）。 */
   let pendingClearTimer: ReturnType<typeof globalThis.setTimeout> | undefined;
   /** 坐标漂移告警是否已打过（限流：只报一次）。 */
@@ -908,7 +911,7 @@ export function createAnchorLayer(
       entries.map((entry) => entry.input),
       bounds,
     );
-    const smooth = motionSwitches(motionMode).smoothLabels;
+    const smoothEnabled = motionSwitches(motionMode).smoothLabels;
     for (const [index, entry] of entries.entries()) {
       const layout = layouts[index];
       if (!layout) {
@@ -927,6 +930,13 @@ export function createAnchorLayer(
       node.layoutRect = clamped;
       node.labelElement.dataset.collapsed = String(layout.collapsed);
       node.collapsed = layout.collapsed;
+      // hover / 刚移开的标签**立即到位**：若让它们平滑跟随，标签会在指针下方继续漂移，
+      // 用户「瞄准」一个正在滑走的标签 ⇒ hover 频繁落空（真实鼠标缓慢移动时实测复现）。
+      // 平滑只用于「非交互目标」的轻微避让位移。
+      const smooth =
+        smoothEnabled &&
+        !node.hovered &&
+        node.descriptor.pointId !== lastHoveredId;
       node.currentOffset = smooth
         ? smoothOffset(node.currentOffset, clampedOffset, deltaSeconds)
         : { ...clampedOffset };
@@ -1237,6 +1247,8 @@ export function createAnchorLayer(
     if (hoveredPointId === pointId) {
       return;
     }
+    // 记录上一个 hover（其标签保持「立即到位」一帧，避免刚移开就平滑漂走）
+    lastHoveredId = hoveredPointId;
     const previous = hoveredPointId ? nodes.get(hoveredPointId) : undefined;
     if (previous) {
       previous.hovered = false;
