@@ -57,7 +57,8 @@ const FORBIDDEN_PREFIXES = [
 ] as const;
 
 /** 相对路径里指向上层的「跳出引擎层」引用也要拦（`../../views/...` 这类写法）。 */
-const FORBIDDEN_RELATIVE = /^\.\.\/(?:\.\.\/)*(?:views|api|locales|adapter|utils|stores)\//;
+const FORBIDDEN_RELATIVE =
+  /^\.\.\/(?:\.\.\/)*(?:views|api|locales|adapter|utils|stores)\//;
 
 /** 读取引擎层全部非测试 TS 源码。 */
 function engineSources(): Array<{ code: string; file: string }> {
@@ -85,7 +86,8 @@ function stripComments(code: string): string {
 function runtimeImportSpecifiers(code: string): string[] {
   const specifiers: string[] = [];
   // 静态 import：`import ... from 'x'` / `import 'x'`
-  const staticImport = /^\s*import\s+(?!type\s)(?:[\s\S]*?\sfrom\s+)?['"]([^'"]+)['"]/gm;
+  const staticImport =
+    /^\s*import\s+(?!type\s)(?:[\s\S]*?\sfrom\s+)?['"]([^'"]+)['"]/gm;
   for (const match of stripComments(code).matchAll(staticImport)) {
     specifiers.push(match[1] ?? '');
   }
@@ -115,11 +117,15 @@ describe('引擎层分层守门（#125）', () => {
   });
 
   it('引擎层内部互相同级 import 是允许的（确认规则不会误杀）', () => {
-    const anchorLayer = sources.find((item) => item.file === 'anchor-layer.ts');
-    expect(anchorLayer).toBeDefined();
-    // 它 import './colors'（引擎层内部）应通过
-    const specifiers = runtimeImportSpecifiers(anchorLayer?.code ?? '');
-    expect(specifiers).toContain('./colors');
+    const deviceLayer = sources.find(
+      (item) => item.file === 'device-anchor-layer.ts',
+    );
+    expect(deviceLayer).toBeDefined();
+    // 引擎层内部互相同级 import（`./types`、`./scene-manager` 的类型）应通过
+    const specifiers = runtimeImportSpecifiers(deviceLayer?.code ?? '');
+    // 新层在运行时 import 了 `./scene-manager`（只为 AnchorLayer 类型用 import type，
+    // 其余为同层模块）——这里断言「没有任何 views/首屏模块」即可，不绑死具体路径。
+    expect(specifiers.every((one) => one.startsWith('./'))).toBe(true);
     expect(specifiers.some((one) => one.includes('views'))).toBe(false);
   });
 
