@@ -22,6 +22,7 @@ import { $t } from '#/locales';
 import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
 
+import { resolveCameraPreset } from './camera-presets';
 import { isAnchorVisible, placeCard } from './property-card-layout';
 import { buildPropertyCard } from './property-card-model';
 import TwinPropertyCard from './twin-property-card.vue';
@@ -171,6 +172,21 @@ interface EngineOptionalCapabilities {
       };
   /** 动效档位（引擎层判定，页面只展示）。 */
   getMotionMode?: () => 'normal' | 'off' | 'reduced';
+  /** 相机立即切到指定机位（无动画；预设按钮用）。 */
+  getCameraPose?: () => {
+    position: { x: number; y: number; z: number };
+    target: { x: number; y: number; z: number };
+  };
+  /**
+   * 立即切到指定机位（无动画）。
+   *
+   * 为什么预设用「瞬切」而不是飞行：预设是**构图选择**（在几个固定视角间挑选），
+   * 飞行会让每次切换耗时 600ms 且中途穿过模型；快速对比构图时瞬切更符合预期。
+   */
+  setCameraPose?: (pose: {
+    position: { x: number; y: number; z: number };
+    target: { x: number; y: number; z: number };
+  }) => void;
   /** 场景概况（模型体积/动画/巡航/渲染统计）。 */
   getSceneSummary?: () =>
     | undefined
@@ -1038,8 +1054,38 @@ async function focusPoint(pointId: string): Promise<void> {
   await engine()?.flyToAnchor?.(pointId);
 }
 
+/**
+ * 切到相机预设机位（页面「视角」按钮组调用）。
+ *
+ * @param presetId 预设 ID
+ */
+function applyCameraPreset(
+  presetId: import('./camera-presets').CameraPresetId,
+): void {
+  const caps = engine();
+  const pose = resolveCameraPreset(presetId, caps?.getModelMetrics?.());
+  caps?.setCameraPose?.(pose);
+  // 预设有动画时用飞行的目标点也一起更新，避免后续「聚焦」从旧机位起飞
+  cameraRig?.captureHome();
+}
+
+/** 当前相机机位（用于页面高亮选中的预设；拿不到返回 undefined）。 */
+function currentCameraPose():
+  | import('./camera-presets').CameraPose
+  | undefined {
+  return engine()?.getCameraPose?.();
+}
+
+/** 模型尺度（供页面判定「同一机位」容差）。 */
+function modelScale(): number {
+  return engine()?.getModelMetrics?.()?.maxDimension ?? 100;
+}
+
 defineExpose({
+  applyCameraPreset,
+  currentCameraPose,
   focusPoint,
+  modelScale,
   retry,
   setShellVisible,
   syncPinnedPoint,

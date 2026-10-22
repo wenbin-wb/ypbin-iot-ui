@@ -137,3 +137,56 @@ export const TWIN_COLOR_DOT_NEUTRAL = '#cbd5e1';
  * 且需要在浅/深背景上都醒目，后续可能单独调亮度而不影响锚点状态色。
  */
 export const TWIN_COLOR_ALERT_RIPPLE = '#f87171';
+
+/**
+ * 由 CSS 颜色串判断是否为「浅色底」（用于深浅主题下切换画布配色）。
+ *
+ * ## 为什么需要这个判定
+ *
+ * 画布配色（背景渐变/地面/网格线）是为暗色主题调好的。亮色主题下若继续用同一套，
+ * 会出现「深色画布嵌在亮色页面里」的割裂感（反差过大，像贴上去的一块黑玻璃）。
+ * 而 `viewJson.background` 是**用户显式配置**的场景颜色，语义上应被视为浅色底
+ * （用户选了浅色就按浅色主题处理地面/网格），因此两者用同一个判定。
+ *
+ * 支持 `#rgb`/`#rrggbb`/`rgb()`/`rgba()`；无法解析时按**深色**处理（安全默认：
+ * 现有配色就是深色，解析不了时保持原样，不会把画布刷成一片白）。
+ *
+ * @param color CSS 颜色串
+ * @returns 是否浅色底
+ */
+export function isLightBackground(color: null | string | undefined): boolean {
+  if (!color) {
+    return false;
+  }
+  const hex = /^#([\da-f]{3}|[\da-f]{6})$/i.exec(color.trim());
+  if (hex) {
+    const raw = hex[1] ?? '';
+    const full =
+      raw.length === 3 ? [...raw].map((char) => char + char).join('') : raw;
+    const value = Number.parseInt(full, 16);
+    if (!Number.isFinite(value)) {
+      return false;
+    }
+    const r = (value >> 16) & 0xff;
+    const g = (value >> 8) & 0xff;
+    const b = value & 0xff;
+    // 感知亮度（Rec. 601）：0.5 附近是深浅分界，浅灰白都 > 0.7
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.72;
+  }
+  const rgb = /^rgba?\(([^)]+)\)$/i.exec(color.trim());
+  if (rgb) {
+    const parts = (rgb[1] ?? '').split(',').map((part) => Number(part.trim()));
+    const [r = 0, g = 0, b = 0] = parts;
+    if (![r, g, b].every((n) => Number.isFinite(n))) {
+      return false;
+    }
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.72;
+  }
+  return false;
+}
+
+/** 浅色底时地面主色（冷白灰：与浅色页面同层次，避免深色地面像贴纸）。 */
+export const TWIN_COLOR_GROUND_LIGHT = '#d7dce4';
+
+/** 浅色底时网格主色（比深色底用更深的线，保证对比度）。 */
+export const TWIN_COLOR_GRID_LINE_LIGHT = '#9aa6b6';

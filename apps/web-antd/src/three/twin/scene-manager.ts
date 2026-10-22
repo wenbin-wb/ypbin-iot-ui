@@ -346,6 +346,14 @@ export class TwinSceneManager {
    */
   private driftSeconds = 0;
 
+  /**
+   * 当前**实际生效**的画布背景色（CSS 颜色串）。
+   *
+   * 初始为主题默认渐变（深色）；`applyView` 若读到 `viewJson.background` 则更新为它。
+   * 环境（地面/网格）在它之后重建，因此换算出的浅色标记才是对的。
+   */
+  private effectiveBackground: string = TWIN_COLOR_BACKGROUND_TOP;
+
   /** 场景环境（地面/网格/扫描光圈）。切场景重建（地面尺寸依赖模型包围盒）。 */
   private environment?: Omit<TwinEnvironment, 'environmentTexture'>;
 
@@ -647,6 +655,34 @@ export class TwinSceneManager {
    */
   getCamera(): THREE_NS.PerspectiveCamera | undefined {
     return this.camera;
+  }
+
+  /**
+   * 当前相机位姿（供「视角预设」判断选中态）。
+   *
+   * @returns 位姿；未初始化时 undefined
+   */
+  getCameraPose():
+    | undefined
+    | {
+        position: { x: number; y: number; z: number };
+        target: { x: number; y: number; z: number };
+      } {
+    if (!this.camera || !this.controls) {
+      return undefined;
+    }
+    return {
+      position: {
+        x: this.camera.position.x,
+        y: this.camera.position.y,
+        z: this.camera.position.z,
+      },
+      target: {
+        x: this.controls.target.x,
+        y: this.controls.target.y,
+        z: this.controls.target.z,
+      },
+    };
   }
 
   /**
@@ -1024,8 +1060,6 @@ export class TwinSceneManager {
     return { visible, x, y };
   }
 
-  // ---------- 公共：集成契约（hover 卡片 / 状态栏 / 聚焦） ----------
-
   /**
    * 批量更新锚点运行态（由页面在 rAF 合并后调用）。
    *
@@ -1053,6 +1087,31 @@ export class TwinSceneManager {
     if (this.lastAnchorStates && this.lastAnchorStates.size > 0) {
       this.anchorLayer?.update(this.lastAnchorStates);
     }
+  }
+
+  // ---------- 公共：集成契约（hover 卡片 / 状态栏 / 聚焦） ----------
+
+  /**
+   * 立即切到指定机位（**无动画**：预设是构图选择，不是导航）。
+   *
+   * 同时把「初始视角」更新为这里：否则用户点完预设后再点「重置」会跳回加载时
+   * 自适应算出的旧机位（用户会以为预设没生效）。
+   *
+   * @param pose 机位
+   */
+  setCameraPose(pose: {
+    position: { x: number; y: number; z: number };
+    target: { x: number; y: number; z: number };
+  }): void {
+    if (!this.camera || !this.controls) {
+      return;
+    }
+    // 用户主动选机位 ⇒ 巡航必须让位（否则 20s 后被转走）
+    this.orbit?.notifyInteraction();
+    this.camera.position.set(pose.position.x, pose.position.y, pose.position.z);
+    this.controls.target.set(pose.target.x, pose.target.y, pose.target.z);
+    this.controls.update();
+    this.defaultTarget = { ...pose.target };
   }
 
   /**
@@ -1267,6 +1326,19 @@ export class TwinSceneManager {
     }
   }
 
+  /**
+   * 记录「是否浅色底」。
+   *
+   * 配色在「重建环境」时生效（`rebuildEnvironment` 是地面/网格的**唯一创建点**）：
+   * 切场景会重建环境 ⇒ 一并带上当前底色；`applyView` 早于环境重建，所以这里只记录。
+   * 只改颜色不改光照强度：光照与阴影已按模型尺度与色调映射调好，换底不该动它们。
+   *
+   * @param light 是否浅色底
+   */
+  private applySurfacePalette(background: string | undefined): void {
+    this.effectiveBackground = background ?? TWIN_COLOR_BACKGROUND_TOP;
+  }
+
   /** 应用视角配置（空则按模型包围盒自适应，保证「一进去就能看到模型」）。 */
   private applyView(view?: null | TwinViewConfig): void {
     const THREE = this.THREE;
@@ -1282,6 +1354,9 @@ export class TwinSceneManager {
     if (view?.background) {
       this.scene.background = new THREE.Color(view.background);
     }
+    // 浅色底（亮色主题或用户配置了浅色背景）时切换地面/网格/填充色：
+    // 否则「深色地面 + 浅色底」会像贴纸，且网格线对比度不足（看不出来）。
+    this.applySurfacePalette(view?.background);
     // 光照强度可配（场景级差异：室内楼层通常比园区暗）。
     //
     // ⚠️ 这里曾按 `AmbientLight` 找子节点；本次改造把环境光换成了 `HemisphereLight`
@@ -1441,9 +1516,8 @@ export class TwinSceneManager {
       );
     }
 
-    // ---- 光照/阴影按模型尺度自适应、环境（地面/网格/扫描光圈）重建 ----
+    // ---- 光照/阴影按模型尺度自适应（与视角无关，先做） ----
     this.applyLightingToModel(root);
-    this.rebuildEnvironment(root);
 
     // ---- 剖切：收集外壳节点并按当前状态应用 ----
     // 必须在 applyView 之前？不需要：visible 不影响包围盒（three 的 Box3.setFromObject
@@ -1452,8 +1526,15 @@ export class TwinSceneManager {
     this.shellNodes = collectShellNodes(root);
     applyShellVisibility(this.shellNodes, this.shellVisible, root);
 
-    // 先把相机位姿定下来，再建锚点位置缓存（缓存依赖最终的世界矩阵）
+    // ---- 先定视角（含 `viewJson.background`），再重建环境 ----
+    //
+    // ⚠️ 这两个顺序曾被写反（线上实测）：环境（地面/网格）要按「实际生效的背景」选浅色/
+    //    深色调色板，而背景只在 `applyView` 里确定。先重建环境 ⇒ 环境永远拿到主题默认的
+    //    深色 ⇒ 用户配了浅色背景时地面仍是深灰，像贴了一层贴纸。
     this.applyView(request.view);
+    this.rebuildEnvironment(root);
+
+    // 相机位姿已定，再建锚点位置缓存（缓存依赖最终的世界矩阵）
     this.refreshAnchorPositionCache();
   }
 
@@ -1665,7 +1746,10 @@ export class TwinSceneManager {
     const box = new THREE.Box3().setFromObject(modelRoot);
     this.driftSeconds = 0;
     try {
+      // 用**实际生效**的背景判定深浅：场景配置了浅色背景（`viewJson.background`）时
+      // 地面/网格必须跟着换成浅色调色板，否则「浅底 + 深地面」会像贴纸。
       this.environment = buildEnvironment(THREE, {
+        background: this.effectiveBackground,
         box,
         createScanRings: motionSwitches(this.motionMode).scanRing,
       });
