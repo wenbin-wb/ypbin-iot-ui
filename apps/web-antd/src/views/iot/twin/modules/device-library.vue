@@ -126,7 +126,14 @@ watch(
       />
     </header>
 
-    <div class="min-h-0 flex-1 overflow-auto p-2">
+    <!-- 未选场景：不要展示两个「0」的空分区（会被误读成「资料库是空的」） -->
+    <div
+      v-if="!enabled"
+      class="flex min-h-0 flex-1 items-center justify-center px-3 text-center text-[11px] text-muted-foreground"
+    >
+      {{ $t('page.iot.twin.library.selectSceneFirst') }}
+    </div>
+    <div v-else class="min-h-0 flex-1 overflow-auto p-2">
       <!-- 分区一：已放置（可直接拖拽改位置：画布选中后拖） -->
       <section>
         <h3 class="px-1 pb-1 text-[11px] font-medium text-muted-foreground">

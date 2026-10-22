@@ -695,12 +695,36 @@ watch(
   { immediate: true },
 );
 
+/**
+ * 未指定场景时自动进入**第一个有模型的场景**。
+ *
+ * 为什么（用户反馈）：「打开数字孪生菜单，画布提示『从左侧选择一个场景开始』，
+ * 但左侧我好像没法选择、都是空的」——用户期望「点菜单就能看到东西」，
+ * 而不是先学会去场景树上点叶子。选择顺序：有模型的场景优先（没模型的进去只有空白画布，
+ * 更像坏了），否则第一个。
+ *
+ * 为什么放在 `await loadScenes()` 之后而不是 `watch(scenes)`：scenes 赋值与
+ * currentSceneId 的读取时序交错，watch 触发时路由可能还没就绪，实测不生效。
+ */
+async function enterDefaultSceneIfNeeded(): Promise<void> {
+  if (currentSceneId.value || scenes.value.length === 0) {
+    return;
+  }
+  const preferred =
+    scenes.value.find((item) => Boolean(item.modelAssetId)) ?? scenes.value[0];
+  if (preferred) {
+    await router.replace({ query: { ...route.query, sceneId: preferred.id } });
+  }
+}
+
 onMounted(async () => {
   try {
     await loadScenes();
   } catch {
     // 失败原因在 sceneError，模板渲染错误态
+    return;
   }
+  await enterDefaultSceneIfNeeded();
 });
 
 /** 点位保存/删除后刷新（点位变 ⇒ 绑定变 ⇒ 运行态的主展示属性变）。 */
@@ -882,6 +906,12 @@ async function onOpenPointConfig(pointId: string): Promise<void> {
     <div v-else class="flex h-full min-h-0 gap-3">
       <!-- ═══ 左车道：场景导航 ═══ -->
       <aside class="flex w-64 shrink-0 flex-col gap-3 overflow-hidden">
+        <!--
+          ⚠️ 高度分配（实测缺陷）：场景树曾是 `flex-1`、资料库是 `h-[42%]`。
+          资料库内容（已放置 + 可放置两个分区）比 42% 高时，它把树**挤到 0 高度**——
+          用户看到左栏只有「设备资料库」，场景树整块消失，于是「左侧没法选择场景」。
+          现在：树给 `min-h-[38%]`（保证至少能显示 6~8 行），资料库 `flex-1 min-h-0` 自理滚动。
+        -->
         <SceneTree
           :badges="sceneBadges"
           :can-add-child="canAddChild"
@@ -892,13 +922,13 @@ async function onOpenPointConfig(pointId: string): Promise<void> {
           :parent-options="parentOptions"
           :scenes="scenes"
           :tree="tree"
-          class="min-h-0 flex-1 overflow-hidden rounded-xl border border-border/70 bg-card"
+          class="h-auto shrink-0 basis-[38%] overflow-hidden rounded-xl border border-border/70 bg-card"
           @enter="enterScene"
           @refresh="loadScenes"
         />
         <!-- 设备资料库（拖拽源）：把设备拖进画布放置/改位置 -->
         <DeviceLibrary
-          class="h-[42%] shrink-0"
+          class="h-auto min-h-0 flex-auto basis-[58%]"
           :device-candidates="deviceCandidates"
           :enabled="!!currentSceneId"
           :points="points"
@@ -920,9 +950,25 @@ async function onOpenPointConfig(pointId: string): Promise<void> {
         />
         <div
           v-else-if="!currentSceneId"
-          class="flex h-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground"
+          class="flex h-full flex-col items-center justify-center gap-3 text-sm text-muted-foreground"
         >
           <span>{{ $t('page.iot.twin.selectSceneHint') }}</span>
+          <!--
+            给出**可点的出口**：只写「请从左侧选择」时，用户找不到该点什么（实测反馈）。
+            这里直接把「第一个场景」做成按钮，一次点击就能看到模型。
+          -->
+          <button
+            v-if="scenes.length > 0"
+            class="rounded-lg border border-primary/50 bg-primary/10 px-3 py-1.5 text-xs text-primary transition-colors hover:bg-primary/20"
+            type="button"
+            @click="
+              enterScene(
+                (scenes.find((item) => item.modelAssetId) ?? scenes[0])!.id,
+              )
+            "
+          >
+            {{ $t('page.iot.twin.enterFirstScene') }}
+          </button>
         </div>
         <TwinCanvas
           v-else

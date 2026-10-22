@@ -1677,6 +1677,7 @@
       "dropInvalid": "请拖到模型表面上放置",
       "duplicateBinding": "属性绑定重复：{0}",
       "engineInitFailed": "3D 引擎初始化失败（浏览器可能不支持 WebGL）",
+      "enterFirstScene": "进入第一个场景",
       "external": "外链",
       "externalHint": "服务端不主动拉取外链地址（避免内网探测），连通性由页面加载时暴露",
       "externalUrl": "外链地址（http/https）",
@@ -1717,6 +1718,7 @@
         "emptyAvailable": "（已全部放置或未搜索到）",
         "placed": "已放置 {0}",
         "searchPlaceholder": "搜索设备",
+        "selectSceneFirst": "请先选择场景，再从这里把设备拖到画布上",
         "title": "设备资料库"
       },
       "loading": "加载中…",
