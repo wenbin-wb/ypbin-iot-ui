@@ -45,7 +45,7 @@ const props = defineProps<{
   deviceCode: string;
   /** 所属设备 ID（展示用，长 ID 由 CSS 截断）。 */
   deviceId: string;
-  /** 设备名。 */
+  /** 设备名 / 点位可读名（页面按「点位备注 → 设备名 → 设备 ID」优先级传入）。 */
   deviceName: string;
   /** 是否有未保存的位置修改（拖拽后置 true）。 */
   dirty?: boolean;
