@@ -264,3 +264,330 @@ describe('sceneManager：getSceneSummary（HUD 概况）', () => {
     expect(manager.getSceneSummary()).toBeUndefined();
   });
 });
+
+/**
+ * 设备聚焦 API（`setSelectedPoint` / `setHoveredPoint` / `hasNodeForPoint`）。
+ *
+ * 这三条是用户需求「不要圆点，直接选中设备要有高光」的可验证形态：
+ * 选中要真的让模型节点变亮、取消要恢复、没有绑定节点时要走兜底而不是「点了没反应」。
+ *
+ * 用**替身 three 命名空间**构造真实的最小场景（只注入 `refreshFocus` 依赖的那些字段），
+ * 不跑 WebGL。
+ */
+describe('sceneManager：设备聚焦（选中/悬停高亮）', () => {
+  /** 造一个替身 three（只含聚焦路径用到的类）。 */
+  function fakeThree() {
+    class Vector3 {
+      x: number;
+      y: number;
+      z: number;
+      constructor(x = 0, y = 0, z = 0) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+      }
+      applyMatrix4() {
+        return this;
+      }
+      clone() {
+        return new Vector3(this.x, this.y, this.z);
+      }
+      copy(v: { x: number; y: number; z: number }) {
+        this.x = v.x;
+        this.y = v.y;
+        this.z = v.z;
+        return this;
+      }
+      distanceTo() {
+        return 0;
+      }
+    }
+    class Box3 {
+      getCenter(target: Vector3) {
+        return target.copy(new Vector3(50, 50, 50));
+      }
+      getSize(target: Vector3) {
+        return target.copy(new Vector3(100, 100, 100));
+      }
+      setFromObject() {
+        return this;
+      }
+    }
+    class Raycaster {
+      intersectObject() {
+        return [];
+      }
+      setFromCamera() {}
+    }
+    class Vector2 {
+      constructor(
+        public x = 0,
+        public y = 0,
+      ) {}
+    }
+    return { Box3, Raycaster, Vector2, Vector3 } as never;
+  }
+
+  /** 替身颜色（three 的 `Color` 最小形状）。 */
+  interface FakeColor {
+    b: number;
+    g: number;
+    r: number;
+    clone: () => FakeColor;
+    copy: (other: FakeColor) => FakeColor;
+    multiplyScalar: (factor: number) => FakeColor;
+  }
+
+  /** 造一个替身 Standard 材质。 */
+  function material(red = 0.5) {
+    const emissive = {
+      clone: () => emissive,
+      copy: () => emissive,
+      set: () => emissive,
+    };
+    const color: FakeColor = {
+      b: red,
+      clone() {
+        return { ...color };
+      },
+      copy(other: FakeColor) {
+        Object.assign(color, other);
+        return color;
+      },
+      g: red,
+      multiplyScalar(factor: number) {
+        color.r *= factor;
+        color.g *= factor;
+        color.b *= factor;
+        return color;
+      },
+      r: red,
+    };
+    return {
+      color: color as never,
+      emissive: {
+        clone() {
+          return emissive;
+        },
+        copy() {
+          return emissive;
+        },
+        set() {
+          return emissive;
+        },
+      } as never,
+      dispose() {},
+      emissiveIntensity: 0.1,
+      needsUpdate: false,
+    };
+  }
+
+  /** 造一个替身 mesh。 */
+  function mesh(name: string, mat = material()) {
+    const object: Record<string, unknown> = {
+      children: [] as unknown[],
+      geometry: {
+        boundingSphere: { center: { x: 0, y: 0, z: 0 } },
+        computeBoundingSphere() {},
+        dispose() {},
+      },
+      isMesh: true,
+      material: mat,
+      matrixWorld: { elements: [] },
+      name,
+      position: { set() {} },
+      scale: { clone: () => ({}), copy() {}, multiplyScalar() {} },
+      removeFromParent() {},
+      userData: {},
+    };
+    object.traverse = (callback: (item: unknown) => void) => {
+      callback(object);
+      for (const child of object.children as {
+        traverse: (cb: (i: unknown) => void) => void;
+      }[]) {
+        child.traverse(callback);
+      }
+    };
+    return object;
+  }
+
+  /** 造一个注入好替身的管理器。 */
+  async function createManager(options: {
+    anchors: { nodeName?: null | string; pointId: string }[];
+    withRoot?: boolean;
+  }) {
+    const { TwinSceneManager } = await import('./scene-manager');
+    const container = document.createElement('div');
+    Object.defineProperty(container, 'clientWidth', { value: 800 });
+    Object.defineProperty(container, 'clientHeight', { value: 600 });
+    const manager = new TwinSceneManager({
+      container,
+      errorMessages: { downloadFailed: (d) => d, parseFailed: (d) => d },
+      onStateChange: () => undefined,
+    });
+    const THREE = fakeThree();
+    const cabinetMaterial = material(0.5);
+    const conveyorMaterial = material(0.5);
+    const root = mesh('Root');
+    const cabinet = mesh('Cabinet_A', cabinetMaterial);
+    const conveyor = mesh('Conveyor_01', conveyorMaterial);
+    (root.children as unknown[]).push(cabinet, conveyor);
+
+    const internals = manager as unknown as Record<string, unknown>;
+    internals.THREE = THREE;
+    internals.modelRoot = options.withRoot === false ? undefined : root;
+    internals.anchorPositionCache = new Map([['p1', { x: 0, y: 0, z: 0 }]]);
+    internals.anchorLayer = {
+      detach: () => undefined,
+      render: () => undefined,
+      resize: () => undefined,
+      setHovered: () => undefined,
+      setSelected: () => undefined,
+      update: () => undefined,
+    };
+    // 通过公开路径记住点位描述（与生产同一条路径）
+    (
+      manager as unknown as {
+        rememberAnchorDescriptors: (a: unknown[]) => void;
+      }
+    ).rememberAnchorDescriptors(
+      options.anchors.map((anchor) => ({
+        deviceId: `d-${anchor.pointId}`,
+        deviceName: anchor.pointId,
+        labelVisible: true,
+        local: { x: 0, y: 0, z: 0 },
+        nodeName: anchor.nodeName,
+        normal: { x: 0, y: 1, z: 0 },
+        pointId: anchor.pointId,
+        sort: 0,
+      })),
+    );
+    return {
+      cabinet,
+      cabinetMaterial,
+      conveyor,
+      conveyorMaterial,
+      manager,
+      root,
+    };
+  }
+
+  it('★ 选中绑定了 nodeName 的点位 ⇒ 该模型节点高亮，getSelectedPoint 返回它', async () => {
+    const { cabinetMaterial, manager } = await createManager({
+      anchors: [{ nodeName: 'Cabinet_A', pointId: 'p1' }],
+    });
+    manager.setSelectedPoint('p1');
+    expect(manager.getSelectedPoint()).toBe('p1');
+    expect(
+      cabinetMaterial.emissiveIntensity,
+      '★ 选中的柜子必须真的变亮',
+    ).toBeGreaterThan(0.1);
+    manager.dispose();
+  });
+
+  it('★ 无 nodeName 的点位 ⇒ hasNodeForPoint=false，但选中仍走位置兜底（不报错）', async () => {
+    const { manager } = await createManager({
+      anchors: [{ nodeName: null, pointId: 'p1' }],
+    });
+    expect(manager.hasNodeForPoint('p1')).toBe(false);
+    expect(() => manager.setSelectedPoint('p1')).not.toThrow();
+    expect(manager.getSelectedPoint()).toBe('p1');
+    manager.dispose();
+  });
+
+  it('★ 取消选中 ⇒ 材质恢复，getSelectedPoint 变 undefined', async () => {
+    const { cabinetMaterial, manager } = await createManager({
+      anchors: [{ nodeName: 'Cabinet_A', pointId: 'p1' }],
+    });
+    const original = cabinetMaterial.emissiveIntensity;
+    manager.setSelectedPoint('p1');
+    expect(cabinetMaterial.emissiveIntensity).not.toBe(original);
+    manager.setSelectedPoint(undefined);
+    expect(manager.getSelectedPoint()).toBeUndefined();
+    expect(cabinetMaterial.emissiveIntensity).toBe(original);
+    manager.dispose();
+  });
+
+  it('★ 悬停是弱高亮：不压暗其它设备（与选中的区别）', async () => {
+    const { cabinetMaterial, conveyorMaterial, manager } = await createManager({
+      anchors: [{ nodeName: 'Cabinet_A', pointId: 'p1' }],
+    });
+    manager.setHoveredPoint('p1');
+    expect(cabinetMaterial.emissiveIntensity).toBeGreaterThan(0.1);
+    // 悬停不压暗：conveyor 颜色保持原值
+    expect((conveyorMaterial.color as unknown as { r: number }).r).toBe(0.5);
+    manager.dispose();
+  });
+
+  it('★ 已有选中 A 时悬停 B ⇒ 高亮仍留在 A（不抢占，避免与详情卡片不一致）', async () => {
+    const { cabinetMaterial, conveyorMaterial, manager } = await createManager({
+      anchors: [
+        { nodeName: 'Cabinet_A', pointId: 'p1' },
+        { nodeName: 'Conveyor_01', pointId: 'p2' },
+      ],
+    });
+    const cabinetBase = cabinetMaterial.emissiveIntensity;
+    const conveyorBase = conveyorMaterial.emissiveIntensity;
+
+    manager.setSelectedPoint('p1');
+    const cabinetSelected = cabinetMaterial.emissiveIntensity;
+    expect(cabinetSelected).toBeGreaterThan(cabinetBase);
+
+    // 悬停 B：不应抢走高亮
+    manager.setHoveredPoint('p2');
+    expect(
+      cabinetMaterial.emissiveIntensity,
+      '★ 选中 A 时悬停 B 不能把高亮抢走（卡片还显示 A）',
+    ).toBe(cabinetSelected);
+    expect(conveyorMaterial.emissiveIntensity, '★ B 不应被高亮').toBe(
+      conveyorBase,
+    );
+    expect(manager.getSelectedPoint()).toBe('p1');
+    manager.dispose();
+  });
+
+  it('★ 没有选中时悬停正常生效；取消选中后悬停恢复生效', async () => {
+    const { conveyorMaterial, manager } = await createManager({
+      anchors: [
+        { nodeName: 'Cabinet_A', pointId: 'p1' },
+        { nodeName: 'Conveyor_01', pointId: 'p2' },
+      ],
+    });
+    const conveyorBase = conveyorMaterial.emissiveIntensity;
+
+    manager.setHoveredPoint('p2');
+    expect(
+      conveyorMaterial.emissiveIntensity,
+      '无选中时悬停应生效',
+    ).toBeGreaterThan(conveyorBase);
+
+    // 选中 A 后悬停 B 不生效；再取消选中，悬停 B 重新生效
+    manager.setSelectedPoint('p1');
+    manager.setHoveredPoint('p2');
+    manager.setSelectedPoint(undefined);
+    expect(
+      conveyorMaterial.emissiveIntensity,
+      '取消选中后悬停应恢复',
+    ).toBeGreaterThan(conveyorBase);
+    manager.dispose();
+  });
+
+  it('hasNodeForPoint：未绑节点 / 节点名对不上 / 模型未加载 都返回 false', async () => {
+    const { manager } = await createManager({
+      anchors: [{ nodeName: 'NoSuchNode', pointId: 'p1' }],
+    });
+    expect(manager.hasNodeForPoint('p1')).toBe(false);
+    expect(manager.hasNodeForPoint('not-exist')).toBe(false);
+    manager.dispose();
+  });
+
+  it('模型未加载时选中/悬停不抛错（画布还没就绪）', async () => {
+    const { manager } = await createManager({
+      anchors: [{ nodeName: 'Cabinet_A', pointId: 'p1' }],
+      withRoot: false,
+    });
+    expect(() => manager.setSelectedPoint('p1')).not.toThrow();
+    expect(() => manager.setHoveredPoint('p1')).not.toThrow();
+    manager.dispose();
+  });
+});

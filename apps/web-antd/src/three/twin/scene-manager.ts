@@ -1,6 +1,7 @@
 import type * as THREE_NS from 'three';
 
 import type { TwinAutoOrbit } from './camera-orbit';
+import type { DeviceFocus } from './device-focus';
 import type { TwinEnvironment } from './environment';
 import type { LoadedModel, LoadModelOptions } from './model-loader';
 import type { TwinMotionMode } from './motion-profile';
@@ -26,8 +27,14 @@ import {
   TWIN_COLOR_FILL,
   TWIN_COLOR_HEMI_GROUND,
   TWIN_COLOR_HEMI_SKY,
+  TWIN_COLOR_SCAN_RING,
   TWIN_COLOR_SUN,
 } from './colors';
+import {
+  createDeviceFocus,
+  findNodesByPointName,
+  pickHighlightNodes,
+} from './device-focus';
 import { disposeSubtree } from './disposal';
 import {
   buildEnvironment,
@@ -211,6 +218,8 @@ export interface AnchorLayer {
    * 可选是为了向后兼容：旧装配/单测的替身对象没有它时，`?.` 调用不崩。
    */
   setLightTheme?: (light: boolean) => void;
+  /** 可选：设置选中点位（选中时持久显示圆点与数值标签）。 */
+  setSelected?: (pointId?: string) => void;
 }
 
 /** 场景管理器构造选项。 */
@@ -309,6 +318,9 @@ export class TwinSceneManager {
    */
   private ancestryPivots: THREE_NS.Object3D[] = [];
 
+  /** 最近一次收到的点位描述（ID → 描述），供节点匹配与兜底拾取用。 */
+  private anchorDescriptors = new Map<string, AnchorDescriptor>();
+
   private anchorLayer?: AnchorLayer;
 
   /**
@@ -354,6 +366,9 @@ export class TwinSceneManager {
   /** 默认机位（`applyView` 里记下来，供投影/聚焦兜底）。 */
   private defaultTarget?: { x: number; y: number; z: number };
 
+  /** 设备聚焦控制器（选中/悬停高亮）。 */
+  private deviceFocus?: DeviceFocus;
+
   private disposed = false;
 
   /**
@@ -362,6 +377,9 @@ export class TwinSceneManager {
    * 不直接用 `performance.now()`：切场景时重置相位，避免「新场景一进来就是缓变中段」。
    */
   private driftSeconds = 0;
+
+  /** 拖放落点预览对象（未拖拽时为 undefined）。 */
+  private dropPreview?: THREE_NS.Object3D;
 
   /**
    * 当前**实际生效**的画布背景色（CSS 颜色串）。
@@ -405,8 +423,9 @@ export class TwinSceneManager {
 
   private hemiLight?: THREE_NS.HemisphereLight;
 
-  private initialized = false;
+  private hoveredPointId?: string;
 
+  private initialized = false;
   /**
    * 最近一次收到的锚点描述（模型就绪前到达的**暂存**在此）。
    *
@@ -460,6 +479,9 @@ export class TwinSceneManager {
 
   private postOptions: TwinPostOptions = resolvePostOptions();
 
+  /** 复用 raycaster（`screenToLocal` 用；每次点击都要用，重复 new 会产生垃圾）。 */
+  private raycaster?: THREE_NS.Raycaster;
+
   private renderer?: THREE_NS.WebGLRenderer;
 
   private rendererFactory?: SceneManagerOptions['rendererFactory'];
@@ -469,6 +491,9 @@ export class TwinSceneManager {
   private resizeObserver?: ResizeObserver;
 
   private scene?: THREE_NS.Scene;
+
+  /** 当前选中 / 悬停点位（UI 状态，纯内存）。 */
+  private selectedPointId?: string;
 
   /**
    * 当前模型的「外壳」节点（roof/wall/truss）。
@@ -660,6 +685,8 @@ export class TwinSceneManager {
     await this.flyHandler(pointId, distanceScale);
   }
 
+  // ---------- 公共：设备聚焦（选中 / 悬停高亮）与拖放 ----------
+
   /**
    * 锚点世界坐标（供 hover 卡片定位）。
    *
@@ -843,6 +870,15 @@ export class TwinSceneManager {
   }
 
   /**
+   * 当前选中点位（页面详情卡片用）。
+   *
+   * @returns 选中的点位 ID；未选中 undefined
+   */
+  getSelectedPoint(): string | undefined {
+    return this.selectedPointId;
+  }
+
+  /**
    * three 命名空间（供相机控制器/拾取器构造，避免它们各自再 import 一次）。
    *
    * @returns three 命名空间（未初始化时为 undefined）
@@ -861,6 +897,24 @@ export class TwinSceneManager {
       throw new Error('场景管理器未初始化：世界矩阵不可用');
     }
     return this.currentWorldMatrix;
+  }
+
+  /**
+   * 点位对应的模型节点是否找到（找不到时页面要提示「该点位未绑定模型节点」）。
+   *
+   * @param pointId 点位 ID
+   * @returns 是否命中 ≥1 个可高亮的节点
+   */
+  hasNodeForPoint(pointId: string): boolean {
+    const root = this.modelRoot;
+    const descriptor = this.anchorDescriptors.get(pointId);
+    if (!root || !descriptor) {
+      return false;
+    }
+    return (
+      pickHighlightNodes(findNodesByPointName(root, descriptor.nodeName))
+        .length > 0
+    );
   }
 
   /**
@@ -1040,6 +1094,17 @@ export class TwinSceneManager {
   }
 
   /**
+   * 当前场景的「模型节点 → 点位」映射是否可用（调试/HUD 用）。
+   *
+   * @returns 已收到且节点匹配成功的点位 ID 列表
+   */
+  listPointsWithNodes(): string[] {
+    return [...this.anchorDescriptors.keys()].filter((pointId) =>
+      this.hasNodeForPoint(pointId),
+    );
+  }
+
+  /**
    * 把世界坐标投到容器像素坐标（相对画布容器左上角）。
    *
    * @param world 世界坐标
@@ -1109,7 +1174,10 @@ export class TwinSceneManager {
     if (!this.modelRoot) {
       return;
     }
+    this.rememberAnchorDescriptors(anchors);
     this.anchorLayer?.attach(this.modelRoot, anchors);
+    // 点位变了：重新按当前选中/悬停刷新高亮（旧节点可能已被替换）
+    this.refreshFocus();
     this.refreshAnchorPositionCache();
     // 重建后立刻重放最近一次运行态，避免标签又空一帧
     if (this.lastAnchorStates && this.lastAnchorStates.size > 0) {
@@ -1117,7 +1185,51 @@ export class TwinSceneManager {
     }
   }
 
-  // ---------- 公共：集成契约（hover 卡片 / 状态栏 / 聚焦） ----------
+  /**
+   * 画布容器的像素坐标 → 场景局部坐标（**资料库拖拽落点**用）。
+   *
+   * 射线拾取模型表面：拿到世界交点后换算回本场景局部坐标（落库口径，与点击放置锚点
+   * 完全同一套换算）。命中不到模型表面时返回 `undefined`（调用方据此拒绝落下，
+   * 不要在虚空里创建点位）。
+   *
+   * @param screenX 相对画布容器左上角的 X（CSS 像素）
+   * @param screenY 相对画布容器左上角的 Y
+   * @returns 场景局部坐标；未命中模型表面/未初始化时 undefined
+   */
+  screenToLocal(
+    screenX: number,
+    screenY: number,
+  ): undefined | { x: number; y: number; z: number } {
+    const THREE = this.THREE;
+    const camera = this.camera;
+    const root = this.modelRoot;
+    if (!THREE || !camera || !root) {
+      return undefined;
+    }
+    const width = this.container.clientWidth || 1;
+    const height = this.container.clientHeight || 1;
+    // NDC：画布像素 → [-1, 1]（与 picker.ts 同一口径，保证「拖拽落点」与「点击放点」一致）
+    const pointer = new THREE.Vector2(
+      (screenX / width) * 2 - 1,
+      -(screenY / height) * 2 + 1,
+    );
+    if (!this.raycaster) {
+      this.raycaster = new THREE.Raycaster();
+    }
+    this.raycaster.setFromCamera(pointer, camera);
+    const hits = this.raycaster.intersectObject(root, true);
+    // 跳过锚点 sprite（它们 depthTest=false，可能挡在模型前面）
+    const hit = hits.find((item) => {
+      const { isTwinAnchor } = item.object.userData as {
+        isTwinAnchor?: boolean;
+      };
+      return isTwinAnchor !== true;
+    });
+    if (!hit) {
+      return undefined;
+    }
+    return this.worldToLocal(hit.point);
+  }
 
   /**
    * 立即切到指定机位（**无动画**：预设是构图选择，不是导航）。
@@ -1143,6 +1255,39 @@ export class TwinSceneManager {
   }
 
   /**
+   * 拖放落点预览（在落点显示一个临时标记；`undefined` = 清除）。
+   *
+   * 标记是一个贴地的细圆环（低透明度），只做「将要落在这里」的提示，不参与拾取。
+   *
+   * @param local 场景局部坐标（与 `screenToLocal` 同口径）；undefined 清除预览
+   */
+  setDropPreview(local?: { x: number; y: number; z: number }): void {
+    const THREE = this.THREE;
+    const root = this.modelRoot;
+    if (!this.dropPreview || !root) {
+      // 没有预览对象也没有模型：先建出预览对象（等模型就绪后再显示）
+      if (local && this.scene) {
+        this.ensureDropPreview();
+      }
+      if (!local) {
+        this.dropPreview?.removeFromParent();
+      }
+      if (local && this.dropPreview) {
+        this.positionDropPreview(local);
+      }
+      return;
+    }
+    if (!local) {
+      this.dropPreview.visible = false;
+      return;
+    }
+    if (!THREE) {
+      return;
+    }
+    this.positionDropPreview(local);
+  }
+
+  /**
    * 注册聚焦飞行实现（由 `twin-canvas` 在 `init()` 之后调用一次）。
    *
    * @param handler 飞行实现
@@ -1151,6 +1296,23 @@ export class TwinSceneManager {
     handler: (pointId: string, distanceScale: number) => Promise<void>,
   ): void {
     this.flyHandler = handler;
+  }
+
+  // ---------- 公共：集成契约（hover 卡片 / 状态栏 / 聚焦） ----------
+
+  /**
+   * 设置悬停点位（弱高亮；`undefined` = 清除）。
+   *
+   * 弱于选中：只提自发光，不放大、不压暗其余设备（否则鼠标一扫全屏变暗，很吵）。
+   *
+   * **有选中时悬停不抢占**：用户点选 A 后鼠标扫过 B，高亮仍留在 A 上
+   * （否则高亮与详情卡片的内容会不一致）。取消选中后悬停立即恢复生效。
+   *
+   * @param pointId 点位 ID；undefined 清除悬停
+   */
+  setHoveredPoint(pointId?: string): void {
+    this.hoveredPointId = pointId;
+    this.refreshFocus();
   }
 
   /**
@@ -1208,6 +1370,22 @@ export class TwinSceneManager {
     }
     // 标签胶囊同样要跟随：浅底上「深色药丸」比模型还重，信息层级会反过来
     this.anchorLayer?.setLightTheme?.(light && !this.hasExplicitBackground);
+  }
+
+  /**
+   * 设置选中点位（高亮模型节点；`undefined` = 取消选中）。
+   *
+   * 高亮口径（见 `device-focus.ts`）：点位有 `nodeName` 时在模型里找同名节点并高亮
+   * （精确优先、宽松匹配兜底）；没有 `nodeName` 或匹配不到时，退化为「锚点位置附近
+   * 半径内最近的 mesh」——这样历史点位（未绑节点）也有可见反馈，而不是点了没反应。
+   *
+   * @param pointId 点位 ID；undefined 取消选中
+   */
+  setSelectedPoint(pointId?: string): void {
+    this.selectedPointId = pointId;
+    // 选中时持久显示该点位的圆点与数值（默认态两者都不显示）
+    this.anchorLayer?.setSelected?.(pointId);
+    this.refreshFocus();
   }
 
   /**
@@ -1578,6 +1756,7 @@ export class TwinSceneManager {
     // 两者都为空是合法情况（场景暂无点位）。
     const anchorsToUse = this.lastAnchors ?? request.anchors;
     this.lastAnchors = anchorsToUse;
+    this.rememberAnchorDescriptors(anchorsToUse);
     this.anchorLayer?.attach(root, anchorsToUse);
     // 挂载后立刻重放运行态（数据通常比模型先到）
     if (this.lastAnchorStates && this.lastAnchorStates.size > 0) {
@@ -1694,9 +1873,16 @@ export class TwinSceneManager {
     });
   }
 
-  /** 同步清理当前模型与其 GPU 资源。 */
   private clearCurrentModelSync(): void {
     this.anchorLayer?.detach();
+    // 高亮必须解除：它改的是**材质**（emissive/color）与**节点缩放**，
+    // 不恢复就会跟着共享材质带到下一个场景（表现为「新场景一进来就是被选中的样子」）
+    this.deviceFocus?.clear();
+    // 选中/悬停属于「当前场景的 UI 状态」：换场景必须清空（旧点位 ID 不属于新场景）
+    this.selectedPointId = undefined;
+    this.hoveredPointId = undefined;
+    this.anchorDescriptors.clear();
+    this.disposeDropPreview();
     // 动画必须先停：mixer 内部持有对模型节点的引用与 track 绑定缓存，
     // 先 dispose 模型会留下悬空引用（切场景后内存不降）
     this.animator?.dispose();
@@ -1721,6 +1907,49 @@ export class TwinSceneManager {
       this.ancestryPivots[index]?.removeFromParent();
     }
     this.ancestryPivots = [];
+  }
+
+  /** 销毁拖放预览对象（切场景/销毁时调用）。 */
+  private disposeDropPreview(): void {
+    const preview = this.dropPreview;
+    if (!preview) {
+      return;
+    }
+    const mesh = preview as THREE_NS.Mesh;
+    mesh.geometry?.dispose();
+    const material = mesh.material as THREE_NS.Material | THREE_NS.Material[];
+    if (Array.isArray(material)) {
+      for (const item of material) {
+        item.dispose();
+      }
+    } else {
+      material?.dispose();
+    }
+    preview.removeFromParent();
+    this.dropPreview = undefined;
+  }
+
+  /** 创建拖放落点预览（贴地细圆环，低透明度、不参与拾取）。 */
+  private ensureDropPreview(): void {
+    const THREE = this.THREE;
+    if (!THREE || !this.scene || this.dropPreview) {
+      return;
+    }
+    const geometry = new THREE.RingGeometry(0.9, 1, 48, 1);
+    const material = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(TWIN_COLOR_SCAN_RING),
+      depthWrite: false,
+      opacity: 0.55,
+      side: THREE.DoubleSide,
+      transparent: true,
+    });
+    const ring = new THREE.Mesh(geometry, material);
+    ring.name = '__twin_drop_preview__';
+    // 标记不参与拾取：`userData.isTwinAnchor` 会被聚焦/拾取逻辑跳过
+    ring.userData.isTwinAnchor = true;
+    ring.renderOrder = 3;
+    this.dropPreview = ring;
+    this.scene.add(ring);
   }
 
   /** 淡入遮罩。 */
@@ -1818,6 +2047,38 @@ export class TwinSceneManager {
   }
 
   /**
+   * 把预览标记放到落点（贴在模型包围盒底面附近）。
+   *
+   * @param local 场景局部坐标
+   */
+  private positionDropPreview(local: {
+    x: number;
+    y: number;
+    z: number;
+  }): void {
+    const THREE = this.THREE;
+    const root = this.modelRoot;
+    const preview = this.dropPreview;
+    if (!THREE || !root || !preview) {
+      return;
+    }
+    // 局部坐标 → 世界坐标（与锚点同一套换算：模型根的世界矩阵）
+    const world = new THREE.Vector3(local.x, local.y, local.z).applyMatrix4(
+      root.matrixWorld,
+    );
+    const box = new THREE.Box3().setFromObject(root);
+    const size = box.getSize(new THREE.Vector3());
+    const maxDimension = Math.max(size.x, size.y, size.z);
+    const scale =
+      (Number.isFinite(maxDimension) && maxDimension > 0 ? maxDimension : 100) *
+      0.03;
+    preview.position.set(world.x, world.y + scale * 0.01, world.z);
+    preview.scale.setScalar(Math.max(0.001, scale));
+    preview.rotation.x = -Math.PI / 2;
+    preview.visible = true;
+  }
+
+  /**
    * 按模型包围盒重建场景环境（地面/网格/扫描光圈）。
    *
    * @param modelRoot 模型根
@@ -1877,6 +2138,54 @@ export class TwinSceneManager {
     });
   }
 
+  /**
+   * 按当前「选中 ∪ 悬停」刷新高亮（**选中优先**：两者都在时用选中样式）。
+   *
+   * 高亮的节点来源（按优先级）：
+   * 1. 点位的 `nodeName` → 模型里同名节点（精确/宽松匹配）；
+   * 2. 无 nodeName 或匹配不到 → 「锚点位置半径内最近的 mesh」（兜底，保证有反馈）。
+   */
+  private refreshFocus(): void {
+    const THREE = this.THREE;
+    const root = this.modelRoot;
+    if (!THREE || !root) {
+      return;
+    }
+    if (!this.deviceFocus) {
+      this.deviceFocus = createDeviceFocus(THREE);
+    }
+    // **选中优先且独占**：已有选中时，悬停别的设备不改变高亮。
+    //
+    // 为什么不让悬停抢占：用户点选了 A（正在看 A 的详情卡片），鼠标扫过 B 时如果高亮
+    // 跳到 B，画面与卡片内容就不一致了（卡片还显示 A）。悬停只在**没有选中**时生效。
+    const pointId = this.selectedPointId ?? this.hoveredPointId;
+    if (!pointId) {
+      this.deviceFocus.clear();
+      return;
+    }
+    const nodes = this.resolveFocusNodes(pointId, root);
+    if (nodes.length === 0) {
+      this.deviceFocus.clear();
+      return;
+    }
+    this.deviceFocus.focus(nodes, this.selectedPointId ? 'selected' : 'hover', [
+      root,
+    ]);
+  }
+
+  /** 同步清理当前模型与其 GPU 资源。 */
+  /**
+   * 记住点位描述（ID → 描述），供「点位 → 模型节点」匹配与兜底拾取使用。
+   *
+   * @param anchors 点位描述
+   */
+  private rememberAnchorDescriptors(anchors: AnchorDescriptor[]): void {
+    this.anchorDescriptors.clear();
+    for (const anchor of anchors) {
+      this.anchorDescriptors.set(anchor.pointId, anchor);
+    }
+  }
+
   private resize(): void {
     if (!this.renderer || !this.camera) {
       return;
@@ -1893,6 +2202,69 @@ export class TwinSceneManager {
     // 都必须跟着改尺寸，否则窗口缩放后画面被拉伸/模糊
     this.postComposer?.setSize(width, height);
     this.anchorLayer?.resize(width, height);
+  }
+
+  /**
+   * 解析某个点位要高亮的模型节点。
+   *
+   * @param pointId 点位 ID
+   * @param root 模型根
+   * @returns 要高亮的节点（可能多个；空数组表示怎么也找不到）
+   */
+  private resolveFocusNodes(
+    pointId: string,
+    root: THREE_NS.Object3D,
+  ): THREE_NS.Object3D[] {
+    const descriptor = this.anchorDescriptors.get(pointId);
+    if (!descriptor) {
+      return [];
+    }
+    // 1) 按 nodeName 找（主路径）
+    const byName = pickHighlightNodes(
+      findNodesByPointName(root, descriptor.nodeName),
+    );
+    if (byName.length > 0) {
+      return byName;
+    }
+    // 2) 兜底：锚点位置附近半径内最近的 mesh
+    const anchor = this.anchorPositionCache.get(pointId);
+    const THREE = this.THREE;
+    if (!anchor || !THREE) {
+      return [];
+    }
+    const center = new THREE.Vector3(anchor.x, anchor.y, anchor.z);
+    // 半径取模型尺度的 8%：既能罩住「点位在设备表面」的情形，又不会扫到隔壁设备
+    const box = new THREE.Box3().setFromObject(root);
+    const size = box.getSize(new THREE.Vector3());
+    const maxDimension = Math.max(size.x, size.y, size.z);
+    const radius =
+      (Number.isFinite(maxDimension) && maxDimension > 0 ? maxDimension : 100) *
+      0.08;
+    let nearest: undefined | { distance: number; object: THREE_NS.Object3D };
+    root.traverse((object) => {
+      const mesh = object as THREE_NS.Mesh & { isMesh?: boolean };
+      if (!mesh.isMesh || !mesh.geometry) {
+        return;
+      }
+      const { isTwinAnchor } = object.userData as { isTwinAnchor?: boolean };
+      if (isTwinAnchor === true) {
+        return;
+      }
+      if (!mesh.geometry.boundingSphere) {
+        mesh.geometry.computeBoundingSphere();
+      }
+      const sphereCenter = new THREE.Vector3()
+        .copy(mesh.geometry.boundingSphere?.center ?? new THREE.Vector3())
+        .applyMatrix4(object.matrixWorld);
+      const distance = sphereCenter.distanceTo(center);
+      if (distance > radius) {
+        return;
+      }
+      if (!nearest || distance < nearest.distance) {
+        nearest = { distance, object };
+      }
+    });
+    return nearest ? [nearest.object] : [];
   }
 
   private setState(state: TwinSceneState, error?: TwinSceneError): void {
