@@ -309,6 +309,16 @@ export function createAnchorLayer(
   let hoveredPointId: string | undefined;
   /** hover 粘滞截止时间（毫秒时间戳；期间不清空 hover，防 true→false 抖动）。 */
   let hoverStickyUntil = 0;
+  /**
+   * 当前 hover 是否由 **DOM 事件**建立/维持（权威标记）。
+   *
+   * 为 true 时，几何判定（`hitTestAnchor`）的未命中结果**一律忽略**：
+   * 几何坐标来自 3D 投影，与 DOM 实测的胶囊位置可能不同源（实测差 170px+），
+   * 用它去「否决」DOM 事实会把刚建立的 hover 立刻清掉 —— 这正是线上反复出现的
+   * 「悬停能出卡片、稍后就消失」的根因。只有 DOM 的 `pointerleave`（真正离开胶囊）
+   * 才允许清除这个标记。
+   */
+  let hoverFromDom = false;
   /** 「待定关闭」定时器（几何未命中时排的延时清除；任何命中都会取消它）。 */
   let pendingClearTimer: ReturnType<typeof globalThis.setTimeout> | undefined;
   /** 坐标漂移告警是否已打过（限流：只报一次）。 */
@@ -544,6 +554,7 @@ export function createAnchorLayer(
       // 因此必须再用 `pointermove` 续期；两者都取消「待定关闭」。
       const onCapsuleHover = (): void => {
         cancelPendingClear();
+        hoverFromDom = true;
         hoverStickyUntil =
           (typeof performance === 'undefined'
             ? Date.now()
@@ -554,8 +565,10 @@ export function createAnchorLayer(
       capsule.addEventListener('pointermove', onCapsuleHover, listenerOptions);
       capsule.addEventListener('pointerenter', onCapsuleHover, listenerOptions);
       capsule.addEventListener('pointerleave', () => {
-        // 明确离开胶囊：立即进入「待定关闭」（而不是硬清空 —— 可能只是移到相邻元素上）
+        // 明确离开胶囊：解除 DOM 权威，并进入「待定关闭」
+        // （不硬清空：可能只是移到相邻元素上，或用户正把指针移向卡片本身）
         if (hoveredPointId === anchor.pointId) {
+          hoverFromDom = false;
           hoverStickyUntil = 0;
           schedulePendingClear();
         }
@@ -601,9 +614,11 @@ export function createAnchorLayer(
    */
   function detach(): void {
     clearFlashTimers();
+    cancelPendingClear();
     pointer.active = false;
     hoveredPointId = undefined;
     hoverStickyUntil = 0;
+    hoverFromDom = false;
     for (const node of nodes.values()) {
       node.sprite.removeFromParent();
       node.sprite.material.dispose();
@@ -1086,11 +1101,16 @@ export function createAnchorLayer(
     lastPointerMoveAt = nowMs;
     const hit = hitTestAnchor(pointer.x, pointer.y);
     if (hit) {
-      // 几何命中：进入 hover、刷新粘滞窗口、取消待定关闭
+      // 几何命中：进入 hover、刷新粘滞窗口、取消待定关闭。
+      // 注意：几何建立的 hover 不设 DOM 权威标记（否则指针移开后几何误判会一直粘住）。
       cancelPendingClear();
       setHovered(hit.pointId);
       hoverStickyUntil = nowMs + HOVER_STICKY_MS;
       warnCoordinateDriftOnce();
+      return;
+    }
+    // **DOM 权威优先**：hover 由胶囊上的真实指针事件建立时，几何未命中一律忽略。
+    if (hoverFromDom) {
       return;
     }
     // 几何未命中 ⇒ **不再硬清空**：

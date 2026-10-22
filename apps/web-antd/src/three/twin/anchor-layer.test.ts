@@ -3,6 +3,7 @@ import type { AnchorDescriptor, AnchorRuntimeState } from './types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createAnchorLayer } from './anchor-layer';
+import { fakeCss2d, fakeThree } from './anchor-layer-test-doubles';
 
 /**
  * 锚点层：**数据先到、模型后到**时必须能重放状态（线上缺陷回归）。
@@ -20,110 +21,6 @@ import { createAnchorLayer } from './anchor-layer';
  */
 
 /** 最小 three 替身（只实现 anchor-layer 用到的部分）。 */
-function fakeThree() {
-  class FakeObject3D {
-    children: FakeObject3D[] = [];
-    name = '';
-    position = { set: () => undefined };
-    renderOrder = 0;
-    userData: Record<string, unknown> = {};
-    add(child: FakeObject3D) {
-      this.children.push(child);
-      return this;
-    }
-    removeFromParent() {
-      return this;
-    }
-  }
-  class FakeGroup extends FakeObject3D {}
-  class FakeSprite extends FakeObject3D {
-    material: {
-      color: { set: (value: string) => void };
-      dispose: () => void;
-    };
-    scale = { set: () => undefined };
-    constructor() {
-      super();
-      this.material = {
-        color: { set: () => undefined },
-        dispose: () => undefined,
-      };
-    }
-  }
-  class FakeTexture {
-    needsUpdate = false;
-    dispose = () => undefined;
-  }
-  const canvasStub = {
-    getContext: () => ({
-      arc: () => undefined,
-      beginPath: () => undefined,
-      clearRect: () => undefined,
-      fill: () => undefined,
-      fillStyle: '',
-    }),
-    height: 64,
-    width: 64,
-  };
-  return {
-    CanvasTexture: class extends FakeTexture {},
-    Group: FakeGroup,
-    Sprite: FakeSprite,
-    SpriteMaterial: class {
-      color = { set: () => undefined };
-      depthTest = true;
-      map: unknown = null;
-      sizeAttenuation = true;
-      transparent = true;
-      constructor(params?: Record<string, unknown>) {
-        Object.assign(this, params);
-      }
-      dispose = () => undefined;
-    },
-    __canvasStub: canvasStub,
-  };
-}
-
-/**
- * 最小 CSS2D 替身。
- *
- * 真实 `CSS2DRenderer` 会在每帧 render 时把 `CSS2DObject.element` 挂进它的 domElement。
- * 单测里不跑渲染循环，所以这里在构造时就**把元素插入 document.body**，
- * 使测试能直接查 DOM（与真实渲染后的可观测结果一致）。
- */
-function fakeCss2d() {
-  class FakeGroup {
-    children: unknown[] = [];
-    name = '';
-    position = { set: () => undefined };
-    userData: Record<string, unknown> = {};
-    add(child: unknown) {
-      this.children.push(child);
-      return this;
-    }
-    removeFromParent() {
-      return this;
-    }
-  }
-  class CSS2DObject extends FakeGroup {
-    element: HTMLElement;
-    constructor(element: HTMLElement) {
-      super();
-      this.element = element;
-      document.body.append(element);
-    }
-  }
-  return {
-    CSS2DObject,
-    CSS2DRenderer: class {
-      domElement = document.createElement('div');
-      render() {}
-      setSize() {}
-    },
-  };
-}
-
-/** 造一个锚点描述。 */
 function anchor(pointId: string, deviceName: string): AnchorDescriptor {
   return {
     deviceId: `dev-${pointId}`,
