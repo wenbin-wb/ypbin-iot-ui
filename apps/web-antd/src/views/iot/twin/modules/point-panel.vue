@@ -186,6 +186,21 @@ function onFormSuccess(): void {
 }
 
 /**
+ * 点位的展示名：**点位备注优先**（管理员写的可读名），其次设备名，最后设备 ID。
+ *
+ * 为什么不是直接用设备名：同一台设备可以在同一场景里放多个点位（不同位置），
+ * 此时设备名会重复；而点位备注能表达「这是哪一根灯杆」。
+ *
+ * @param point 点位
+ * @returns 展示名（永不返回空串）
+ */
+function pointLabel(point: IotTwinApi.PointResp): string {
+  return (
+    point.remark?.trim() || point.deviceIdName?.trim() || point.deviceId || '--'
+  );
+}
+
+/**
  * 主展示属性的展示文本（`温度 ℃` 形式；无绑定时给明确文案而不是空白）。
  *
  * @param point 点位
@@ -294,8 +309,11 @@ function primaryText(point: IotTwinApi.PointResp): string {
           <div class="flex items-center gap-2">
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-1.5">
-                <span class="truncate font-medium">
-                  {{ point.deviceIdName ?? point.deviceId }}
+                <span
+                  class="truncate font-medium"
+                  :title="point.nodeName ?? undefined"
+                >
+                  {{ pointLabel(point) }}
                 </span>
                 <span
                   v-if="staleCountByPoint.get(point.id)"

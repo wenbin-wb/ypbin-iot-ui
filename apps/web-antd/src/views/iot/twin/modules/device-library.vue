@@ -5,7 +5,7 @@ import { computed, ref, watch } from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
 
-import { Spin, Tag } from 'ant-design-vue';
+import { Spin } from 'ant-design-vue';
 
 import { $t } from '#/locales';
 
@@ -88,6 +88,18 @@ function onDragStart(event: DragEvent, deviceId: string): void {
   emit('dragDevice', deviceId);
 }
 
+/**
+ * 点位的展示名（可读名优先）。
+ *
+ * @param point 点位
+ * @returns 展示名（永不返回空串）
+ */
+function pointLabel(point: IotTwinApi.PointResp): string {
+  return (
+    point.remark?.trim() || point.deviceIdName?.trim() || point.deviceId || '--'
+  );
+}
+
 /** 拖拽结束（含用户中途松手取消）。 */
 function onDragEnd(): void {
   emit('dragEnd');
@@ -165,12 +177,22 @@ watch(
                   : 'lucide:cpu'
               "
             />
-            <span class="min-w-0 flex-1 truncate">
-              {{ point.deviceIdName ?? point.deviceId }}
-            </span>
-            <Tag v-if="point.nodeName" class="m-0 shrink-0 text-[10px]">
-              {{ point.nodeName }}
-            </Tag>
+            <!--
+              显示名优先级：点位备注（管理员写的可读名，如「监控立杆-01（南门广场东）」）
+              → 设备名 → 设备 ID。资产节点名（`camera_pole_0000|camera_pole`）是**技术标识**，
+              只放 title 里做排查用，不再占列表宽度（用户反馈「都是技术名，看不出是什么设备」）。
+            -->
+            <div class="min-w-0 flex-1">
+              <div class="truncate" :title="point.nodeName ?? undefined">
+                {{ pointLabel(point) }}
+              </div>
+              <div
+                v-if="point.nodeName"
+                class="truncate text-[10px] text-muted-foreground/70"
+              >
+                {{ point.nodeName }}
+              </div>
+            </div>
           </li>
         </ul>
       </section>

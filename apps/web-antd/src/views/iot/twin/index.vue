@@ -385,6 +385,23 @@ async function saveDragDraft(): Promise<void> {
   }
 }
 
+/**
+ * 当前选中设备的**展示名**（点位备注优先）。
+ *
+ * 为什么不直接用设备名：同一设备在同一场景可能有多个点位（不同位置），
+ * 点位备注才能表达「这是哪一根灯杆」；资产节点名（`camera_pole_0000|camera_pole`）
+ * 是技术标识，不放进标题。
+ */
+const selectedDisplayName = computed(() => {
+  const point = points.value.find((item) => item.id === currentPointId.value);
+  if (!point) {
+    return '';
+  }
+  return (
+    point.remark?.trim() || point.deviceIdName?.trim() || point.deviceId || '--'
+  );
+});
+
 /** 当前选中设备（详情卡数据）。 */
 const selectedPoint = computed(() =>
   points.value.find((item) => item.id === currentPointId.value),
@@ -1024,7 +1041,7 @@ async function onOpenPointConfig(pointId: string): Promise<void> {
             class="pointer-events-auto"
             :device-code="selectedCard.deviceId"
             :device-id="selectedCard.deviceId"
-            :device-name="selectedCard.deviceName"
+            :device-name="selectedDisplayName || selectedCard.deviceName"
             :dirty="twinDrag.dirty.value"
             :node-found="canvasRef?.canHighlight(currentPointId) ?? false"
             :node-name="selectedCard.nodeName ?? undefined"
