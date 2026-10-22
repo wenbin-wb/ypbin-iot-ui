@@ -200,3 +200,18 @@ export const TWIN_COLOR_GROUND_LIGHT = '#d7dce4';
 
 /** 浅色底时网格主色（比深色底用更深的线，保证对比度）。 */
 export const TWIN_COLOR_GRID_LINE_LIGHT = '#9aa6b6';
+
+/**
+ * 浅色底（亮色主题）下的**标签胶囊配色**。
+ *
+ * 暗色主题的胶囊是「深底 + 浅字」，放到浅色画布上会变成一排深色药丸，视觉上比模型还重。
+ * 浅色底改用「白底 + 深字 + 细边框」，并保留状态色（圆点/边框仍按在线/告警着色），
+ * 这样「设备状态」仍然是第一视觉信息，胶囊只是承载文字。
+ */
+export const TWIN_COLOR_LABEL_BG_LIGHT = 'rgba(255,255,255,.92)';
+export const TWIN_COLOR_LABEL_TEXT_LIGHT = '#1f2937';
+export const TWIN_COLOR_LABEL_TEXT_MUTED_LIGHT = '#6b7280';
+export const TWIN_COLOR_LABEL_BORDER_LIGHT = 'rgba(100,116,139,.45)';
+export const TWIN_COLOR_LABEL_SHADOW_LIGHT = 'rgba(15,23,42,.18)';
+/** 浅色底下圆点的描边色（深色描边才与白底分离；暗色底下是白描边）。 */
+export const TWIN_COLOR_DOT_RING_LIGHT = 'rgba(255,255,255,.96)';
