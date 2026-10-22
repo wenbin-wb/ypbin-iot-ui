@@ -19,6 +19,7 @@ import { extractErrorMessage } from '#/utils/error';
 
 import ListErrorAlert from '../shared/list-error-alert.vue';
 import { useTwinAlertCounts } from './composables/use-twin-alert-counts';
+import { useTwinDrag } from './composables/use-twin-drag';
 import { useTwinEditor } from './composables/use-twin-editor';
 import { useTwinLiveValues } from './composables/use-twin-live-values';
 import { useTwinRuntime } from './composables/use-twin-runtime';
@@ -27,6 +28,7 @@ import { CAMERA_PRESET_IDS } from './modules/camera-presets';
 import { buildDeviceDetailTarget } from './modules/device-detail-link';
 import ModelPanel from './modules/model-panel.vue';
 import PointPanel from './modules/point-panel.vue';
+import { buildPropertyCard } from './modules/property-card-model';
 import RuntimeLegend from './modules/runtime-legend.vue';
 import { computeSceneBadges } from './modules/scene-badges';
 import SceneTree from './modules/scene-tree.vue';
@@ -228,6 +230,158 @@ function openDisplayMode(): void {
   }).href;
   globalThis.open(href, '_blank', 'noopener');
 }
+
+/** 设备放置/改位置草稿（拖拽产生；点「保存」才落库）。 */
+const twinDrag = useTwinDrag();
+
+/** 可放置设备候选（资料库下半区；来自设备搜索，按需加载）。 */
+const deviceCandidates = ref<Array<{ code: string; id: string; name: string }>>(
+  [],
+);
+const deviceSearching = ref(false);
+
+/**
+ * 资料库拖起某设备 ⇒ 拉一次候选列表（含该设备信息，便于落点后显示设备名）。
+ *
+ * 为什么不在页面初始化就拉：设备列表可能上千台，用户不拖拽就不该付这个成本。
+ *
+ * @param deviceId 设备 ID
+ */
+async function onLibraryDrag(deviceId: string): Promise<void> {
+  twinDrag.startDrag(deviceId);
+  // 已有候选且包含被拖设备 ⇒ 无需再拉
+  if (
+    deviceCandidates.value.length > 0 &&
+    deviceCandidates.value.some((item) => item.id === deviceId)
+  ) {
+    return;
+  }
+  deviceSearching.value = true;
+  try {
+    const { getDeviceOptions } = await import('#/api/iot');
+    const items = await getDeviceOptions();
+    // 已在本场景放置的设备不重复出现在「可放置」里（拖进来会得到重复点位）
+    const placed = new Set(points.value.map((point) => String(point.deviceId)));
+    deviceCandidates.value = items
+      .filter((item) => !placed.has(String(item.id)))
+      .map((item) => ({
+        code: item.deviceCode || item.id,
+        id: String(item.id),
+        name: item.deviceName || item.deviceCode || item.id,
+      }));
+  } catch (error) {
+    // 候选列表拉不到不阻塞拖拽（拖拽本身只需要 deviceId）；必须留痕
+    console.warn('[iot/twin] 设备候选列表加载失败（不影响拖放）：', error);
+  } finally {
+    deviceSearching.value = false;
+  }
+}
+
+/**
+ * 画布收到拖放（资料库设备落到模型上）。
+ *
+ * 落点无效（拖到天空/空白）时**不静默丢弃**：给出可见提示让用户重新拖到模型上。
+ *
+ * @param payload 拖放结果
+ */
+function onDeviceDrop(payload: {
+  deviceId: string;
+  local: { x: number; y: number; z: number };
+}): void {
+  if (!Number.isFinite(payload.local.x)) {
+    deeplinkNotice.value = $t('page.iot.twin.devicePanel.dropInvalid');
+    return;
+  }
+  const device = deviceCandidates.value.find(
+    (item) => item.id === payload.deviceId,
+  );
+  twinDrag.placeNewDevice(
+    { id: payload.deviceId, name: device?.name ?? payload.deviceId },
+    payload.local,
+  );
+  // 草稿落成后打开点位表单，并把落点预填进去（用户只需选设备/绑属性）
+  editorDraft.value = {
+    local: payload.local,
+    normal: { x: 0, y: 1, z: 0 },
+  };
+  setDraft({
+    local: payload.local,
+    normal: { x: 0, y: 1, z: 0 },
+  });
+}
+
+/**
+ * 保存拖拽草稿（点位坐标改到新落点）。
+ *
+ * 走**既有** `PUT /twin/scenes/{sceneId}/points/{id}`，不新增接口；
+ * 只提交坐标字段，其余（设备/绑定/图标/标签）原样带回，避免整体替换把绑定清空。
+ */
+async function saveDragDraft(): Promise<void> {
+  const draft = twinDrag.draft.value;
+  if (!draft) {
+    return;
+  }
+  if (draft.kind === 'new') {
+    // 新设备拖入：表单已打开，由表单流程负责创建（不在这里重复提交）
+    deeplinkNotice.value = $t('page.iot.twin.devicePanel.presetNew');
+    return;
+  }
+  const point = points.value.find((item) => item.id === draft.pointId);
+  if (!point) {
+    twinDrag.discard();
+    return;
+  }
+  try {
+    const { updateTwinPoint } = await import('#/api/iot');
+    await updateTwinPoint(currentSceneId.value, point.id, {
+      bindings: point.bindings.map((binding) => ({
+        decimals: binding.decimals ?? undefined,
+        displayRole: binding.displayRole,
+        displayType: binding.displayType,
+        propertyIdentifier: binding.propertyIdentifier,
+        serviceIdentifier: binding.serviceIdentifier,
+        unitOverride: binding.unitOverride ?? undefined,
+      })),
+      deviceId: point.deviceId,
+      icon: point.icon ?? undefined,
+      labelVisible: point.labelVisible,
+      localX: draft.local.x,
+      localY: draft.local.y,
+      localZ: draft.local.z,
+      nodeName: point.nodeName ?? undefined,
+      normalX: Number(point.normalX),
+      normalY: Number(point.normalY),
+      normalZ: Number(point.normalZ),
+      remark: point.remark ?? undefined,
+      sort: point.sort ?? 0,
+    });
+    twinDrag.discard();
+    await loadPoints(currentSceneId.value);
+    deeplinkNotice.value = $t('page.iot.twin.devicePanel.saved');
+  } catch (error) {
+    pointsError.value = extractErrorMessage(
+      error,
+      $t('page.iot.twin.saveFailed'),
+    );
+  }
+}
+
+/** 当前选中设备（详情卡数据）。 */
+const selectedPoint = computed(() =>
+  points.value.find((item) => item.id === currentPointId.value),
+);
+
+/** 详情卡数据（复用悬浮卡片的组装口径，避免两套取值逻辑）。 */
+const selectedCard = computed(() => {
+  const point = selectedPoint.value;
+  if (!point) {
+    return undefined;
+  }
+  const live = runtime.snapshot.value?.points?.find(
+    (item) => item.pointId === point.id,
+  );
+  return buildPropertyCard({ point, runtime: live, values: live?.values });
+});
 
 /** 当前相机预设（按钮组高亮用；用户自由旋转后清空）。 */
 const activeCameraPreset = ref<CameraPresetId | undefined>();
@@ -506,6 +660,13 @@ watch(
   { immediate: true },
 );
 
+/** 切场景时丢弃未保存的拖拽草稿（坐标属于上一个场景的坐标系）。 */
+watch(currentSceneId, () => {
+  if (twinDrag.dirty.value) {
+    twinDrag.discard();
+  }
+});
+
 /** 主题变化 ⇒ 下发画布（亮色主题用浅色背景/地面，避免深色画布嵌在亮色页面里）。 */
 watch(
   isDark,
@@ -561,6 +722,22 @@ function onCanvasReady(): void {
   }
   // 画布就绪后同步当前钉住态（深链 `?pointId=` 刷新进入时，卡片要直接出现）
   canvasRef.value?.syncPinnedPoint(currentPointId.value || undefined);
+}
+
+/**
+ * 画布选中设备 ⇒ 写回 URL（URL 是唯一真相）+ 同步资料库高亮。
+ *
+ * @param pointId 点位 ID（undefined = 取消选中）
+ */
+async function onSelectionChange(pointId?: string): Promise<void> {
+  if (!pointId) {
+    if (currentPointId.value) {
+      selectPoint(null);
+      await router.replace({ query: { ...route.query, pointId: undefined } });
+    }
+    return;
+  }
+  await onSelectAnchor(pointId);
 }
 
 /**
@@ -685,9 +862,7 @@ async function onOpenPointConfig(pointId: string): Promise<void> {
     -->
     <div v-else class="flex h-full min-h-0 gap-3">
       <!-- ═══ 左车道：场景导航 ═══ -->
-      <aside
-        class="flex w-64 shrink-0 flex-col overflow-hidden rounded-xl border border-border/70 bg-card"
-      >
+      <aside class="flex w-64 shrink-0 flex-col gap-3 overflow-hidden">
         <SceneTree
           :badges="sceneBadges"
           :can-add-child="canAddChild"
@@ -698,8 +873,21 @@ async function onOpenPointConfig(pointId: string): Promise<void> {
           :parent-options="parentOptions"
           :scenes="scenes"
           :tree="tree"
+          class="min-h-0 flex-1 overflow-hidden rounded-xl border border-border/70 bg-card"
           @enter="enterScene"
           @refresh="loadScenes"
+        />
+        <!-- 设备资料库（拖拽源）：把设备拖进画布放置/改位置 -->
+        <DeviceLibrary
+          class="h-[42%] shrink-0"
+          :device-candidates="deviceCandidates"
+          :enabled="!!currentSceneId"
+          :points="points"
+          :searching="deviceSearching"
+          :selected-point-id="currentPointId"
+          @drag-device="onLibraryDrag"
+          @drag-end="twinDrag.endDrag"
+          @select="onSelectAnchor"
         />
       </aside>
 
@@ -738,7 +926,9 @@ async function onOpenPointConfig(pointId: string): Promise<void> {
           @ready="onCanvasReady"
           @render-stats="(stats) => (renderStats = stats)"
           @scene-summary="(summary) => (sceneSummary = summary)"
+          @device-drop="onDeviceDrop"
           @select="onSelectAnchor"
+          @selection-change="onSelectionChange"
           @shell-supported="(supported) => (shellSupported = supported)"
           @state-change="
             (state: string, error?: string) => {
@@ -758,6 +948,29 @@ async function onOpenPointConfig(pointId: string): Promise<void> {
           :summary="sceneSummary"
           @enter="enterScene"
         />
+
+        <!-- 画布 HUD：选中设备详情卡（点设备才出现；右上角，避开左上上下文条） -->
+        <div
+          v-if="selectedCard"
+          class="pointer-events-none absolute right-4 top-28 z-10 w-72"
+        >
+          <DeviceDetailPanel
+            :alert-count="selectedCard.alertCount"
+            class="pointer-events-auto"
+            :device-code="selectedCard.deviceId"
+            :device-name="selectedCard.deviceName"
+            :dirty="twinDrag.dirty.value"
+            :node-found="canvasRef?.canHighlight(currentPointId) ?? false"
+            :node-name="selectedCard.nodeName ?? undefined"
+            :online-status="selectedCard.onlineStatus"
+            :rows="selectedCard.rows"
+            :scene-name="currentScene?.sceneName"
+            :status="selectedCard.status"
+            @close="onSelectionChange(undefined)"
+            @open-device="openDeviceDetail(currentPointId)"
+            @open-point="onOpenPointConfig(currentPointId)"
+          />
+        </div>
 
         <!-- 画布 HUD：左上角告警提示（有内容才出现，避免常态占位） -->
         <div
@@ -855,6 +1068,14 @@ async function onOpenPointConfig(pointId: string): Promise<void> {
         <div
           class="pointer-events-none absolute bottom-4 right-4 z-10 flex items-center gap-2"
         >
+          <button
+            v-if="twinDrag.dirty.value"
+            class="pointer-events-auto rounded-lg border border-primary/50 bg-primary/10 px-2 py-1 text-xs text-primary shadow backdrop-blur transition-colors hover:bg-primary/20"
+            type="button"
+            @click="saveDragDraft"
+          >
+            {{ $t('page.iot.twin.save') }}
+          </button>
           <TwinStatusBar
             :last-update-at="lastUpdateAt"
             :model-count="currentScene?.modelAssetId ? 1 : 0"
@@ -882,7 +1103,9 @@ async function onOpenPointConfig(pointId: string): Promise<void> {
           @dismiss-place="dismissPlaceForm"
           @open-device="openDeviceDetail"
           @refresh="reloadAfterPointChange"
+          @device-drop="onDeviceDrop"
           @select="onSelectAnchor"
+          @selection-change="onSelectionChange"
           @start-placing="startPlacing"
         />
 

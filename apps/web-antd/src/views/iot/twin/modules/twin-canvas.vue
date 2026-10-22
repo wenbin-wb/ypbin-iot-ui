@@ -87,6 +87,10 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
+  /** 资料库拖拽落点（画布内放下）：`local` 为场景局部坐标，`deviceId` 来自拖拽协议。 */
+  deviceDrop: [
+    payload: { deviceId: string; local: { x: number; y: number; z: number } },
+  ];
   /** 飞行模式被回退时的原因（**已本地化**；引擎层只给 key，这里用 $t 渲染）。 */
   fallback: [reason: string];
   /** 动效档位（引擎层判定后回调；页面状态栏展示，保证「说的和做的一致」）。 */
@@ -127,6 +131,12 @@ const emit = defineEmits<{
   ];
   /** 点击已有锚点（父组件据此高亮该点位）。 */
   select: [pointId: string];
+  /**
+   * 设备选中变化（点击模型/锚点/空白）。
+   *
+   * `undefined` = 取消选中（点空白）。父组件据此写 URL `?pointId=` 与展示详情卡。
+   */
+  selectionChange: [pointId?: string];
   /**
    * 当前模型是否支持「剖切外观」（即含可隐藏的屋顶/墙体节点）。
    *
@@ -210,6 +220,19 @@ interface EngineOptionalCapabilities {
   setFlyHandler?: (
     handler: (pointId: string, distanceScale?: number) => Promise<void> | void,
   ) => void;
+  /** 选中点位（模型节点高亮 + 锚点层持久显示该点；undefined 取消）。 */
+  setSelectedPoint?: (pointId?: string) => void;
+  /** 悬停点位（弱高亮；undefined 清除）。 */
+  setHoveredPoint?: (pointId?: string) => void;
+  /** 该点位能否在模型上找到节点（false ⇒ 卡片提示「未绑定模型节点」）。 */
+  hasNodeForPoint?: (pointId: string) => boolean;
+  /** 屏幕像素（相对容器）→ 场景局部坐标（拖放落点）。 */
+  screenToLocal?: (
+    x: number,
+    y: number,
+  ) => undefined | { x: number; y: number; z: number };
+  /** 拖放落点预览（undefined 清除）。 */
+  setDropPreview?: (local?: { x: number; y: number; z: number }) => void;
   /** 悬停交互提示（悬停中的锚点不参与避让、暂停脉冲）。 */
   setInteractionHover?: (pointId?: string) => void;
   /**
@@ -458,6 +481,142 @@ function readPointIdFromEventTarget(
 }
 
 /**
+ * 选中某设备（点击锚点标签 / 模型节点 / 资料库列表）。
+ *
+ * 与「钉住卡片」是**同一件事的两面**：
+ * - 引擎侧 `setSelectedPoint` 负责模型节点高亮（这是用户要的「选中柜子有高光」）；
+ * - 页面侧 `selectionChange` 负责写 URL 与弹详情卡。
+ *
+ * @param pointId 点位 ID（undefined = 取消选中）
+ */
+function selectDevice(pointId?: string): void {
+  selectedPointId.value = pointId;
+  engine()?.setSelectedPoint?.(pointId);
+  pinnedPointId.value = pointId;
+  emit('selectionChange', pointId);
+  if (pointId) {
+    lastAnchorPx = undefined;
+    sampleCardPosition();
+  }
+}
+
+/** 当前选中的点位（引擎高亮与页面卡片的共同真相）。 */
+const selectedPointId = ref<string>();
+
+/** 某点位能否在模型上高亮（白名单：模型加载完成 + 引擎找到节点）。 */
+function canHighlight(pointId: string): boolean {
+  return engine()?.hasNodeForPoint?.(pointId) ?? false;
+}
+
+/**
+ * 拖拽经过画布：实时把落点换算成局部坐标并交给引擎画预览。
+ *
+ * 只有落在**模型表面**才算有效落点（落在天空/空白返回 undefined ⇒ 引擎清掉预览）。
+ *
+ * @param event 拖拽事件
+ */
+function onDragOver(event: DragEvent): void {
+  if (!isTwinDeviceDrag(event)) {
+    return;
+  }
+  event.preventDefault();
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'copy';
+  }
+  const container = containerRef.value;
+  const caps = engine();
+  if (!container || !caps?.screenToLocal) {
+    return;
+  }
+  const rect = container.getBoundingClientRect();
+  const local = caps.screenToLocal(
+    event.clientX - rect.left,
+    event.clientY - rect.top,
+  );
+  caps.setDropPreview?.(local);
+  dragLocal.value = local;
+}
+
+/** 拖拽中的落点（供页面提示「松开以放置 / 请拖到模型上」）。 */
+const dragLocal = ref<{ x: number; y: number; z: number }>();
+
+/**
+ * 拖拽离开画布：清掉落点预览。
+ *
+ * @param event 拖拽事件
+ */
+function onDragLeave(event: DragEvent): void {
+  // 只在真正离开容器时清（子元素之间移动也会触发 dragleave）
+  const container = containerRef.value;
+  if (!container || !(event.relatedTarget instanceof Node)) {
+    engine()?.setDropPreview?.(undefined);
+    dragLocal.value = undefined;
+    return;
+  }
+  if (container.contains(event.relatedTarget)) {
+    return;
+  }
+  engine()?.setDropPreview?.(undefined);
+  dragLocal.value = undefined;
+}
+
+/**
+ * 拖放：资料库设备落到画布。
+ *
+ * @param event 拖拽事件
+ */
+function onDrop(event: DragEvent): void {
+  const deviceId = readDeviceIdFromDrag(event);
+  if (!deviceId) {
+    return;
+  }
+  event.preventDefault();
+  const local =
+    dragLocal.value ??
+    engine()?.screenToLocal?.(
+      event.clientX - (containerRef.value?.getBoundingClientRect().left ?? 0),
+      event.clientY - (containerRef.value?.getBoundingClientRect().top ?? 0),
+    );
+  engine()?.setDropPreview?.(undefined);
+  dragLocal.value = undefined;
+  if (!local) {
+    // 落在天空/空白：不静默忽略，交给页面提示（父组件据 `deviceDrop` 的空落点提示重放）
+    emit('deviceDrop', { deviceId, local: { x: Number.NaN, y: 0, z: 0 } });
+    return;
+  }
+  emit('deviceDrop', { deviceId, local });
+}
+
+/**
+ * 判断拖拽数据是否来自「设备资料库」（协议：`text/plain` 前缀 `twin-device:`）。
+ *
+ * @param event 拖拽事件
+ * @returns 设备 ID；非本功能的拖拽返回 undefined
+ */
+function readDeviceIdFromDrag(event: DragEvent): string | undefined {
+  const raw = event.dataTransfer?.getData('text/plain') ?? '';
+  const prefix = 'twin-device:';
+  return raw.startsWith(prefix) ? raw.slice(prefix.length) : undefined;
+}
+
+/**
+ * 拖拽经过/进入时浏览器对 `dragover` 的类型判定（不能读 `getData`）。
+ *
+ * 为什么不直接用 `readDeviceIdFromDrag`：`dragover` 阶段出于安全限制 `getData` 返回空串，
+ * 必须用 `types` 判断。这里用「存在 `text/plain`」作为保守判据（拒绝时只是不 preventDefault，
+ * 不会误放）。
+ *
+ * @param event 拖拽事件
+ * @returns 是否可能是设备拖拽
+ */
+function isTwinDeviceDrag(event: DragEvent): boolean {
+  return (
+    event.dataTransfer !== null &&
+    [...event.dataTransfer.types].includes('text/plain')
+  );
+}
+
+/**
  * 指针按下兜底：**在画布上按下（非锚点标签）⇒ 取消钉住**。
  *
  * ## 为什么用 `pointerdown` 而不是 `click`
@@ -592,8 +751,13 @@ function unpinCard(): void {
  * 语义：有钉住则取消钉住；没有钉住则清掉悬停。
  */
 function onCanvasBlankClick(): void {
-  if (pinnedPointId.value !== undefined) {
+  if (
+    selectedPointId.value !== undefined ||
+    pinnedPointId.value !== undefined
+  ) {
+    // 点空白 = 取消选中（引擎撤掉模型高光 + 页面关掉详情卡）
     unpinCard();
+    selectDevice(undefined);
     return;
   }
   hoveredPointId.value = undefined;
@@ -768,6 +932,7 @@ async function loadScene(): Promise<void> {
         deviceName: point.deviceIdName ?? point.deviceId,
         icon: point.icon ?? null,
         labelVisible: point.labelVisible,
+        nodeName: point.nodeName ?? null,
         local: {
           x: Number(point.localX),
           y: Number(point.localY),
@@ -961,6 +1126,7 @@ watch(
         deviceName: point.deviceIdName ?? point.deviceId,
         icon: point.icon ?? null,
         labelVisible: point.labelVisible,
+        nodeName: point.nodeName ?? null,
         local: {
           x: Number(point.localX),
           y: Number(point.localY),
@@ -1100,11 +1266,13 @@ let lightCanvas = false;
 
 defineExpose({
   applyCameraPreset,
-  setLightCanvasTheme,
+  canHighlight,
   currentCameraPose,
   focusPoint,
   modelScale,
   retry,
+  selectDevice,
+  setLightCanvasTheme,
   setShellVisible,
   syncPinnedPoint,
   updateAnchorStates,
@@ -1126,6 +1294,9 @@ defineExpose({
     <div
       ref="containerRef"
       class="h-full w-full"
+      @dragover="onDragOver"
+      @dragleave="onDragLeave"
+      @drop="onDrop"
       @pointerdown="onPointerDownDelegated"
       @pointerout="onPointerOutDelegated"
       @pointerover="onPointerOverDelegated"

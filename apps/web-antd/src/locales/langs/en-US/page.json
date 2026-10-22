@@ -1639,14 +1639,14 @@
       "device": "Device",
       "deviceMissingForPoint": "The device for this point has been deleted, so its details cannot be opened",
       "devicePanel": {
-        "dragHint": "Drag to reposition",
-        "dragToPlace": "Drag to the canvas",
+        "dragHint": "Drag to reposition, then save",
+        "dragToPlace": "Drag onto the canvas",
         "dropHere": "Release to place",
-        "notFoundNode": "No model node bound; cannot highlight",
+        "dropInvalid": "Drop onto the model surface",
+        "notFoundNode": "No model node bound; nothing to highlight",
         "presetNew": "Device selected (new point)",
         "saved": "Position saved",
-        "selectHint": "Click a device for details",
-        "unsaved": "Unsaved position changes"
+        "unsaved": "Position changed (unsaved)"
       },
       "devicePlaceholder": "Search by device name or code",
       "deviceRequired": "Please select a device",
@@ -1673,6 +1673,8 @@
         "sparkline": "Sparkline"
       },
       "displayTypeUnsupported": "not supported yet",
+      "dropHere": "Release to place",
+      "dropInvalid": "Drop onto the model surface",
       "duplicateBinding": "Duplicate property binding: {0}",
       "engineInitFailed": "Failed to initialize the 3D engine (WebGL may be unsupported)",
       "external": "External",
@@ -1710,6 +1712,13 @@
       "legendOffline": "Offline",
       "legendOnline": "Online",
       "legendUnknown": "Unknown (no connection event yet)",
+      "library": {
+        "available": "Available {0}",
+        "emptyAvailable": "(all placed or none found)",
+        "placed": "Placed {0}",
+        "searchPlaceholder": "Search",
+        "title": "Device library"
+      },
       "loading": "Loading…",
       "loadingModel": "Loading model…",
       "modelAssets": "Model assets",
