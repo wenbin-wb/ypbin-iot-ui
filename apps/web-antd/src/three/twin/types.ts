@@ -79,6 +79,22 @@ export interface AnchorDescriptor {
   /** 场景局部法线。 */
   normal: { x: number; y: number; z: number };
   icon?: null | string;
+  /**
+   * 点位绑定的**模型节点名**（`iot_twin_point.node_name`）。
+   *
+   * 有它就能「点位 → 模型节点」直接高亮（画布不再依赖圆点/标签表达选中）；
+   * 为空时回退到「锚点位置附近的 mesh」兜底。
+   *
+   * 可选：历史点位可能没绑节点，视图层也可能暂未透传（此时全部走兜底）。
+   */
+  nodeName?: null | string;
+  /**
+   * 是否在「列表/图例」里展示（`iot_twin_point.label_visible` 的原语义）。
+   *
+   * ⚠️ 语义已变更（设备呈现方式重做）：画布**默认不显示圆点与常驻标签**，
+   * 这个字段不再决定「画布上是否常驻显示标签」，而是保留给视图层做列表筛选。
+   * 画布上的数值只在**选中/悬停**时展示。
+   */
   labelVisible: boolean;
   sort: number;
 }

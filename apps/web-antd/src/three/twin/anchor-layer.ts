@@ -134,6 +134,20 @@ export const ALERT_BLINK_HALF_PERIOD_MS = 600;
 /** 标签避让的重排间隔（毫秒，约 10Hz：避让不需要跟满帧率，省 CPU）。 */
 export const LAYOUT_INTERVAL_MS = 100;
 
+/**
+ * 是否默认显示锚点圆点与常驻标签（**设备呈现方式重做后默认关闭**）。
+ *
+ * 用户原话：「现在都是在设备上标记一个圆点，默认显示设备的名称显得页面有点混乱，
+ * 我不想要这种表现形式」「可以不要圆点吗？直接选择具体的设备，会有选中效果」。
+ *
+ * 因此默认态画布上**没有任何标注**：设备就是模型本身；圆点/数值只在
+ * **悬停**或**选中**时出现（作为「这是哪台设备、当前值多少」的即时提示）。
+ *
+ * 保留这个开关是为了「需要一个总览时」还能打开（例如调试/大屏模式），
+ * 但默认值必须是 false。
+ */
+export const SHOW_ANCHOR_MARKERS_BY_DEFAULT = false;
+
 /** 图标在屏幕上的缩放（`sizeAttenuation=false` 时的屏幕比例）。 */
 const ICON_SCREEN_SCALE = 0.045;
 
@@ -245,6 +259,8 @@ export interface AnchorLayerInstance extends AnchorLayer {
   setMotionMode: (mode: TwinMotionMode) => void;
   /** 设置 hover 点位（hover 卡片打开时由 manager 转发，用于阻止对应标签被降级）。 */
   setHovered: (pointId?: string) => void;
+  /** 设置选中点位（选中时持久显示圆点与数值标签）。 */
+  setSelected: (pointId?: string) => void;
 }
 
 /** 锚点层交互回调。 */
@@ -307,6 +323,8 @@ export function createAnchorLayer(
    */
   let ripplePhaseSeconds = 0;
   let hoveredPointId: string | undefined;
+  /** 当前选中点位（选中时显示圆点 + 数值标签，比悬停更持久）。 */
+  let selectedPointId: string | undefined;
   /** hover 粘滞截止时间（毫秒时间戳；期间不清空 hover，防 true→false 抖动）。 */
   let hoverStickyUntil = 0;
   /**
@@ -489,6 +507,8 @@ export function createAnchorLayer(
       sprite.renderOrder = 999;
       sprite.userData.pointId = anchor.pointId;
       sprite.userData.isTwinAnchor = true;
+      // **默认不显示**：设备呈现方式重做后，画布默认只有模型本身（没有圆点）
+      sprite.visible = SHOW_ANCHOR_MARKERS_BY_DEFAULT;
 
       // 标签结构：胶囊 = 圆点 + 设备名 + 数值
       // 参考图的做法：小圆点 + 半透明胶囊；数值保留在标签里（运维场景要看实时值），
@@ -579,8 +599,14 @@ export function createAnchorLayer(
 
       const labelObject = new CSS2D.CSS2DObject(labelElement);
       labelObject.position.set(anchor.local.x, anchor.local.y, anchor.local.z);
-      // 标签默认显隐由配置项 labelVisible 决定
-      labelElement.style.display = anchor.labelVisible ? '' : 'none';
+      // **默认不渲染标签**：只在悬停/选中时由 setHovered / setSelected 打开。
+      // `labelVisible`（原 label_visible 字段）的语义已变为「列表/图例是否展示」，
+      // 不再决定画布上的常驻标签（用户明确要求默认不显示名称）。
+      // 默认态一律不显示；开启常驻标记时才按 labelVisible 决定
+      const showPersistently =
+        SHOW_ANCHOR_MARKERS_BY_DEFAULT && anchor.labelVisible;
+      labelElement.style.display = showPersistently ? '' : 'none';
+      labelElement.style.visibility = 'hidden';
 
       modelRoot.add(sprite);
       modelRoot.add(labelObject);
@@ -598,6 +624,7 @@ export function createAnchorLayer(
         valueElement,
       });
     }
+    refreshMarkerVisibility();
     // 重放**已收到**的运行态：数据通常比模型先到（先拉 runtime 再加载 GLB），
     // 不重放会让标签停在空文本，直到设备下次上报才有内容（那时用户早已认为功能坏了）。
     if (currentStates.size > 0) {
@@ -1273,7 +1300,49 @@ export function createAnchorLayer(
         String(HOVER_SCALE),
       );
     }
+    // hover 的显隐变化：圆点与标签只在 hover/选中时可见
+    refreshMarkerVisibility();
     callbacks.onHoverAnchor?.(pointId);
+  }
+
+  /**
+   * 设置选中点位（设备呈现方式重做后的「选中态」）。
+   *
+   * 与 hover 的区别：选中是**持久的**（用户点过的设备一直保持标注，直到点别的/点空白），
+   * hover 是即时的。两者叠加时取并集：选中 + hover 同一台不影响。
+   *
+   * 显隐口径（{@link SHOW_ANCHOR_MARKERS_BY_DEFAULT} = false）：
+   * - 默认：圆点与数值标签都不显示；
+   * - hover：显示圆点 + 数值标签（「这是哪台、现在多少」）；
+   * - selected：同样显示，且保持到取消选中。
+   *
+   * @param pointId 点位 ID；undefined = 取消选中
+   */
+  function setSelected(pointId?: string): void {
+    selectedPointId = pointId;
+    refreshMarkerVisibility();
+  }
+
+  /**
+   * 按「hover / 选中」状态刷新圆点与标签的显隐。
+   *
+   * 为什么集中在一处：显隐的真相是「hover ∪ selected」，散落各处容易出现
+   * 「取消选中后标签还在」这类残留。
+   */
+  function refreshMarkerVisibility(): void {
+    for (const [pointId, node] of nodes) {
+      const active = pointId === hoveredPointId || pointId === selectedPointId;
+      // 圆点：默认隐藏，hover/选中时显示（作为「设备在这」的即时提示 + 点击靶心）
+      node.sprite.visible = SHOW_ANCHOR_MARKERS_BY_DEFAULT ? true : active;
+      // 标签：同上
+      if (active) {
+        node.labelElement.style.visibility = 'visible';
+        node.labelElement.style.display = '';
+      } else {
+        node.labelElement.style.visibility = 'hidden';
+        node.labelElement.style.display = 'none';
+      }
+    }
   }
 
   /**
@@ -1379,6 +1448,7 @@ export function createAnchorLayer(
       lastLayoutAt = Number.NEGATIVE_INFINITY;
     },
     setHovered,
+    setSelected,
     setMotionMode: (mode) => {
       motionMode = mode;
       // 档位变化立即重放一次状态：让「关闭脉冲」马上生效（不等下一次 update）
