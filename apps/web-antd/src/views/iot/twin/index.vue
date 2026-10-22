@@ -9,6 +9,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
+import { usePreferences } from '@vben/preferences';
 
 import { Alert, Empty, Modal } from 'ant-design-vue';
 
@@ -202,6 +203,14 @@ const sceneSummary = ref<{
  */
 const showShell = ref(false);
 const shellSupported = ref(false);
+
+/**
+ * 当前主题是否为暗色（画布底色跟随应用主题）。
+ *
+ * 用 `usePreferences().isDark` 而不是 `matchMedia`：主题是**应用设置**（用户可在页面里
+ * 手动切），系统偏好只在「跟随系统」时才生效；引擎侧同理由页面下发。
+ */
+const { isDark } = usePreferences();
 
 /** 当前相机预设（按钮组高亮用；用户自由旋转后清空）。 */
 const activeCameraPreset = ref<CameraPresetId | undefined>();
@@ -476,6 +485,15 @@ watch(
     } catch {
       // 失败原因已写入 runtime.error，模板渲染错误态；此处不重复提示
     }
+  },
+  { immediate: true },
+);
+
+/** 主题变化 ⇒ 下发画布（亮色主题用浅色背景/地面，避免深色画布嵌在亮色页面里）。 */
+watch(
+  isDark,
+  (dark) => {
+    canvasRef.value?.setLightCanvasTheme(!dark);
   },
   { immediate: true },
 );

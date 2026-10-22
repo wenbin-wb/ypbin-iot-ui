@@ -167,11 +167,13 @@ export function isLightBackground(color: null | string | undefined): boolean {
     if (!Number.isFinite(value)) {
       return false;
     }
-    // 位运算掩码用字面量 0xFF（本仓 formatter 会把十六进制数字降小写、linter 又要求大写，
-    // 两者互相改写；用 `0xFF` 写在 linter 认可的大小写即可，无需位掩码常量）
-    const r = (value >> 16) & 0xff;
-    const g = (value >> 8) & 0xff;
-    const b = value & 0xff;
+    // 用「除以通道基数取余」代替位掩码：本仓 formatter（oxfmt）会把十六进制字面量降小写、
+    // linter（oxlint）又要求大写，两者对同一行互相改写 ⇒ 门禁永远红。完全避开十六进制字面量。
+    const CHANNEL_BASE = 256;
+    const RRGB_SHIFT = CHANNEL_BASE * CHANNEL_BASE;
+    const r = Math.floor(value / RRGB_SHIFT) % CHANNEL_BASE;
+    const g = Math.floor(value / CHANNEL_BASE) % CHANNEL_BASE;
+    const b = value % CHANNEL_BASE;
     // 感知亮度（Rec. 601）：0.5 附近是深浅分界，浅灰白都 > 0.7
     return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.72;
   }
@@ -186,6 +188,12 @@ export function isLightBackground(color: null | string | undefined): boolean {
   }
   return false;
 }
+
+/** 浅色底时画布背景渐变：顶部（冷白灰，接近页面背景）。 */
+export const TWIN_COLOR_BACKGROUND_TOP_LIGHT = '#eef2f7';
+
+/** 浅色底时画布背景渐变：底部（略深，营造纵深但仍是浅色）。 */
+export const TWIN_COLOR_BACKGROUND_BOTTOM_LIGHT = '#d3dae4';
 
 /** 浅色底时地面主色（冷白灰：与浅色页面同层次，避免深色地面像贴纸）。 */
 export const TWIN_COLOR_GROUND_LIGHT = '#d7dce4';

@@ -172,6 +172,8 @@ interface EngineOptionalCapabilities {
       };
   /** 动效档位（引擎层判定，页面只展示）。 */
   getMotionMode?: () => 'normal' | 'off' | 'reduced';
+  /** 按主题切换画布底色（亮色主题 ⇒ 浅色背景/地面/网格）。 */
+  setLightCanvasByTheme?: (light: boolean) => void;
   /** 相机立即切到指定机位（无动画；预设按钮用）。 */
   getCameraPose?: () => {
     position: { x: number; y: number; z: number };
@@ -632,6 +634,8 @@ async function mountEngine(): Promise<void> {
       },
     });
     await manager.init();
+    // 引擎初始化晚于页面挂载：补下发一次主题（否则亮色主题下首屏仍是深色画布）
+    manager.setLightCanvasByTheme?.(lightCanvas);
 
     anchorLayer = createAnchorLayer(THREE, CSS2D, container, {
       onClickAnchor: (pointId) => {
@@ -1081,8 +1085,22 @@ function modelScale(): number {
   return engine()?.getModelMetrics?.()?.maxDimension ?? 100;
 }
 
+/**
+ * 按主题切换画布底色（父组件在主题变化时调用）。
+ *
+ * @param light 是否亮色主题
+ */
+function setLightCanvasTheme(light: boolean): void {
+  lightCanvas = light;
+  engine()?.setLightCanvasByTheme?.(light);
+}
+
+/** 记住主题（引擎初始化晚于页面，初始化完成后要补一次）。 */
+let lightCanvas = false;
+
 defineExpose({
   applyCameraPreset,
+  setLightCanvasTheme,
   currentCameraPose,
   focusPoint,
   modelScale,

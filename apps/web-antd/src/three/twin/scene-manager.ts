@@ -20,7 +20,9 @@ import { applyAnchorToObject, buildAncestryPivots } from './ancestry';
 import { createAutoOrbit } from './camera-orbit';
 import {
   TWIN_COLOR_BACKGROUND_BOTTOM,
+  TWIN_COLOR_BACKGROUND_BOTTOM_LIGHT,
   TWIN_COLOR_BACKGROUND_TOP,
+  TWIN_COLOR_BACKGROUND_TOP_LIGHT,
   TWIN_COLOR_FILL,
   TWIN_COLOR_HEMI_GROUND,
   TWIN_COLOR_HEMI_SKY,
@@ -140,7 +142,10 @@ const SUN_DISTANCE_RATIO = 2.2;
  * @param THREE three 命名空间
  * @returns 背景纹理
  */
-function createBackgroundTexture(THREE: typeof THREE_NS): THREE_NS.Texture {
+function createBackgroundTexture(
+  THREE: typeof THREE_NS,
+  light = false,
+): THREE_NS.Texture {
   const canvas = document.createElement('canvas');
   canvas.width = 2;
   canvas.height = BACKGROUND_TEXTURE_SIZE;
@@ -152,9 +157,15 @@ function createBackgroundTexture(THREE: typeof THREE_NS): THREE_NS.Texture {
       0,
       BACKGROUND_TEXTURE_SIZE,
     );
-    gradient.addColorStop(0, TWIN_COLOR_BACKGROUND_TOP);
-    gradient.addColorStop(BACKGROUND_GRADIENT_SPLIT, TWIN_COLOR_BACKGROUND_TOP);
-    gradient.addColorStop(1, TWIN_COLOR_BACKGROUND_BOTTOM);
+    const top = light
+      ? TWIN_COLOR_BACKGROUND_TOP_LIGHT
+      : TWIN_COLOR_BACKGROUND_TOP;
+    const bottom = light
+      ? TWIN_COLOR_BACKGROUND_BOTTOM_LIGHT
+      : TWIN_COLOR_BACKGROUND_BOTTOM;
+    gradient.addColorStop(0, top);
+    gradient.addColorStop(BACKGROUND_GRADIENT_SPLIT, top);
+    gradient.addColorStop(1, bottom);
     context.fillStyle = gradient;
     context.fillRect(0, 0, canvas.width, canvas.height);
   }
@@ -380,6 +391,9 @@ export class TwinSceneManager {
   /** 取访问令牌（注入，见 SceneManagerOptions#getAccessToken）。 */
   private getAccessToken?: () => null | string | undefined;
 
+  /** 场景是否显式配置了背景色（`viewJson.background`）⇒ 不随主题覆盖。 */
+  private hasExplicitBackground = false;
+
   /** 半球光/方向光的基准强度（缓变围绕它上下浮动，`applyView` 改的就是它）。 */
   private hemiBaseIntensity = DEFAULT_HEMI_INTENSITY;
 
@@ -407,6 +421,14 @@ export class TwinSceneManager {
    * textContent 全为空、childNodes 为 0。
    */
   private lastAnchorStates?: Map<string, AnchorRuntimeState>;
+
+  /**
+   * 是否「亮色主题」（由页面按主题设置注入）。
+   *
+   * 只在**场景没有配置 `viewJson.background`** 时生效：用户显式配置的背景优先
+   * （配置了就必须尊重，不能因为切主题把用户的配色覆盖掉）。
+   */
+  private lightCanvas = false;
 
   /** 当前模型的字节数（来自 `SceneLoadRequest.modelBytes`，未知为 0）。 */
   private modelBytes = 0;
@@ -867,7 +889,7 @@ export class TwinSceneManager {
     });
 
     this.scene = new THREE.Scene();
-    this.scene.background = createBackgroundTexture(THREE);
+    this.scene.background = createBackgroundTexture(THREE, this.lightCanvas);
 
     this.camera = new THREE.PerspectiveCamera(50, this.aspect(), 0.1, 20_000);
     // 初始视角：斜上方看向原点（根场景的合理起点；子场景会被 view_json 覆盖）
@@ -1143,6 +1165,44 @@ export class TwinSceneManager {
   }
 
   /**
+   * 按主题切换画布底色（亮色主题 ⇒ 浅色背景渐变 + 浅色地面/网格）。
+   *
+   * 为什么由页面传入而不是引擎自己读 `matchMedia`：主题是**应用设置**（用户可在页面里
+   * 手动切），不是系统偏好；引擎自己读会与应用的 `theme.mode` 不一致
+   * （用户切了亮色、画布仍按系统深色渲染）。
+   *
+   * 用户为场景显式配置了 `viewJson.background` 时**不覆盖背景**，只让地面/网格跟随主题
+   * （见 {@link hasExplicitBackground}）。
+   *
+   * @param light 是否亮色主题
+   */
+  setLightCanvasByTheme(light: boolean): void {
+    if (this.lightCanvas === light) {
+      return;
+    }
+    this.lightCanvas = light;
+    const THREE = this.THREE;
+    if (!THREE || !this.scene) {
+      return;
+    }
+    if (!this.hasExplicitBackground) {
+      const previous = this.scene.background;
+      this.scene.background = createBackgroundTexture(THREE, light);
+      // 旧纹理必须释放：每次切主题新建一张 CanvasTexture，不释放会持续占显存
+      if (previous instanceof THREE.Texture) {
+        previous.dispose();
+      }
+      this.effectiveBackground = light
+        ? TWIN_COLOR_BACKGROUND_TOP_LIGHT
+        : TWIN_COLOR_BACKGROUND_TOP;
+    }
+    // 地面/网格按**新的实际背景**重建（配色必须与背景同一套，否则出现「浅底深地面」）
+    if (this.modelRoot) {
+      this.rebuildEnvironment(this.modelRoot);
+    }
+  }
+
+  /**
    * 设置「剖切 / 完整」外观（按节点名隐藏屋顶与近侧墙）。
    *
    * 默认为剖切（{@link shellVisible} 初始 false）：演示场景的锚点在机柜内部，
@@ -1214,6 +1274,8 @@ export class TwinSceneManager {
     return { x: vector.x, y: vector.y, z: vector.z };
   }
 
+  // ---------- 私有：加载与装配 ----------
+
   /**
    * 按模型包围盒调整主光源、阴影相机与补光（**每个场景都要重做**）。
    *
@@ -1278,8 +1340,6 @@ export class TwinSceneManager {
     this.hemiBaseIntensity =
       this.hemiLight?.intensity ?? DEFAULT_HEMI_INTENSITY;
   }
-
-  // ---------- 私有：加载与装配 ----------
 
   /**
    * 应用新的动效档位（系统偏好变化时调用）。
@@ -1351,12 +1411,26 @@ export class TwinSceneManager {
     ) {
       return;
     }
+    this.hasExplicitBackground = Boolean(view?.background);
     if (view?.background) {
       this.scene.background = new THREE.Color(view.background);
+    } else {
+      // 未配置 ⇒ 跟随主题（亮色主题用浅色渐变，而不是把深色画布塞进亮色页面）
+      // 到这里 this.scene 必然存在（函数开头已 return 空值分支）
+      const previous = this.scene.background;
+      this.scene.background = createBackgroundTexture(THREE, this.lightCanvas);
+      if (previous instanceof THREE.Texture) {
+        previous.dispose();
+      }
     }
     // 浅色底（亮色主题或用户配置了浅色背景）时切换地面/网格/填充色：
     // 否则「深色地面 + 浅色底」会像贴纸，且网格线对比度不足（看不出来）。
-    this.applySurfacePalette(view?.background);
+    this.applySurfacePalette(
+      view?.background ??
+        (this.lightCanvas
+          ? TWIN_COLOR_BACKGROUND_TOP_LIGHT
+          : TWIN_COLOR_BACKGROUND_TOP),
+    );
     // 光照强度可配（场景级差异：室内楼层通常比园区暗）。
     //
     // ⚠️ 这里曾按 `AmbientLight` 找子节点；本次改造把环境光换成了 `HemisphereLight`
