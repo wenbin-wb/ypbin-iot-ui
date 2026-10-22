@@ -663,6 +663,50 @@ export class TwinSceneManager {
   }
 
   /**
+   * 由「被点中的模型节点名」反查点位 ID（用户点柜子 ⇒ 选中该设备）。
+   *
+   * 匹配顺序：
+   * 1. 精确等于点位 `nodeName`；
+   * 2. 命中节点名以点位 `nodeName` 开头（点在柜门/面板这类子网格上时，祖先名才是柜子）；
+   * 3. 点位 `nodeName` 以命中节点名开头（命名粒度相反的情况）。
+   *
+   * 三种都按**忽略大小写与分隔符**比较（与设备高亮的宽松匹配同口径），
+   * 找不到返回 `undefined`（调用方据此判定「点的是模型而非设备」）。
+   *
+   * @param nodeName 命中节点名
+   * @returns 点位 ID；无匹配时 undefined
+   */
+  findPointByHit(nodeName?: null | string): string | undefined {
+    const name = (nodeName ?? '').trim();
+    if (!name) {
+      return undefined;
+    }
+    const normalize = (value: string) =>
+      value.toLowerCase().replaceAll(/[_\-\s.]/g, '');
+    const hit = normalize(name);
+    let prefixMatch: string | undefined;
+    let suffixMatch: string | undefined;
+    for (const anchor of this.lastAnchors ?? []) {
+      const target = normalize(anchor.nodeName ?? '');
+      if (!target) {
+        continue;
+      }
+      if (target === hit) {
+        return anchor.pointId;
+      }
+      if (!prefixMatch && hit.startsWith(target)) {
+        prefixMatch = anchor.pointId;
+      }
+      if (!suffixMatch && target.startsWith(hit)) {
+        suffixMatch = anchor.pointId;
+      }
+    }
+    return prefixMatch ?? suffixMatch;
+  }
+
+  // ---------- 公共：设备聚焦（选中 / 悬停高亮）与拖放 ----------
+
+  /**
    * 相机飞向某个锚点（点击设备标签后的聚焦）。
    *
    * 飞行实现由 `twin-canvas` 注入（它持有 `CameraRig`，同时管理重置视角）；
@@ -684,8 +728,6 @@ export class TwinSceneManager {
     }
     await this.flyHandler(pointId, distanceScale);
   }
-
-  // ---------- 公共：设备聚焦（选中 / 悬停高亮）与拖放 ----------
 
   /**
    * 锚点世界坐标（供 hover 卡片定位）。
@@ -1287,6 +1329,8 @@ export class TwinSceneManager {
     this.positionDropPreview(local);
   }
 
+  // ---------- 公共：集成契约（hover 卡片 / 状态栏 / 聚焦） ----------
+
   /**
    * 注册聚焦飞行实现（由 `twin-canvas` 在 `init()` 之后调用一次）。
    *
@@ -1297,8 +1341,6 @@ export class TwinSceneManager {
   ): void {
     this.flyHandler = handler;
   }
-
-  // ---------- 公共：集成契约（hover 卡片 / 状态栏 / 聚焦） ----------
 
   /**
    * 设置悬停点位（弱高亮；`undefined` = 清除）。
@@ -1438,6 +1480,8 @@ export class TwinSceneManager {
     return { x: vector.x, y: vector.y, z: vector.z };
   }
 
+  // ---------- 私有：加载与装配 ----------
+
   /**
    * 世界坐标 → 当前场景局部坐标（拾取结果的落库口径）。
    *
@@ -1459,8 +1503,6 @@ export class TwinSceneManager {
     );
     return { x: vector.x, y: vector.y, z: vector.z };
   }
-
-  // ---------- 私有：加载与装配 ----------
 
   /**
    * 按模型包围盒调整主光源、阴影相机与补光（**每个场景都要重做**）。

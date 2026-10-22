@@ -226,6 +226,8 @@ interface EngineOptionalCapabilities {
   setHoveredPoint?: (pointId?: string) => void;
   /** 该点位能否在模型上找到节点（false ⇒ 卡片提示「未绑定模型节点」）。 */
   hasNodeForPoint?: (pointId: string) => boolean;
+  /** 由命中节点的名字反查点位（用户点柜子 ⇒ 选中该设备）。 */
+  findPointByHit?: (nodeName?: null | string) => string | undefined;
   /** 屏幕像素（相对容器）→ 场景局部坐标（拖放落点）。 */
   screenToLocal?: (
     x: number,
@@ -803,7 +805,9 @@ async function mountEngine(): Promise<void> {
 
     anchorLayer = createAnchorLayer(THREE, CSS2D, container, {
       onClickAnchor: (pointId) => {
+        // 点锚点 = 选中该设备（引擎高亮模型节点 + 页面弹详情卡）
         onPinAnchor(pointId);
+        selectDevice(pointId);
       },
       // 键盘焦点与 hover 同语义：展开卡片；引擎侧据此把该标签排除出避让（防聚焦时被挤走）
       onFocusAnchor: (pointId) => {
@@ -817,6 +821,8 @@ async function mountEngine(): Promise<void> {
       onHoverAnchor: (pointId) => {
         // 同步给引擎：悬停中的标签不参与避让、暂停脉冲（否则卡片位置与标签来回跳）
         engine()?.setInteractionHover?.(pointId);
+        // 悬停弱高亮模型节点（用户要求「鼠标指向设备就有反应」）
+        engine()?.setHoveredPoint?.(pointId);
         onHoverAnchor(pointId);
       },
     });
@@ -863,6 +869,17 @@ async function mountEngine(): Promise<void> {
       getModelRoot: () => manager?.getModelRoot(),
       onClick: (result) => {
         if (!result) {
+          onCanvasBlankClick();
+          return;
+        }
+        // 运行态点到模型：试试命中的是不是某个点位绑定的节点（用户要「直接点柜子选中」）
+        if (props.editorMode !== 'place' && result.kind === 'surface') {
+          const hitPointId = manager?.findPointByHit?.(result.nodeName);
+          if (hitPointId) {
+            selectDevice(hitPointId);
+            void manager?.flyToAnchor?.(hitPointId);
+            return;
+          }
           onCanvasBlankClick();
           return;
         }

@@ -27,6 +27,13 @@ export type PickResult =
   | {
       /** 命中了模型表面（可在此放置新锚点）。 */
       kind: 'surface';
+      /**
+       * 命中对象的节点名（可能为空）。
+       *
+       * 运行态用它反查「点中的是哪个设备点位」：点位绑定了 `nodeName` 时，
+       * 点柜子即可选中该设备（用户明确要的交互）。
+       */
+      nodeName?: null | string;
       /** 世界坐标法线（已归一化）。 */
       normal: { x: number; y: number; z: number };
       /** 世界坐标交点。 */
@@ -215,8 +222,15 @@ export class TwinPicker {
           )
           .normalize()
       : new this.THREE.Vector3(0, 1, 0);
+    // 命中对象可能是 mesh 的子层（GLTF 导出的网格常有嵌套节点），
+    // 向上找最近的有名字的祖先：用户点的是「柜子的某块面板」，语义上仍是这个柜子。
+    let named: null | THREE_NS.Object3D = surfaceHit.object;
+    while (named && !named.name) {
+      named = named.parent;
+    }
     this.options.onClick({
       kind: 'surface',
+      nodeName: named?.name ?? null,
       normal: { x: worldNormal.x, y: worldNormal.y, z: worldNormal.z },
       point: {
         x: surfaceHit.point.x,
