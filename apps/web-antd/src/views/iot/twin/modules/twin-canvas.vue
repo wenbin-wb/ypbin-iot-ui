@@ -260,7 +260,7 @@ function engine(): EngineOptionalCapabilities | undefined {
   return manager as unknown as EngineOptionalCapabilities | undefined;
 }
 let anchorLayer:
-  | import('#/three/twin/anchor-layer').AnchorLayerInstance
+  | import('#/three/twin/device-anchor-layer').AnchorLayerInstance
   | undefined;
 let picker: import('#/three/twin/picker').TwinPicker | undefined;
 let cameraRig: import('#/three/twin/camera-rig').CameraRig | undefined;
@@ -405,7 +405,7 @@ function sampleCardPosition(): void {
       height: container.clientHeight,
       width: container.clientWidth,
     };
-    const next = readAnchorScreenPosition(pointId, container);
+    const next = readAnchorScreenPosition(pointId);
     if (!next) {
       // 锚点不在画布 DOM 里：卡片隐藏（钉住态保留，转回来会重新出现）
       cardAnchor.value = undefined;
@@ -425,61 +425,29 @@ function sampleCardPosition(): void {
 }
 
 /**
- * 读锚点的屏幕位置（容器坐标）：DOM 实测优先，引擎投影回退。
+ * 读设备的屏幕位置（容器坐标）。
+ *
+ * 设备锚点层不再有 DOM 标签（用户要求删除一切标注），因此位置来源是：
+ * 1. 锚点层的命中矩形中心（设备节点包围盒投影——**贴着设备本体**）；
+ * 2. 引擎 `projectToScreen(anchorWorld)`（节点找不到时的兜底）。
  *
  * @param pointId 点位 ID
- * @param container 画布容器
  * @returns 容器坐标；都拿不到时 undefined
  */
 function readAnchorScreenPosition(
   pointId: string,
-  container: HTMLElement,
 ): undefined | { x: number; y: number } {
-  const containerRect = container.getBoundingClientRect();
-  // ① DOM 实测：标签是 CSS2D 元素，位置就是用户看到的像素
-  const label = container.querySelector<HTMLElement>(
-    `.twin-anchor-label[data-point-id="${CSS.escape(pointId)}"]`,
-  );
-  const capsule = label?.querySelector<HTMLElement>('.twin-anchor-capsule');
-  const visibleRect =
-    capsule?.getBoundingClientRect() ?? label?.getBoundingClientRect();
-  if (visibleRect && visibleRect.width > 0 && visibleRect.height > 0) {
-    // 卡片锚点用**胶囊底边中点**（胶囊挂在圆点上方，底边中点≈圆点上方一点）
-    return {
-      x: visibleRect.left - containerRect.left + visibleRect.width / 2,
-      y: visibleRect.top - containerRect.top + visibleRect.height,
-    };
+  const fromLayer = anchorLayer?.getLabelScreenPosition?.(pointId);
+  if (fromLayer) {
+    return { x: fromLayer.x, y: fromLayer.y };
   }
-  // ② 引擎投影回退（标签还没被摆好时）
   const caps = engine();
   const world = caps?.getAnchorWorldPosition?.(pointId);
   const screen = world ? caps?.projectToScreen?.(world) : undefined;
   if (!screen) {
     return undefined;
   }
-  // 不再用引擎的 visible 标志（它用的是容器 clientWidth，实测会误判）：
-  // 越界统一交给 cardVisible 的 isAnchorVisible（带 24px 容差）判断。
   return { x: screen.x, y: screen.y };
-}
-
-/**
- * 从事件目标上读锚点点位 ID（DOM 委托通道，见模板注释）。
- *
- * @param target 事件目标
- * @returns 点位 ID；不在锚点标签内时 undefined
- */
-function readPointIdFromEventTarget(
-  target: EventTarget | null,
-): string | undefined {
-  if (!(target instanceof Element)) {
-    return undefined;
-  }
-  const label = target.closest<HTMLElement>('.twin-anchor-label');
-  if (!label) {
-    return undefined;
-  }
-  const { pointId } = label.dataset;
-  return pointId === undefined || pointId === '' ? undefined : pointId;
 }
 
 /**
@@ -619,77 +587,51 @@ function isTwinDeviceDrag(event: DragEvent): boolean {
 }
 
 /**
- * 指针按下兜底：**在画布上按下（非锚点标签）⇒ 取消钉住**。
+ * 指针在画布上移动 ⇒ 交给设备锚点层做命中判定（设备就是模型节点，没有悬浮点）。
  *
- * ## 为什么用 `pointerdown` 而不是 `click`
+ * 为什么要自己转发而不是在锚点层里绑监听：一个画布只应有一个事件源（容器），
+ * 且锚点层是 pure 逻辑（不碰 DOM 事件绑定），便于单测与替换实现。
  *
- * 实测踩过两个坑：
- * 1. picker 在 `pointerup` 上做射线拾取，而 `OrbitControls` 的拖拽会**吞掉后续 click**
- *    （按下→移动→抬起 时不派发 click）⇒ 用 click 会「拖完相机点了没反应」；
- * 2. picker 只在「射线什么都没命中」时才回调 undefined，而运行态点到**模型本体**
- *    会命中 surface ⇒ 「点模型取消钉住」失效（dev 实测：点空白后 URL 仍带 pointId）。
+ * @param event 指针事件
+ */
+function onCanvasPointerMove(event: PointerEvent): void {
+  const container = containerRef.value;
+  if (!container) {
+    return;
+  }
+  const rect = container.getBoundingClientRect();
+  anchorLayer?.pointerMove?.(
+    event.clientX - rect.left,
+    event.clientY - rect.top,
+  );
+}
+
+/** 指针离开画布 ⇒ 清除设备 hover。 */
+function onCanvasPointerLeave(): void {
+  anchorLayer?.pointerLeave?.();
+}
+
+/**
+ * 指针在画布上按下（非设备）⇒ 取消选中/钉住。
  *
- * `pointerdown` 在锚点标签上会被锚点层 `stopPropagation`（点击锚点钉住），
- * 所以这里收到 `pointerdown` 就等于「在画布别处按下」，语义精确且不依赖射线拾取。
- *
- * 钉住态下的取消是**幂等**的：拖动相机时按下一次就取消，符合直觉。
+ * 为什么不依赖 picker：picker 只在 `pointerup` 上做射线拾取，而 `OrbitControls`
+ * 的拖拽会吞掉 click；并且「点到模型但没命中设备」也要算作「点了空白」。
  *
  * @param event 指针按下事件
  */
 function onPointerDownDelegated(event: PointerEvent): void {
-  if (readPointIdFromEventTarget(event.target)) {
-    return;
-  }
+  void event;
   onCanvasBlankClick();
 }
 
-/**
- * 指针移入锚点标签（DOM 委托通道）。
- *
- * @param event 指针事件
- */
-function onPointerOverDelegated(event: PointerEvent): void {
-  const pointId = readPointIdFromEventTarget(event.target);
-  if (pointId) {
-    onHoverAnchor(pointId);
-  }
-}
-
-/**
- * 指针移出锚点标签（DOM 委托通道）。
- *
- * 只在「真的离开了这个标签」时上报 `undefined`：标签内部相邻子元素之间移动也会触发
- * pointerout，用 `relatedTarget` 判断是否仍在同一标签内，避免卡片闪烁。
- *
- * @param event 指针事件
- */
-function onPointerOutDelegated(event: PointerEvent): void {
-  const pointId = readPointIdFromEventTarget(event.target);
-  if (!pointId) {
-    return;
-  }
-  const nextLabel =
-    event.relatedTarget instanceof Element
-      ? event.relatedTarget.closest<HTMLElement>('.twin-anchor-label')
-      : null;
-  if (nextLabel?.dataset.pointId === pointId) {
-    return;
-  }
-  // 指针进入卡片本身时也不要关闭（卡片是可交互浮层）
-  if (
-    event.relatedTarget instanceof Element &&
-    event.relatedTarget.closest('[data-twin-property-card]')
-  ) {
-    return;
-  }
-  onHoverAnchor(undefined);
-}
-
-/** 指针是否在属性卡片上（决定 hover 是否可以被离开事件清掉）。 */
+/** 指针是否在属性/详情卡片上（在卡片上时不因「离开设备」而清掉 hover）。 */
 let pointerOnCard = false;
 
 /**
- * 处理锚点悬停（进入/离开）。
+ * 处理设备悬停（进入/离开）。
+ *
+ * 语义与旧实现一致：hover 只是「临时态」，用于弱高亮 + 让详情卡跟随；
+ * 真正的选中由点击设备触发（见 `selectDevice`）。
  *
  * @param pointId 点位 ID（undefined = 离开）
  */
@@ -722,19 +664,6 @@ function onCardPointerLeave(): void {
   if (pinnedPointId.value === undefined) {
     hoveredPointId.value = undefined;
   }
-}
-
-/**
- * 点击锚点 ⇒ 钉住（父组件同步 URL 并聚焦相机）。
- *
- * @param pointId 点位 ID
- */
-function onPinAnchor(pointId: string): void {
-  pinnedPointId.value = pointId;
-  lastAnchorPx = undefined;
-  sampleCardPosition();
-  emit('pinChange', pointId);
-  emit('select', pointId);
 }
 
 /** 关闭钉住（卡片右上角关闭 / 点击画布空白）。 */
@@ -774,10 +703,11 @@ async function mountEngine(): Promise<void> {
   try {
     const THREE = await import('three');
     const { TwinSceneManager } = await import('#/three/twin/scene-manager');
-    const { createAnchorLayer } = await import('#/three/twin/anchor-layer');
+    // 设备锚点层：**不创建任何标注**（无圆点/无标签），只做命中与位置换算
+    const { createDeviceAnchorLayer } =
+      await import('#/three/twin/device-anchor-layer');
     const { TwinPicker } = await import('#/three/twin/picker');
     const { CameraRig } = await import('#/three/twin/camera-rig');
-    const CSS2D = await import('three/addons/renderers/CSS2DRenderer.js');
 
     // 令牌由**画布层**注入给引擎层：引擎层不直接依赖 @vben/stores，
     // 否则会形成静态依赖边把 three 提回首屏（工单 #125）。
@@ -803,25 +733,9 @@ async function mountEngine(): Promise<void> {
     // 引擎初始化晚于页面挂载：补下发一次主题（否则亮色主题下首屏仍是深色画布）
     manager.setLightCanvasByTheme?.(lightCanvas);
 
-    anchorLayer = createAnchorLayer(THREE, CSS2D, container, {
-      onClickAnchor: (pointId) => {
-        // 点锚点 = 选中该设备（引擎高亮模型节点 + 页面弹详情卡）
-        onPinAnchor(pointId);
-        selectDevice(pointId);
-      },
-      // 键盘焦点与 hover 同语义：展开卡片；引擎侧据此把该标签排除出避让（防聚焦时被挤走）
-      onFocusAnchor: (pointId) => {
-        engine()?.setInteractionHover?.(pointId);
-        onHoverAnchor(pointId);
-      },
-      // Esc：取消钉住（与「点画布空白」同语义）
-      onDismissAnchor: () => {
-        onCanvasBlankClick();
-      },
+    anchorLayer = createDeviceAnchorLayer(THREE, container, {
       onHoverAnchor: (pointId) => {
-        // 同步给引擎：悬停中的标签不参与避让、暂停脉冲（否则卡片位置与标签来回跳）
-        engine()?.setInteractionHover?.(pointId);
-        // 悬停弱高亮模型节点（用户要求「鼠标指向设备就有反应」）
+        // 悬停弱高亮模型节点（用户要求「鼠标指到设备就有反应」）
         engine()?.setHoveredPoint?.(pointId);
         onHoverAnchor(pointId);
       },
@@ -1315,8 +1229,8 @@ defineExpose({
       @dragleave="onDragLeave"
       @drop="onDrop"
       @pointerdown="onPointerDownDelegated"
-      @pointerout="onPointerOutDelegated"
-      @pointerover="onPointerOverDelegated"
+      @pointerleave="onCanvasPointerLeave"
+      @pointermove="onCanvasPointerMove"
     ></div>
 
     <!-- 悬浮/点击属性卡片（浮层，跟随 3D 锚点） -->
