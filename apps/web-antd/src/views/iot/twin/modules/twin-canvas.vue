@@ -1,6 +1,4 @@
 <script lang="ts" setup>
-import type { PropertyCardModel } from './property-card-model';
-
 import type { IotTwinApi } from '#/api/iot';
 import type { AnchorRuntimeState, TwinSceneState } from '#/three/twin/types';
 
@@ -23,9 +21,6 @@ import { toBackendNumber } from '#/utils/backend-number';
 import { extractErrorMessage } from '#/utils/error';
 
 import { resolveCameraPreset } from './camera-presets';
-import { isAnchorVisible, placeCard } from './property-card-layout';
-import { buildPropertyCard } from './property-card-model';
-import TwinPropertyCard from './twin-property-card.vue';
 
 /**
  * three.js 画布宿主（**唯一直接 import 引擎层的组件**）。
@@ -274,15 +269,6 @@ const assetById = computed(() => {
   return map;
 });
 
-/** 点位索引（卡片组装需要绑定信息）。 */
-const pointById = computed(() => {
-  const map = new Map<string, IotTwinApi.PointResp>();
-  for (const point of props.anchors) {
-    map.set(point.id, point);
-  }
-  return map;
-});
-
 /**
  * 模型地址（由资产决定；场景未绑模型时为 undefined）。
  *
@@ -324,49 +310,6 @@ const now = ref(Date.now());
 const activePointId = computed(
   () => pinnedPointId.value ?? hoveredPointId.value,
 );
-
-/** 卡片数据（依赖 `now`：相对时间随实时刷新）。 */
-const cardModel = computed<PropertyCardModel | undefined>(() => {
-  const pointId = activePointId.value;
-  if (!pointId) {
-    return undefined;
-  }
-  const point = pointById.value.get(pointId);
-  if (!point) {
-    return undefined;
-  }
-  void now.value;
-  const live = props.getLiveValues?.(pointId);
-  return buildPropertyCard({
-    point,
-    runtime: live,
-    values: live?.values,
-  });
-});
-
-/** 卡片放置结果。 */
-const cardPlacement = computed(() => {
-  const anchor = cardAnchor.value;
-  if (!anchor) {
-    return undefined;
-  }
-  return placeCard({
-    anchor,
-    canvas: canvasSize.value,
-    card: { height: 280, width: 320 },
-  });
-});
-
-/** 卡片可见性：有数据 + 锚点在画面内 + 不在放置模式。 */
-const cardVisible = computed(() => {
-  if (!cardModel.value || !cardPlacement.value || !cardAnchor.value) {
-    return false;
-  }
-  if (props.editorMode === 'place') {
-    return false;
-  }
-  return isAnchorVisible(cardAnchor.value, canvasSize.value);
-});
 
 /** 上一次更新的像素位置（用于 2px 阈值）。 */
 let lastAnchorPx: undefined | { x: number; y: number };
@@ -649,19 +592,6 @@ function onHoverAnchor(pointId?: string): void {
     return;
   }
   if (hoveredPointId.value !== undefined && pinnedPointId.value === undefined) {
-    hoveredPointId.value = undefined;
-  }
-}
-
-/** 指针进入卡片：接管 hover（不再跟随锚点离开）。 */
-function onCardPointerEnter(): void {
-  pointerOnCard = true;
-}
-
-/** 指针离开卡片：真正放开 hover。 */
-function onCardPointerLeave(): void {
-  pointerOnCard = false;
-  if (pinnedPointId.value === undefined) {
     hoveredPointId.value = undefined;
   }
 }
@@ -1233,19 +1163,12 @@ defineExpose({
       @pointermove="onCanvasPointerMove"
     ></div>
 
-    <!-- 悬浮/点击属性卡片（浮层，跟随 3D 锚点） -->
-    <TwinPropertyCard
-      v-if="cardVisible && cardModel && cardPlacement"
-      :card="cardModel"
-      :now="now"
-      :pinned="pinnedPointId !== undefined"
-      :placement="cardPlacement"
-      @close="unpinCard"
-      @open-device="emit('openDevice', activePointId!)"
-      @open-point="emit('openPoint', activePointId!)"
-      @pointer-enter="onCardPointerEnter"
-      @pointer-leave="onCardPointerLeave"
-    />
+    <!--
+      ⚠️ 这里**不再**渲染悬浮属性卡（`TwinPropertyCard`）。
+      它是「圆点时代」的产物：卡片跟着圆点跑。现在设备本身就是锚点、选中由页面的
+      设备详情卡（`DeviceDetailPanel`）承担 —— 两处同时渲染会出现**两张卡片叠在一起**
+      （用户实测：「设备的悬浮卡片怎么会有两个」）。
+    -->
 
     <!-- 加载中：骨架式遮罩（比纯转圈更能说明「正在建模型」） -->
     <div

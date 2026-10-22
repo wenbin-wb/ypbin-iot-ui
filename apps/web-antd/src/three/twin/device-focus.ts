@@ -260,6 +260,19 @@ export function createDeviceFocus(THREE: typeof THREE_NS): DeviceFocus {
   let snapshots: MaterialSnapshots | undefined;
   let snapshotRoot: THREE_NS.Object3D | undefined;
   let scaleSnapshot: FocusSnapshot | undefined;
+  /**
+   * 为「实例级高亮」而复制出来的材质（共享材质的副本）。
+   *
+   * 结构：mesh → { original, copy }。恢复时把 mesh.material 换回 original 并 dispose copy，
+   * 否则反复点选会持续泄漏材质（每点一次复制一份）。
+   */
+  let materialCopies: Array<{
+    copy: THREE_NS.Material | THREE_NS.Material[];
+    mesh: THREE_NS.Mesh;
+    original: THREE_NS.Material | THREE_NS.Material[];
+  }> = [];
+  /** 当前模型根（恢复材质副本时用它统计引用）。 */
+  let focusRoot: THREE_NS.Object3D | undefined;
   let active = false;
 
   /** 确保材质快照对应当前模型根（换模型后必须重建快照）。 */
@@ -288,6 +301,15 @@ export function createDeviceFocus(THREE: typeof THREE_NS): DeviceFocus {
       }
       scaleSnapshot = undefined;
     }
+    // 把克隆出来的材质换回原材质并释放（不释放会随点选次数持续泄漏）
+    for (const record of materialCopies) {
+      record.mesh.material = record.original as never;
+      const copies = Array.isArray(record.copy) ? record.copy : [record.copy];
+      for (const copy of copies) {
+        copy.dispose();
+      }
+    }
+    materialCopies = [];
     active = false;
   };
 
@@ -308,6 +330,7 @@ export function createDeviceFocus(THREE: typeof THREE_NS): DeviceFocus {
     const style =
       strength === 'selected' ? SELECTED_FOCUS_STYLE : HOVER_FOCUS_STYLE;
     const root = allModelNodes[0];
+    focusRoot = root;
     const materials = root ? ensureSnapshots(root) : undefined;
 
     // 1) 压暗其余设备（只对 Standard 材质，按快照恢复，幂等）
@@ -339,6 +362,30 @@ export function createDeviceFocus(THREE: typeof THREE_NS): DeviceFocus {
     }
 
     // 2) 高亮目标节点：自发光 + （选中时）轻微放大
+    //
+    // ⚠️ **共享材质必须先拆成实例级**（实测缺陷：用户反馈「所有的设备都亮了」）：
+    //    资产里同一类设备（10 根监控杆）共享同一个 material 对象，直接改它会把
+    //    全部同款设备一起点亮。因此：若某材质被「目标节点之外的 mesh」也引用，
+    //    先给目标 mesh 换一份 `material.clone()`，再只点亮这份副本。
+    //
+    //    判据用 `usedByOthers`（遍历整棵树统计引用），而不是「材质 id 是否见过」——
+    //    后者只能防重复改，防不了「改的就是公共材质」。
+    const materialUseCount = new Map<THREE_NS.Material, number>();
+    focusRoot?.traverse((child) => {
+      const mesh = child as THREE_NS.Mesh & { isMesh?: boolean };
+      if (!mesh.isMesh || !mesh.material) {
+        return;
+      }
+      for (const material of Array.isArray(mesh.material)
+        ? mesh.material
+        : [mesh.material]) {
+        materialUseCount.set(
+          material,
+          (materialUseCount.get(material) ?? 0) + 1,
+        );
+      }
+    });
+
     const focusedMaterials = new Set<THREE_NS.MeshStandardMaterial>();
     scaleSnapshot = new Map();
     for (const node of nodes) {
@@ -350,7 +397,32 @@ export function createDeviceFocus(THREE: typeof THREE_NS): DeviceFocus {
         const list = Array.isArray(mesh.material)
           ? mesh.material
           : [mesh.material];
-        for (const material of list) {
+        const isolated = list.map((material) => {
+          // 只被目标节点自己引用 ⇒ 直接改；被别的 mesh 也用着 ⇒ 复制一份独占
+          if ((materialUseCount.get(material) ?? 0) <= 1) {
+            return material;
+          }
+          // 测试替身/极简材质可能没有 clone：此时退化为「原材质」（高亮会波及同款，
+          // 但至少不崩）；真实 three 材质总有 clone。
+          const cloneFn = (
+            material as unknown as { clone?: () => THREE_NS.Material }
+          ).clone;
+          return typeof cloneFn === 'function'
+            ? cloneFn.call(material)
+            : material;
+        });
+        if (isolated.some((material, index) => material !== list[index])) {
+          const wasArray = Array.isArray(mesh.material);
+          const copied = (wasArray ? isolated : isolated[0]) as
+            | THREE_NS.Material
+            | THREE_NS.Material[];
+          const original = (wasArray ? list : list[0]) as
+            | THREE_NS.Material
+            | THREE_NS.Material[];
+          mesh.material = copied as never;
+          materialCopies.push({ copy: copied, mesh, original });
+        }
+        for (const material of isolated) {
           const standard = material as THREE_NS.MeshStandardMaterial;
           if (!standard.emissive || focusedMaterials.has(standard)) {
             continue;

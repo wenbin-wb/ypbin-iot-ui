@@ -295,3 +295,65 @@ describe('split_node_name_candidates：多候选节点名', () => {
     expect(splitNodeNameCandidates('')).toEqual([]);
   });
 });
+
+describe('共享材质隔离：选中一台不能点亮同款（用户实测缺陷）', () => {
+  /** 造一个「10 台同款设备共享一个材质」的最小场景。 */
+  function buildSharedScene() {
+    const material = {
+      clone() {
+        return { ...this };
+      },
+      color: {
+        clone: () => ({ copy: () => undefined }),
+        copy: () => undefined,
+      },
+      dispose: () => undefined,
+      emissive: {
+        clone: () => ({ copy: () => undefined, set: () => undefined }),
+        copy: () => undefined,
+        set: () => undefined,
+      },
+      emissiveIntensity: 0,
+      needsUpdate: false,
+    };
+    const makeMesh = (name: string) => ({
+      isMesh: true,
+      material,
+      name,
+      traverse: (fn: (node: unknown) => void) => fn({ isMesh: true, material }),
+      children: [],
+    });
+    const root = {
+      traverse: (fn: (node: unknown) => void) => {
+        for (let i = 0; i < 10; i++) {
+          fn(makeMesh(`pole_${i}`));
+        }
+      },
+    };
+    return { material, root };
+  }
+
+  it('★ 目标设备被复制出独立材质，原材质不再被点亮', () => {
+    const THREE = { MeshStandardMaterial: null } as never;
+    const focus = createDeviceFocus(THREE);
+    const { material, root } = buildSharedScene();
+    // 目标节点：直接给一个带 mesh 的容器
+    const targetNode = {
+      children: [] as unknown[],
+      scale: {
+        clone: () => ({ copy: () => undefined }),
+        copy: () => undefined,
+        multiplyScalar: () => undefined,
+      },
+      traverse: (fn: (node: unknown) => void) => {
+        const mesh = { isMesh: true, material };
+        fn(mesh);
+        return mesh;
+      },
+    };
+    focus.focus([targetNode as never], 'selected', [root as never]);
+    // 原材质（其它 9 台共享的那份）不应被改成自发光
+    expect(material.emissiveIntensity).toBe(0);
+    focus.clear();
+  });
+});

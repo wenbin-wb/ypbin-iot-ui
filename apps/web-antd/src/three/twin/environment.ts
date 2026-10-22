@@ -45,10 +45,11 @@ const GROUND_TEXTURE_SIZE = 512;
  * 环境地面相对模型底面**下沉**的比例（相对模型最大尺寸）。
  *
  * 为什么要下沉：资产自带地面时两块地面同高会 z-fighting（实测「地面疯狂闪烁」）。
- * 0.5% 在 380m 园区上约 1.9m、在 24m 车间上约 0.12m —— 视觉上完全看不出来，
- * 但足够把深度分出层次。配合 `polygonOffset` 双保险。
+ * 1.5% 在 380m 园区上约 5.7m、在 24m 车间上约 0.36m —— 相机在空中看完全看不出来，
+ * 但足够把两块地面彻底分开（0.5% 时 dev 上仍能观察到闪烁，说明还不够）。
+ * 配合 `polygonOffset` 做双保险。
  */
-const GROUND_Z_OFFSET_RATIO = 0.005;
+const GROUND_Z_OFFSET_RATIO = 0.015;
 
 /** 扫描线纹理里线条的间隔（像素）。 */
 const SCAN_LINE_SPACING_PX = 16;
@@ -192,8 +193,8 @@ export function buildEnvironment(
   const groundMaterial = new THREE.MeshStandardMaterial({
     color: new THREE.Color(light ? TWIN_COLOR_GROUND_LIGHT : TWIN_COLOR_GROUND),
     // 粗糙度高（混凝土），金属度极低：地面不该有镜面反射（真实感来自阴影与漫反射）
-    metalness: 0.05,
-    roughness: 0.92,
+    metalness: 0,
+    roughness: 1,
     // 透明地面 + 轻微体积感：让扫描线纹理透出来（贴图本身带 alpha）
     map: groundTexture,
     // 与「模型自带地面」同高时的第二道保险：即使高度只差一点点，深度也会被推开，

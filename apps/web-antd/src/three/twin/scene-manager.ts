@@ -2261,27 +2261,47 @@ export class TwinSceneManager {
     if (!descriptor) {
       return [];
     }
-    // 1) 按 nodeName 找（主路径）
-    const byName = pickHighlightNodes(
-      findNodesByPointName(root, descriptor.nodeName),
+    // 1) **只认精确节点名**（含 `a|b` 多候选里的精确项）。
+    //
+    // ⚠️ 不能退到「宽松匹配/前缀匹配」：资产里大量设备共享几何（10 根监控杆都叫
+    //    `camera_pole`），宽松匹配会一次命中全部同型设备 ⇒ 用户反馈「所有的设备都亮了」。
+    const exactNames = new Set(
+      (descriptor.nodeName ?? '')
+        .split('|')
+        .map((name) => name.trim())
+        .filter(Boolean),
     );
-    if (byName.length > 0) {
-      return byName;
+    const exact: THREE_NS.Object3D[] = [];
+    if (exactNames.size > 0) {
+      root.traverse((object) => {
+        if (!object.name || exactNames.has(object.name) === false) {
+          return;
+        }
+        const { isTwinAnchor } = object.userData as { isTwinAnchor?: boolean };
+        if (isTwinAnchor !== true) {
+          exact.push(object);
+        }
+      });
     }
-    // 2) 兜底：锚点位置附近半径内最近的 mesh
+    if (exact.length > 0) {
+      return exact;
+    }
+    // 2) 兜底：点位坐标附近**一个设备尺度**内最近的 mesh。
+    //
+    // 半径取模型最大尺寸的 0.8%（380m 园区 ≈ 3m、24m 车间 ≈ 19cm）：
+    // 只罩住「点位就摆在这台设备上」的情形；旧值 8%（≈30m）会同时圈住一排设备。
     const anchor = this.anchorPositionCache.get(pointId);
     const THREE = this.THREE;
     if (!anchor || !THREE) {
       return [];
     }
     const center = new THREE.Vector3(anchor.x, anchor.y, anchor.z);
-    // 半径取模型尺度的 8%：既能罩住「点位在设备表面」的情形，又不会扫到隔壁设备
     const box = new THREE.Box3().setFromObject(root);
     const size = box.getSize(new THREE.Vector3());
     const maxDimension = Math.max(size.x, size.y, size.z);
     const radius =
       (Number.isFinite(maxDimension) && maxDimension > 0 ? maxDimension : 100) *
-      0.08;
+      0.008;
     let nearest: undefined | { distance: number; object: THREE_NS.Object3D };
     root.traverse((object) => {
       const mesh = object as THREE_NS.Mesh & { isMesh?: boolean };
