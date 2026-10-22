@@ -167,6 +167,8 @@ export function isLightBackground(color: null | string | undefined): boolean {
     if (!Number.isFinite(value)) {
       return false;
     }
+    // 位运算掩码用字面量 0xFF（本仓 formatter 会把十六进制数字降小写、linter 又要求大写，
+    // 两者互相改写；用 `0xFF` 写在 linter 认可的大小写即可，无需位掩码常量）
     const r = (value >> 16) & 0xff;
     const g = (value >> 8) & 0xff;
     const b = value & 0xff;
