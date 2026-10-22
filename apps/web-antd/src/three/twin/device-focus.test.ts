@@ -7,6 +7,7 @@ import {
   findNodesByPointName,
   normalizeNodeName,
   pickHighlightNodes,
+  splitNodeNameCandidates,
 } from './device-focus';
 
 /**
@@ -277,5 +278,20 @@ describe('collectStandardMaterials：压暗/恢复的快照口径', () => {
     const snapshots = collectStandardMaterials(root as never);
     // Root 自己的材质 + 共享材质 = 2
     expect(snapshots.size).toBe(2);
+  });
+});
+
+describe('split_node_name_candidates：多候选节点名', () => {
+  it('★ 支持用 `|` 写多个候选（同一设备在模型里可能只渲染成一个共享节点）', () => {
+    expect(splitNodeNameCandidates('camera_pole_0000|camera_pole')).toEqual([
+      'camera_pole_0000',
+      'camera_pole',
+    ]);
+  });
+
+  it('去空、去重、保留顺序', () => {
+    expect(splitNodeNameCandidates(' a | |a|b ')).toEqual(['a', 'b']);
+    expect(splitNodeNameCandidates(undefined)).toEqual([]);
+    expect(splitNodeNameCandidates('')).toEqual([]);
   });
 });

@@ -56,6 +56,37 @@ export interface NodeMatchResult {
 }
 
 /**
+ * 把一个点位绑定的节点名拆成**候选名列表**。
+ *
+ * 为什么支持多候选：模型资产的命名不一定与「业务点位」一一对应。例如
+ * 点位 `camera_pole_0000` 在 `smart-park-3d` 里可能只渲染成 `camera_pole`（共享几何），
+ * 也可能拆成 `camera_pole_0000` / `cam_1` 多个子节点。允许用 `|` 写多个候选：
+ * `camera_pole_0000|camera_pole`，匹配时**任一命中即可**（精确优先）。
+ *
+ * 分隔符选 `|` 而不是逗号：节点名里出现逗号的概率远高于竖线（`Wall,1` 这类导出常见），
+ * 且 `|` 在 URL/JSON 里都安全。
+ *
+ * @param nodeName 点位绑定的节点名
+ * @returns 候选名列表（去空、去重、保留顺序）
+ */
+export function splitNodeNameCandidates(nodeName?: null | string): string[] {
+  if (!nodeName) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of nodeName.split('|')) {
+    const name = part.trim();
+    if (!name || seen.has(name)) {
+      continue;
+    }
+    seen.add(name);
+    out.push(name);
+  }
+  return out;
+}
+
+/**
  * 在模型根里按节点名查找（**纯函数**，不含高亮副作用）。
  *
  * 为什么不直接用 `modelRoot.getObjectByName(name)`：
@@ -71,25 +102,27 @@ export function findNodesByPointName(
   nodeName?: null | string,
 ): NodeMatchResult {
   const result: NodeMatchResult = { exact: [], loose: [] };
-  const target = nodeName?.trim();
-  if (!target) {
+  const candidates = splitNodeNameCandidates(nodeName);
+  if (candidates.length === 0) {
     return result;
   }
-  const looseKey = normalizeNodeName(target);
+  const exactKeys = new Set(candidates);
+  const looseKeys = new Set(candidates.map((name) => normalizeNodeName(name)));
   modelRoot.traverse((object) => {
-    // 锚点图标/标签不是设备本体，绝不参与高亮
-    const { isTwinAnchor } = object.userData as { isTwinAnchor?: boolean };
-    if (isTwinAnchor === true) {
+    const name = object.name;
+    if (!name || object.userData?.isTwinAnchor) {
       return;
     }
-    if (object.name === target) {
+    if (exactKeys.has(name)) {
       result.exact.push(object);
       return;
     }
-    if (looseKey && normalizeNodeName(object.name) === looseKey) {
+    if (looseKeys.has(normalizeNodeName(name))) {
       result.loose.push(object);
     }
   });
+  // 有精确命中时宽松结果无意义（调用方 pickHighlightNodes 会优先精确），
+  // 但保留两者便于调试时观察「宽松匹配命中了哪些多余节点」。
   return result;
 }
 
