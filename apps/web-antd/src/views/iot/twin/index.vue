@@ -26,6 +26,8 @@ import { useTwinRuntime } from './composables/use-twin-runtime';
 import { useTwinScene } from './composables/use-twin-scene';
 import { CAMERA_PRESET_IDS } from './modules/camera-presets';
 import { buildDeviceDetailTarget } from './modules/device-detail-link';
+import DeviceDetailPanel from './modules/device-detail-panel.vue';
+import DeviceLibrary from './modules/device-library.vue';
 import ModelPanel from './modules/model-panel.vue';
 import PointPanel from './modules/point-panel.vue';
 import { buildPropertyCard } from './modules/property-card-model';
@@ -36,6 +38,23 @@ import TwinCanvasHud from './modules/twin-canvas-hud.vue';
 import TwinCanvas from './modules/twin-canvas.vue';
 import { computeTwinKpi } from './modules/twin-kpi';
 import TwinStatusBar from './modules/twin-status-bar.vue';
+
+// 显式注册本页子组件（`script setup` 的自动解析在本仓构建下会把模板里的组件名
+// 退回运行时全局解析器 `r('DeviceLibrary')`，渲染出空的自定义元素且不报错；
+// 用 defineOptions.components 让编译期直接绑定组件对象）。
+defineOptions({
+  components: {
+    DeviceDetailPanel,
+    DeviceLibrary,
+    ModelPanel,
+    PointPanel,
+    RuntimeLegend,
+    SceneTree,
+    TwinCanvas,
+    TwinCanvasHud,
+    TwinStatusBar,
+  },
+});
 
 /**
  * 数字孪生页（宿主：只做编排 + 布局）。
@@ -958,6 +977,7 @@ async function onOpenPointConfig(pointId: string): Promise<void> {
             :alert-count="selectedCard.alertCount"
             class="pointer-events-auto"
             :device-code="selectedCard.deviceId"
+            :device-id="selectedCard.deviceId"
             :device-name="selectedCard.deviceName"
             :dirty="twinDrag.dirty.value"
             :node-found="canvasRef?.canHighlight(currentPointId) ?? false"
