@@ -243,6 +243,30 @@ export function createDeviceAnchorLayer(
     dispose: () => {
       detach();
     },
+    getNearestPoint: (x: number, y: number) => {
+      let best:
+        | undefined
+        | { distance: number; limit: number; pointId: string };
+      for (const [pointId, node] of nodes) {
+        const rect = node.rect;
+        if (!rect) {
+          continue;
+        }
+        const centerX = rect.x + rect.width / 2;
+        const centerY = rect.y + rect.height / 2;
+        const distance = Math.hypot(centerX - x, centerY - y);
+        const limit = Math.max(rect.width, rect.height) * 2.5;
+        if (distance > limit) {
+          continue;
+        }
+        if (!best || distance / limit < best.distance / best.limit) {
+          best = { distance, limit, pointId };
+        }
+      }
+      return best
+        ? { distance: best.distance, pointId: best.pointId }
+        : undefined;
+    },
     getLabelScreenPosition: (pointId: string) => {
       const rect = nodes.get(pointId)?.rect;
       if (!rect) {
@@ -281,6 +305,20 @@ export interface AnchorLayerInstance extends AnchorLayer {
   pointerMove: (x: number, y: number) => void;
   /** 指针离开画布。 */
   pointerLeave: () => void;
+  /**
+   * 取「离某点最近的设备」（点击吸附用）。
+   *
+   * 门限 = max(设备屏幕尺寸 × 2.5, 18px)：小设备（远处的一根杆）给更大容差，
+   * 大设备（近处一栋楼）给严格容差，避免「点 A 却选中旁边的 B」。
+   *
+   * @param x 容器坐标 X
+   * @param y 容器坐标 Y
+   * @returns 最近设备点位 ID 与距离；超出所有门限时 undefined
+   */
+  getNearestPoint: (
+    x: number,
+    y: number,
+  ) => undefined | { distance: number; pointId: string };
   /**
    * 取某设备的屏幕中心（相对容器左上角）。
    *

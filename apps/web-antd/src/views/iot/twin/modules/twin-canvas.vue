@@ -564,7 +564,68 @@ function onCanvasPointerLeave(): void {
  */
 function onPointerDownDelegated(event: PointerEvent): void {
   void event;
-  onCanvasBlankClick();
+}
+
+/**
+ * 画布 `pointerup`：先让 picker 的射线拾取尝试选中设备；**没选中时**用吸附兜底；
+ * 两者都没有才当作「点了空白」取消选中。
+ *
+ * 为什么要这个兜底（用户实测「能选中设备但没卡片」）：园区里设备只有几个像素，
+ * 用户常点在设备**旁边**；射线打空 ⇒ 旧逻辑走 `onCanvasBlankClick` 把选中清掉，
+ * 于是「看起来能选（有高亮）但卡片一闪就没」。
+ *
+ * @param event 指针抬起事件
+ */
+function onCanvasPointerUp(event: PointerEvent): void {
+  // 等 picker 的 pointerup 处理器先跑完（同一元素上的监听顺序：picker 在 init 时先注册）
+  globalThis.setTimeout(() => {
+    if (selectedPointId.value) {
+      // 射线已经选中了某台设备（picker 内部已 emit）
+      return;
+    }
+    const container = containerRef.value;
+    if (!container) {
+      return;
+    }
+    const rect = container.getBoundingClientRect();
+    const near = pickNearestPoint(
+      event.clientX - rect.left,
+      event.clientY - rect.top,
+    );
+    if (near) {
+      selectDevice(near);
+      return;
+    }
+    // 真的点在空白处：取消选中
+    if (
+      selectedPointId.value !== undefined ||
+      pinnedPointId.value !== undefined
+    ) {
+      selectDevice(undefined);
+      unpinCard();
+    }
+  }, 0);
+}
+
+/**
+ * 点击兜底：射线拾取没命中设备时，按「屏幕最近设备」吸附选中。
+ *
+ * 为什么需要（用户实测）：园区/车间这类场景里，一根 6m 监控杆在画面上只有几个像素，
+ * 用户很难精确点中；但用户「点在这根杆子附近」时**期望**就是选中它（地图 POI 的交互惯例）。
+ *
+ * 门限按设备包围盒尺寸的 2.5 倍 + 12px 用不着的固定值：小设备给宽容差，大设备给严格容差。
+ *
+ * @param screenX 容器坐标 X
+ * @param screenY 容器坐标 Y
+ * @returns 吸附到的点位 ID；无合适目标 undefined
+ */
+function pickNearestPoint(
+  screenX: number,
+  screenY: number,
+): string | undefined {
+  const layer = anchorLayer;
+  const nearest = layer?.getNearestPoint?.(screenX, screenY);
+  return nearest?.pointId;
 }
 
 /** 指针是否在属性/详情卡片上（在卡片上时不因「离开设备」而清掉 hover）。 */
@@ -720,8 +781,9 @@ async function mountEngine(): Promise<void> {
         if (props.editorMode !== 'place' && result.kind === 'surface') {
           const hitPointId = manager?.findPointByHit?.(result.nodeName);
           if (hitPointId) {
+            // 只选中，不自动飞行：点设备是「查看」，相机乱飞会被当成故障；
+            // 需要聚焦时用详情卡的「聚焦」或双击。
             selectDevice(hitPointId);
-            void manager?.flyToAnchor?.(hitPointId);
             return;
           }
           onCanvasBlankClick();
@@ -1160,6 +1222,7 @@ defineExpose({
       @drop="onDrop"
       @pointerdown="onPointerDownDelegated"
       @pointerleave="onCanvasPointerLeave"
+      @pointerup="onCanvasPointerUp"
       @pointermove="onCanvasPointerMove"
     ></div>
 
