@@ -8,8 +8,6 @@ import { getDictOptions } from '#/api/system/dictItem';
 import { getSpaceTree } from '#/api/system/space';
 import { $t } from '#/locales';
 
-import { collectSubtreeIds } from '../_shared/space-tree';
-
 /**
  * 空间管理表单 schema。
  *
@@ -22,24 +20,12 @@ export function useSchema(): VbenFormSchema[] {
       component: 'ApiTreeSelect',
       componentProps: {
         allowClear: true,
-        // **排除自身及其子树**：把空间挂到自己下面会形成环。后端会拒绝并报错，
-        // 但让用户在候选列表里根本看不到（而不是选完再报错）才是正确交互。
-        // 编辑时 `id` 由 form.vue 先 setValues 写进表单值，这里从 values 读。
-        api: async (values?: { id?: string }) => {
-          const tree = (await getSpaceTree()) ?? [];
-          if (!values?.id) {
-            return tree;
-          }
-          const exclude = new Set(collectSubtreeIds(tree, values.id));
-          const prune = (nodes: any[]): any[] =>
-            nodes
-              .filter((node) => !exclude.has(node.id))
-              .map((node) => ({
-                ...node,
-                children: node.children ? prune(node.children) : undefined,
-              }));
-          return prune(tree);
-        },
+        // **只能返回全量树**：`ApiComponent` 的 `api` 只接收 `props.params`
+        // （`api-component.vue` 的 `finalParams = unref(mergedParams)`），**拿不到表单当前值**
+        // ⇒ 无法在这里按「当前编辑的空间 id」做子树排除。
+        // 「防把自己挂到自己下面」由后端 `validateParent` 兜底（成环校验，返回明确报错）。
+        // 曾试图用 `api: async (values) => ... values.id` 做前端排除，属**无效实现**（参数恒为 undefined），已移除。
+        api: async () => (await getSpaceTree()) ?? [],
         childrenField: 'children',
         class: 'w-full',
         labelField: 'name',
