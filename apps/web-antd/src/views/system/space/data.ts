@@ -8,6 +8,8 @@ import { getDictOptions } from '#/api/system/dictItem';
 import { getSpaceTree } from '#/api/system/space';
 import { $t } from '#/locales';
 
+import { collectSubtreeIds } from '../_shared/space-tree';
+
 /**
  * 空间管理表单 schema。
  *
@@ -20,12 +22,24 @@ export function useSchema(): VbenFormSchema[] {
       component: 'ApiTreeSelect',
       componentProps: {
         allowClear: true,
-        // **只能返回全量树**：`ApiComponent` 的 `api` 只接收 `props.params`
-        // （`api-component.vue` 的 `finalParams = unref(mergedParams)`），**拿不到表单当前值**
-        // ⇒ 无法在这里按「当前编辑的空间 id」做子树排除。
-        // 「防把自己挂到自己下面」由后端 `validateParent` 兜底（成环校验，返回明确报错）。
-        // 曾试图用 `api: async (values) => ... values.id` 做前端排除，属**无效实现**（参数恒为 undefined），已移除。
-        api: async () => (await getSpaceTree()) ?? [],
+        // **排除自身及其子树**：把空间挂到自己下面会形成环。后端会拒绝并报错，
+        // 但让用户在候选列表里根本看不到（而不是选完再报错）才是正确交互。
+        // 编辑时 `id` 由 form.vue 先 setValues 写进表单值，这里从 values 读。
+        api: async (values?: { id?: string }) => {
+          const tree = (await getSpaceTree()) ?? [];
+          if (!values?.id) {
+            return tree;
+          }
+          const exclude = new Set(collectSubtreeIds(tree, values.id));
+          const prune = (nodes: any[]): any[] =>
+            nodes
+              .filter((node) => !exclude.has(node.id))
+              .map((node) => ({
+                ...node,
+                children: node.children ? prune(node.children) : undefined,
+              }));
+          return prune(tree);
+        },
         childrenField: 'children',
         class: 'w-full',
         labelField: 'name',
@@ -181,10 +195,14 @@ export function useSchema(): VbenFormSchema[] {
 }
 
 /**
- * 空间树形表格列。
+ * 空间树形表格列（**懒加载精简版**）。
  *
- * 用 `treeNode: true` 挂在「名称」列上（与部门页同一套 vxe 树形配置），
- * 层级由后端 `pid` 决定，前端不自行推断。
+ * <p>只保留树渲染必需 + 能从懒加载节点直接得到的字段：懒加载节点刻意不带
+ * 地址/经纬度/面积/容量/负责人/扩展 JSON 等（见 `SpaceTreeNodeResp` 的类注释），
+ * 万级空间下那些字段会让每层响应翻几倍。</p>
+ *
+ * <p>完整字段在**编辑抽屉**里看：`onEdit` 会先按 ID 拉一次 `getSpaceDetail` 补齐
+ * （否则抽屉里那些字段是空的，一保存就把库里已有的值清空）。</p>
  */
 export function useColumns(): VxeTableGridColumns<SystemSpaceApi.SpaceResp> {
   return [
@@ -208,32 +226,6 @@ export function useColumns(): VxeTableGridColumns<SystemSpaceApi.SpaceResp> {
       width: 140,
     },
     {
-      field: 'floorNo',
-      title: $t('system.space.floorNo'),
-      width: 90,
-    },
-    {
-      field: 'roomNo',
-      title: $t('system.space.roomNo'),
-      width: 100,
-    },
-    {
-      field: 'manager',
-      title: $t('system.space.manager'),
-      width: 110,
-    },
-    {
-      field: 'phone',
-      title: $t('system.space.phone'),
-      width: 130,
-    },
-    {
-      // 关联对象数由后端一次分组查询给出（不是前端逐行算）
-      field: 'relationCount',
-      title: $t('system.space.relationCount'),
-      width: 110,
-    },
-    {
       field: 'status',
       cellRender: { name: 'CellTag' },
       title: $t('system.space.status'),
@@ -243,11 +235,6 @@ export function useColumns(): VxeTableGridColumns<SystemSpaceApi.SpaceResp> {
       field: 'sort',
       title: $t('system.space.sort'),
       width: 80,
-    },
-    {
-      field: 'remark',
-      minWidth: 140,
-      title: $t('system.space.remark'),
     },
     {
       align: 'center',
