@@ -623,7 +623,12 @@
       "overviewRenderFailed": "Failed to render device overview",
       "batchPartialDone": "Processed {0} device(s); {1} did not take effect (already deleted by others or already in the target state)",
       "batchNoChange": "No device changed (already deleted by others or already in the target state)",
-      "pageRollbackHint": "The current page became empty after deletion; moved back one page"
+      "pageRollbackHint": "The current page became empty after deletion; moved back one page",
+      "space": "Location",
+      "spaceFilterPlaceholder": "Filter by location (incl. children)",
+      "spaceUnbound": "Unassigned",
+      "spaceSyncFailed": "Device saved, but location was not updated: ",
+      "spaceLoadFailed": "Failed to load device location (verify the selection before saving, otherwise it may be cleared)"
     },
     "event": {
       "title": "Runtime events",

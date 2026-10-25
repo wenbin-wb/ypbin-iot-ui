@@ -45,6 +45,14 @@ export function useColumns(): VxeTableGridColumns {
     },
     { field: 'endpoint', title: $t('page.iot.device.endpoint'), minWidth: 200 },
     {
+      // 所在空间：数据由后端在列表查询时**一次批量反查**填充（不是设备表字段）。
+      // 展示「主空间路径 + N」——设备可同时属于多个空间点。
+      field: 'spaceText',
+      title: $t('page.iot.device.space'),
+      minWidth: 180,
+      slots: { default: 'spaceText' },
+    },
+    {
       field: 'onlineStatus',
       title: $t('page.iot.device.onlineStatus'),
       width: 110,
@@ -164,6 +172,30 @@ export function useFormSchema(): FormSchema[] {
       rules: 'required',
     },
     {
+      // 所在空间：设备可对应多个空间点（如「机房」与「机房所在 3F」），故多选。
+      // 绑定走独立接口（/iot/device/{id}/spaces/sync），不塞进 DeviceSaveReq——
+      // 否则「改个备注」也会要求空间绑定权限。
+      // 用懒加载树：万级空间下全量拉取会让表单打开变慢。
+      component: 'ApiTreeSelect',
+      componentProps: {
+        allowClear: true,
+        api: async (params?: { parentId?: string }) => {
+          const { getSpaceLazyTree } = await import('#/api/system/space');
+          return (await getSpaceLazyTree({ parentId: params?.parentId })) ?? [];
+        },
+        childrenField: 'children',
+        class: 'w-full',
+        labelField: 'name',
+        multiple: true,
+        placeholder: $t('page.iot.device.spaceFilterPlaceholder'),
+        showSearch: true,
+        treeNodeFilterProp: 'name',
+        valueField: 'id',
+      },
+      fieldName: 'spaceIds',
+      label: $t('page.iot.device.space'),
+    },
+    {
       component: 'Input',
       componentProps: { maxlength: 255 },
       fieldName: 'remark',
@@ -207,6 +239,29 @@ export function useGridFormSchema(initialProductId?: string): FormSchema[] {
       defaultValue: initialProductId,
       fieldName: 'productId',
       label: $t('page.iot.device.product'),
+    },
+    {
+      // 空间筛选（含全部后代）：设备挂在末级房间，选「A栋」要能看到其下所有设备。
+      // 用懒加载树接口而不是全量树：万级空间下全量拉取会让筛选面板卡顿。
+      component: 'ApiTreeSelect',
+      componentProps: {
+        allowClear: true,
+        // 懒加载：只取根层，展开时再拉下一层
+        api: async (params?: { parentId?: string }) => {
+          const { getSpaceLazyTree } = await import('#/api/system/space');
+          return (await getSpaceLazyTree({ parentId: params?.parentId })) ?? [];
+        },
+        childrenField: 'children',
+        class: 'w-full',
+        labelField: 'name',
+        placeholder: $t('page.iot.device.spaceFilterPlaceholder'),
+        showSearch: true,
+        // 懒加载树未加载的子节点没有 children 字段 ⇒ 必须由 hasChildren 驱动展开
+        treeNodeFilterProp: 'name',
+        valueField: 'id',
+      },
+      fieldName: 'spaceId',
+      label: $t('page.iot.device.space'),
     },
     {
       component: 'Select',

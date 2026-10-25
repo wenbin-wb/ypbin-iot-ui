@@ -33,6 +33,14 @@ export namespace IotDeviceApi {
     lastSeenAt?: string;
     remark?: string;
     createTime?: string;
+    /**
+     * 所在空间 ID 列表（**来自 system 的空间关联，不是设备表字段**）。
+     *
+     * 设备可同时挂在多个空间点（如「机房」与「机房所在 3F」），故是列表。
+     */
+    spaceIds?: string[];
+    /** 所在空间展示文本（主空间路径 + 「+N」），列表查询时由后端填充 */
+    spaceText?: string;
   }
 
   export interface DeviceQuery {
@@ -42,6 +50,12 @@ export namespace IotDeviceApi {
     /** 按所属产品过滤（后端 `IotDeviceQuery.productId`）。 */
     productId?: string;
     protocol?: string;
+    /**
+     * 空间筛选：按空间**含全部后代**筛选设备（后端 `IotDeviceQuery.spaceId`）。
+     *
+     * 设备通常挂在末级房间，选「A栋」要能看到其下所有设备（后端取子树后 IN 过滤）。
+     */
+    spaceId?: string;
   }
 
   /** 批量启停请求体（`PUT /iot/devices/batch/status`）：ids 全程字符串（Long，铁律 9）。 */
@@ -164,8 +178,17 @@ export async function getDeviceLatest(deviceId: string) {
   );
 }
 
+/**
+ * 创建设备。
+ *
+ * 后端返回**新设备 ID**——前端新建后要立即绑定「所在空间」，
+ * 拿不到 ID 就只能静默丢弃用户选的空间（与部门/岗位侧同一处理）。
+ *
+ * 注意：`number` 是 Long 经 JSON 序列化后的形态；ID 超出 JS 安全整数时后端会用字符串，
+ * 故消费方必须按 `String(id)` 使用（项目铁律：ID 全程字符串）。
+ */
 export async function createDevice(data: IotDeviceApi.DeviceSaveReq) {
-  return requestClient.post<number>('/iot/devices', data);
+  return requestClient.post<number | string>('/iot/devices', data);
 }
 
 export async function updateDevice(
@@ -227,4 +250,71 @@ export async function batchDeleteDevices(
   }
   const data: IotDeviceApi.DeviceBatchDeleteReq = { ids };
   return requestClient.post<number>('/iot/devices/batch/delete', data);
+}
+
+/**
+ * 绑定一批设备到指定空间。
+ *
+ * 失败时前端必须把后端文案展示出来（不是笼统「操作失败」）——
+ * 失败原因可能是「空间不存在」「无该空间权限」等，用户需要据此行动。
+ *
+ * @param spaceId     空间 ID
+ * @param deviceIds   设备 ID 列表
+ * @param isPrimary   是否主空间
+ * @param clearOthers 是否先清空这些设备在其他空间的关联（设备挪位置 = true）
+ * @returns 实际生效的关联条数
+ */
+export async function bindDevicesToSpace(
+  spaceId: string,
+  deviceIds: string[],
+  isPrimary = false,
+  clearOthers = false,
+) {
+  return requestClient.post<number>(`/iot/device/space/${spaceId}/bind`, {
+    clearOthers,
+    deviceIds,
+    isPrimary,
+  });
+}
+
+/**
+ * 解绑一批设备与指定空间。
+ *
+ * @param spaceId   空间 ID
+ * @param deviceIds 设备 ID 列表
+ * @returns 实际删除的关联条数
+ */
+export async function unbindDevicesFromSpace(
+  spaceId: string,
+  deviceIds: string[],
+) {
+  return requestClient.post<number>(`/iot/device/space/${spaceId}/unbind`, {
+    deviceIds,
+  });
+}
+
+/**
+ * 整体设置某设备的空间集合（单事务）。
+ *
+ * **编辑设备时用这个而不是 bind+unbind**：换位置若由前端做两步，
+ * 中间失败会留下「两头都不在」或「两头都在」的不一致状态。
+ *
+ * @param deviceId 设备 ID
+ * @param spaceIds 目标空间集合（空数组 = 清空）
+ * @returns 实际变更条数
+ */
+export async function syncDeviceSpaces(deviceId: string, spaceIds: string[]) {
+  return requestClient.post<number>(`/iot/device/${deviceId}/spaces/sync`, {
+    spaceIds,
+  });
+}
+
+/**
+ * 取设备当前所在的空间 ID 列表（表单回显用）。
+ *
+ * @param deviceId 设备 ID
+ * @returns 空间 ID 列表（无关联时为空数组）
+ */
+export async function getDeviceSpaces(deviceId: string) {
+  return requestClient.get<string[]>(`/iot/device/${deviceId}/spaces`);
 }

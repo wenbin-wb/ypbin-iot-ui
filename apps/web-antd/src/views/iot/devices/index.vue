@@ -32,6 +32,7 @@ import { useDeviceBatch } from './composables/use-device-batch';
 import { useDeviceDrawers } from './composables/use-device-drawers';
 import { useDeviceList } from './composables/use-device-list';
 import { useDeviceStatus } from './composables/use-device-status';
+import { splitSpaceText } from './space-display';
 
 /**
  * 设备台账页（宿主）。
@@ -405,6 +406,27 @@ const { exportLoading, onExportCsv } = useCsvExport({
           :reason="$t('page.iot.device.emptyReason')"
           @open-guide="openGuide"
         />
+      </template>
+
+      <!--
+        所在空间。
+        设备可同时属于多个空间点（如「机房」与「机房所在 3F」），后端返回的 spaceText 形如
+        「总部园区/A栋/1F/101室 +2」。这里把「+N」拆出来用次要色，让主空间路径更醒目。
+        无空间时显示占位符——**空字符串会让用户以为是加载失败**，必须显式说「未绑定」。
+      -->
+      <template #spaceText="{ row }">
+        <template v-if="splitSpaceText(row.spaceText).primary">
+          <span>{{ splitSpaceText(row.spaceText).primary }}</span>
+          <span
+            v-if="splitSpaceText(row.spaceText).others > 0"
+            class="text-muted-foreground ml-1"
+          >
+            +{{ splitSpaceText(row.spaceText).others }}
+          </span>
+        </template>
+        <span v-else class="text-muted-foreground">
+          {{ $t('page.iot.device.spaceUnbound') }}
+        </span>
       </template>
 
       <template #alertActive="{ row }">

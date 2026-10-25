@@ -623,7 +623,12 @@
       "overviewRenderFailed": "设备概览渲染失败",
       "batchPartialDone": "已处理 {0} 台，{1} 台未生效（可能已被他人删除或已是目标状态）",
       "batchNoChange": "没有设备发生变更（可能已被他人删除或已是目标状态）",
-      "pageRollbackHint": "当前页已删空，已自动回到上一页"
+      "pageRollbackHint": "当前页已删空，已自动回到上一页",
+      "space": "所在空间",
+      "spaceFilterPlaceholder": "按空间筛选（含下级）",
+      "spaceUnbound": "未绑定",
+      "spaceSyncFailed": "设备已保存，但所在空间未更新：",
+      "spaceLoadFailed": "读取设备所在空间失败（保存前请确认空间选择，否则可能被清空）"
     },
     "event": {
       "title": "运行期事件",
