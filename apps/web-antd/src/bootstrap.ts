@@ -18,6 +18,11 @@ import { initSetupVbenForm } from './adapter/form';
 import App from './app.vue';
 import { router } from './router';
 
+// IoT 定制：把「设备名解析器」注册进空间关联抽屉的注册表。
+// 基础模块（空间抽屉）不依赖业务域 API，故由本仓在启动阶段自行注册；
+// admin-ui 无此注册 ⇒ 那侧的空间抽屉自动退化为显示 ID，行为不变。
+import './views/system/_shared/register-iot-target-names';
+
 // IoT 定制：顶部大模块导航样式（居中 + 渐变选中条）
 import './styles/top-modules.css';
 
