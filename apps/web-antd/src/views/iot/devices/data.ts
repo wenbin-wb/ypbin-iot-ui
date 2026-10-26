@@ -175,13 +175,16 @@ export function useFormSchema(): FormSchema[] {
       // 所在空间：设备可对应多个空间点（如「机房」与「机房所在 3F」），故多选。
       // 绑定走独立接口（/iot/device/{id}/spaces/sync），不塞进 DeviceSaveReq——
       // 否则「改个备注」也会要求空间绑定权限。
-      // 用懒加载树：万级空间下全量拉取会让表单打开变慢。
+      // 用**全量树**而不是懒加载树：`ApiComponent` 的 `api` 只接收 schema 里静态的
+      // `props.params`（见 packages/effects/common-ui/.../api-component.vue 的 mergedParams），
+      // **没有把 parentId 回传给 api 的路径** ⇒ 懒加载在表单里恒只拿到根层，
+      // 用户永远选不到楼栋/房间。与 `_shared/space-select.vue` 同一口径（那边也是全量）。
       component: 'ApiTreeSelect',
       componentProps: {
         allowClear: true,
-        api: async (params?: { parentId?: string }) => {
-          const { getSpaceLazyTree } = await import('#/api/system/space');
-          return (await getSpaceLazyTree({ parentId: params?.parentId })) ?? [];
+        api: async () => {
+          const { getSpaceTree } = await import('#/api/system/space');
+          return (await getSpaceTree()) ?? [];
         },
         childrenField: 'children',
         class: 'w-full',
@@ -242,21 +245,19 @@ export function useGridFormSchema(initialProductId?: string): FormSchema[] {
     },
     {
       // 空间筛选（含全部后代）：设备挂在末级房间，选「A栋」要能看到其下所有设备。
-      // 用懒加载树接口而不是全量树：万级空间下全量拉取会让筛选面板卡顿。
+      // 同样用全量树（`ApiComponent` 不支持向 api 回传 parentId，懒加载只会拿到根层）。
       component: 'ApiTreeSelect',
       componentProps: {
         allowClear: true,
-        // 懒加载：只取根层，展开时再拉下一层
-        api: async (params?: { parentId?: string }) => {
-          const { getSpaceLazyTree } = await import('#/api/system/space');
-          return (await getSpaceLazyTree({ parentId: params?.parentId })) ?? [];
+        api: async () => {
+          const { getSpaceTree } = await import('#/api/system/space');
+          return (await getSpaceTree()) ?? [];
         },
         childrenField: 'children',
         class: 'w-full',
         labelField: 'name',
         placeholder: $t('page.iot.device.spaceFilterPlaceholder'),
         showSearch: true,
-        // 懒加载树未加载的子节点没有 children 字段 ⇒ 必须由 hasChildren 驱动展开
         treeNodeFilterProp: 'name',
         valueField: 'id',
       },
