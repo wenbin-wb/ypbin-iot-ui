@@ -36,9 +36,17 @@ jobs:
       - name: Lint（oxlint，类型感知）
         run: pnpm exec oxlint -c oxlint.config.ts --type-aware --threads=4 apps/web-antd/src
 
-      # stylelint 只覆盖 IoT 视图：仓库已有 stylelint 配置，但此前 CI 从未执行。
-      - name: Stylelint（IoT 视图）
-        run: pnpm exec stylelint "apps/web-antd/src/views/iot/**/*.{vue,css}" --config stylelint.config.mjs
+      # 格式门禁：oxfmt 是仓内既定工具（`pnpm format` 已用它），但此前从未进 CI，
+      # 于是有 55 个文件长期漂移、且漂移会随功能 PR 一起混进 diff（格式化噪声盖住语义改动）。
+      - name: 格式检查（oxfmt）
+        run: pnpm exec oxfmt --check apps/web-antd/src
+
+      # stylelint 覆盖扩到**全量** apps/web-antd/src（原先只覆盖 views/iot）。
+      # 收窄作用域是「先不把历史问题一次性染红」的过渡措施；现在全量实跑已零报错
+      # （`at-rule-prelude-no-invalid` 对 `@apply` 的误报在 role/modules/form.vue 行内豁免），
+      # 没必要继续只守着 IoT 目录——`views/system` 是两仓共用代码，更需要守。
+      - name: Stylelint（web-antd 全量）
+        run: pnpm exec stylelint "apps/web-antd/src/**/*.{vue,css}" --config stylelint.config.mjs
 
       # 🔴 假加密守卫：.env 里的默认值只服务本地开发；生产构建若仍用占位符/空值，
       # pinia 持久化等于混淆。这里 grep 生产环境文件，门禁拦截；运行时还有 packages/stores 的硬校验。
@@ -107,6 +115,10 @@ jobs:
       # 它的边界用例必须进 CI——否则该 helper 可以悄悄写错而无人察觉。
       # 该目录下目前只有 backend-number.test.ts 一个用例文件。
       #
+      # `views/system` 是 2026-10-28 审查追加的：该目录是**两仓共用**的基础模块
+      # （空间/部门/岗位/用户），此前 `space-tree.test.ts` 写了却从不执行，而 admin 侧连
+      # vitest 都没有。共用代码的回归用例必须两边都跑，否则「同一份代码、两套验证」是假的。
+      #
       # `views/dashboard` + `api/iot` 是 2026-10-20 审查整改追加的（原作用域漏了这两处）：
       # - `views/dashboard` 审查时有 7 个用例文件（含 1415 行 `board.test.ts`，现已增至 9 个）曾「写了但从不跑」，
       #   看板/总览是最贴业务首屏的页面，回归必须进 CI；
@@ -114,7 +126,7 @@ jobs:
       #   这类「URL/参数序列化漂移」只有请求层用例能抓住（trace 时间格式事故即此盲区）。
       # 本机已用 `TZ=UTC` 实跑本步**新增的两条路径**（12 文件 / 178 用例全绿，2026-10-20；CI runner 默认也是 UTC）。
       - name: IoT 前端组件级用例（真实 vue-i18n，覆盖「整块空白」这类渲染期事故）
-        run: pnpm exec vitest run --dom apps/web-antd/src/views/iot apps/web-antd/src/utils apps/web-antd/src/views/dashboard apps/web-antd/src/api/iot
+        run: pnpm exec vitest run --dom apps/web-antd/src/views/iot apps/web-antd/src/views/system apps/web-antd/src/utils apps/web-antd/src/views/dashboard apps/web-antd/src/api/iot
 
       - name: 单元测试（埋点 SDK）
         # 该 SDK 有真实逻辑（批量、队列、URL 截断、令牌携带）且已有单测，
