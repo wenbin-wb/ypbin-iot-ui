@@ -516,11 +516,7 @@ defineExpose({ openCreate, openEdit });
           <div class="mb-1 text-sm">
             {{ $t('page.iot.point.rw') }}
           </div>
-          <Select
-            v-model:value="form.rw"
-            class="w-full"
-            data-testid="form-rw"
-          >
+          <Select v-model:value="form.rw" class="w-full" data-testid="form-rw">
             <Select.Option
               v-for="option in POINT_RW_OPTIONS"
               :key="option.value"

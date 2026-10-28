@@ -165,7 +165,10 @@ async function flush(times = 24) {
 
 /** 挂载真实组件（单台设备 + 产品；`productId: undefined` 用于「未绑定产品」形态）。 */
 async function mountPoints(
-  options: { onOpenSeries?: (propertyId?: string) => void; productId?: string } = {},
+  options: {
+    onOpenSeries?: (propertyId?: string) => void;
+    productId?: string;
+  } = {},
 ) {
   const onOpenSeries = options.onOpenSeries ?? vi.fn();
   const productId = 'productId' in options ? options.productId : PRODUCT_ID;
@@ -215,8 +218,13 @@ async function pickSelectOption(
     ?.querySelector('.ant-select-selector')
     ?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
   await flush();
-  const option = [...document.querySelectorAll<HTMLElement>('.ant-select-item-option')]
-    .filter((element) => !element.classList.contains('ant-select-item-option-disabled'))
+  const option = [
+    ...document.querySelectorAll<HTMLElement>('.ant-select-item-option'),
+  ]
+    .filter(
+      (element) =>
+        !element.classList.contains('ant-select-item-option-disabled'),
+    )
     .find((element) => element.textContent?.includes(optionText));
   expect(option, `下拉 ${id} 中没有选项「${optionText}」`).toBeTruthy();
   option?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -240,9 +248,7 @@ async function confirmPopconfirm() {
     ...document.querySelectorAll<HTMLElement>('.ant-popover'),
   ].find((element) => !element.classList.contains('ant-popover-hidden'));
   expect(popup, '没有出现删除二次确认浮层').toBeTruthy();
-  popup
-    ?.querySelector<HTMLButtonElement>('.ant-btn-primary')
-    ?.click();
+  popup?.querySelector<HTMLButtonElement>('.ant-btn-primary')?.click();
   await flush();
 }
 
@@ -271,9 +277,7 @@ describe('属性与点位：表格渲染（拆分安全网）', () => {
     expect(joinRows).toHaveLength(2);
     expect(joinRows[0]?.textContent).toContain('40001');
     expect(joinRows[0]?.textContent).toContain('temperature');
-    expect(joinRows[1]?.textContent).toContain(
-      $t('page.iot.point.unmapped'),
-    );
+    expect(joinRows[1]?.textContent).toContain($t('page.iot.point.unmapped'));
 
     // 原始表 2 行（pt1 + 孤儿 pt9），孤儿区单列提示
     expect(rawTable?.querySelectorAll('tbody tr')).toHaveLength(2);
@@ -330,8 +334,11 @@ describe('属性与点位：新增/编辑弹窗与提交 payload（拆分安全�
     await confirmModal();
 
     expect(apiMock.updateDevicePoint).toHaveBeenCalledTimes(1);
-    const [deviceId, id, payload] = apiMock.updateDevicePoint.mock
-      .calls[0] as [string, string, Record<string, unknown>];
+    const [deviceId, id, payload] = apiMock.updateDevicePoint.mock.calls[0] as [
+      string,
+      string,
+      Record<string, unknown>,
+    ];
     expect(deviceId).toBe(DEVICE_ID);
     expect(id).toBe('pt1');
     expect(payload).toEqual(
@@ -349,7 +356,11 @@ describe('属性与点位：新增/编辑弹窗与提交 payload（拆分安全�
     byTestId<HTMLButtonElement>(container, 'point-add-for-p2')?.click();
     await flush();
     setInputValue(document.body, 'form-raw-address', '40002');
-    await pickSelectOption(document.body, 'form-register-format', '浮点（IEEE754');
+    await pickSelectOption(
+      document.body,
+      'form-register-format',
+      '浮点（IEEE754',
+    );
 
     // float 固定 2 个寄存器：宽度下拉置灰 + 对应提示出现；数值符号（仅 int）不再展示
     const wordCount = byTestId<HTMLElement>(document.body, 'form-word-count');
@@ -415,9 +426,7 @@ describe('属性与点位：数据源失败必须显示错误态', () => {
   it('★ 未绑定产品 ⇒ 只有「未配置产品」提示 + 原始映射表，不渲染属性连接表', async () => {
     const { container } = await mountPoints({ productId: undefined });
 
-    expect(container.innerHTML).toContain(
-      $t('page.iot.device.noProductHint'),
-    );
+    expect(container.innerHTML).toContain($t('page.iot.device.noProductHint'));
     expect(byTestId(container, 'point-join-table')).toBeNull();
     // 设备级原始映射与孤儿映射与是否绑产品无关，必须仍然可见
     expect(byTestId(container, 'point-raw-table')).toBeTruthy();

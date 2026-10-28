@@ -89,7 +89,8 @@ export function useDebugHistory({ deviceId }: DebugHistoryDeps) {
       const result = await getDeviceCommands(id, {
         page: historyPage.value,
         pageSize: HISTORY_PAGE_SIZE,
-        statusCode: historyStatus.value === '' ? undefined : historyStatus.value,
+        statusCode:
+          historyStatus.value === '' ? undefined : historyStatus.value,
       });
       history.value = result.items ?? [];
       // 后端 Long 全局序列化成**字符串**（实测 `GET /iot/devices/{id}/commands` 回

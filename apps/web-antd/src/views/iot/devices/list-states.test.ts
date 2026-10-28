@@ -107,12 +107,12 @@ vi.mock('@vben/common-ui', async (importOriginal) => {
   return {
     ...actual,
     Page: defineComponent({
-    name: 'PageStub',
-    setup:
-      (_props, { slots }) =>
-      () =>
-        h('div', slots.default?.()),
-  }),
+      name: 'PageStub',
+      setup:
+        (_props, { slots }) =>
+        () =>
+          h('div', slots.default?.()),
+    }),
     useVbenDrawer: () => [
       defineComponent({ name: 'DrawerStub', setup: () => () => null }),
       { close: vi.fn(), open: vi.fn(), setData: vi.fn() },
@@ -382,11 +382,13 @@ describe('列表页：查询成功且有数据 ⇒ 有数据态（不误报失�
     it(`${page.name}：结果原样交给表格，失败/空态文案都不出现`, async () => {
       const marker = `sample-${page.name}`;
       const row = { id: marker, marker };
-      page.fetchMock().mockResolvedValue(
-        page.paged
-          ? { items: [row], page: '1', pageSize: '10', total: '1' }
-          : [row],
-      );
+      page
+        .fetchMock()
+        .mockResolvedValue(
+          page.paged
+            ? { items: [row], page: '1', pageSize: '10', total: '1' }
+            : [row],
+        );
       gridStub.renderEmpty = false;
 
       const handle = await mountPage(page.component);

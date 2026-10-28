@@ -140,11 +140,7 @@ export const IOT_DATA_TYPES = [
 export const IOT_ACCESS_MODES = ['R', 'W', 'RW'] as const;
 
 /** 服务选项（后端白名单；`service_option` 列名避 MySQL 保留字）。 */
-export const IOT_SERVICE_OPTIONS = [
-  'master',
-  'mandatory',
-  'optional',
-] as const;
+export const IOT_SERVICE_OPTIONS = ['master', 'mandatory', 'optional'] as const;
 
 // ---------- 服务 ----------
 
@@ -169,10 +165,7 @@ export async function updateService(
   id: string,
   data: IotThingModelApi.ServiceSaveReq,
 ) {
-  return requestClient.put(
-    `/iot/products/${productId}/services/${id}`,
-    data,
-  );
+  return requestClient.put(`/iot/products/${productId}/services/${id}`, data);
 }
 
 export async function deleteService(productId: string, id: string) {

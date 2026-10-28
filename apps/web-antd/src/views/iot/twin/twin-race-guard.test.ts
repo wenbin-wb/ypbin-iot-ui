@@ -108,7 +108,9 @@ describe('竞态守卫（#132）', () => {
       () => all[callIndex++]?.promise ?? Promise.resolve([]),
     );
 
-    const pending = ['S1', 'S2', 'S3', 'S4', 'S5'].map((key) => loader.load(key));
+    const pending = ['S1', 'S2', 'S3', 'S4', 'S5'].map((key) =>
+      loader.load(key),
+    );
 
     // 乱序返回（倒序）——只有最后发起的 S5 应该生效
     for (let index = all.length - 1; index >= 0; index--) {
@@ -120,7 +122,9 @@ describe('竞态守卫（#132）', () => {
   });
 
   it('正常串行加载不受影响（守卫不误杀）', async () => {
-    const loader = createGuardedLoader<string[]>(async (key) => [`${key}-point`]);
+    const loader = createGuardedLoader<string[]>(async (key) => [
+      `${key}-point`,
+    ]);
     await loader.load('A');
     expect(loader.get()).toEqual(['A-point']);
     await loader.load('B');

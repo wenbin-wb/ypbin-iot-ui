@@ -188,10 +188,7 @@ const {
 } = history;
 
 /** 重发：失败详情要落进「下发失败」区（原样 message + code/信封），与下发失败同一展示口径。 */
-async function onResend(record: {
-  requestId?: string;
-  statusCode?: string;
-}) {
+async function onResend(record: { requestId?: string; statusCode?: string }) {
   const detail = await history.resend(record);
   if (detail) {
     sendError.value = detail;

@@ -212,10 +212,10 @@ const [InstanceGrid, instanceGridApi] = useVbenVxeGrid({
           instanceGuard.consumeIntent();
           // 时间范围不是实例查询字段（契约是 from/to 两个独立参数）⇒ 从表单值里拆出来单独映射；
           // 其余字段原样透传（字段名与后端 InstanceQuery 一致，不做改名）。
-          const formValuesWithRange = (formValues ?? {}) as
-            IotAlertApi.InstanceQuery & {
-              firstTsRange?: AlertTimeRangeValue;
-            };
+          const formValuesWithRange = (formValues ??
+            {}) as IotAlertApi.InstanceQuery & {
+            firstTsRange?: AlertTimeRangeValue;
+          };
           const { firstTsRange, ...filters } = formValuesWithRange;
           // 筛选持久化：只存真正的筛选项（时间范围不持久化：刷新后回到「不限时间」更符合预期）
           saveFilterIfChanged(
@@ -310,7 +310,6 @@ instanceGuard = createRefreshGuard({
   onTrailing: (active) => instanceGridApi.setLoading(active),
 });
 
-
 function onCheckboxChange({
   records,
 }: {
@@ -359,8 +358,8 @@ const batchSilenceDisabledReason = computed(() =>
  */
 const { exportLoading, onExportCsv } = useCsvExport({
   exportFn: () => {
-    const formValues = (instanceGridApi.formApi?.form?.values ?? {}) as
-      IotAlertApi.InstanceQuery & { firstTsRange?: AlertTimeRangeValue };
+    const formValues = (instanceGridApi.formApi?.form?.values ??
+      {}) as IotAlertApi.InstanceQuery & { firstTsRange?: AlertTimeRangeValue };
     const { firstTsRange, ...filters } = formValues;
     // 导出与列表查询同源：非法区间不导出（否则用户以为导出了指定时间段，实际是别的范围）
     if (!isAlertTimeRangeValid(firstTsRange)) {

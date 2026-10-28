@@ -59,7 +59,10 @@ function labelOf(key: string): string {
     >
       <dt class="flex items-center gap-1 text-xs text-muted-foreground">
         <span class="truncate">{{ labelOf(item.key) }}</span>
-        <span v-if="item.hint" class="hidden truncate text-[10px] opacity-70 xl:inline">
+        <span
+          v-if="item.hint"
+          class="hidden truncate text-[10px] opacity-70 xl:inline"
+        >
           · {{ item.hint }}
         </span>
         <!-- 有告警时给一个呼吸点：KPI 条要一眼看出「系统活着且有问题」 -->
@@ -75,7 +78,11 @@ function labelOf(key: string): string {
       >
         <template v-if="item.value === undefined">--</template>
         <template v-else>{{ item.value }}</template>
-        <span v-if="item.key === 'onlineRate' && item.value !== undefined" class="text-xs font-normal text-muted-foreground">%</span>
+        <span
+          v-if="item.key === 'onlineRate' && item.value !== undefined"
+          class="text-xs font-normal text-muted-foreground"
+          >%</span
+        >
       </dd>
     </div>
   </dl>

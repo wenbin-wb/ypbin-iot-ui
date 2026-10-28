@@ -296,9 +296,8 @@ describe('主题变化 ⇒ 图表重绘（canvas 不会自己重算颜色）', (
 // ===== 另外两个不在 dashboard 目录的渲染点（series-chart / 接入拓扑）=====
 describe('设备历史曲线 + 租户接入拓扑：切暗色后再次渲染', () => {
   it('series-chart：model 渲染后切暗色会重绘', async () => {
-    const { default: SeriesChart } = await import(
-      '#/views/iot/devices/modules/series-chart.vue'
-    );
+    const { default: SeriesChart } =
+      await import('#/views/iot/devices/modules/series-chart.vue');
     theme.isDark.value = false;
     await mountComponent(SeriesChart, {
       model: [
@@ -324,9 +323,8 @@ describe('设备历史曲线 + 租户接入拓扑：切暗色后再次渲染', (
 
   it('access-topology：拓扑渲染后切暗色会重绘', async () => {
     // eslint-disable-next-line unicorn/no-await-expression-member
-    const { default: AccessTopology } = await import(
-      '#/views/iot/tenant-ledger/modules/access-topology.vue'
-    );
+    const { default: AccessTopology } =
+      await import('#/views/iot/tenant-ledger/modules/access-topology.vue');
     mockApi.getAccessOverview.mockResolvedValue({
       metrics: {
         egressPendingCount: 0,
