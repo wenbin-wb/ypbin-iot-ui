@@ -154,7 +154,10 @@ export function classifyQuality(
  */
 export function resolveCardStatus(
   runtime:
-    | Pick<IotTwinApi.RuntimePointResp, 'alertCount' | 'onlineStatus' | 'status'>
+    | Pick<
+        IotTwinApi.RuntimePointResp,
+        'alertCount' | 'onlineStatus' | 'status'
+      >
     | undefined,
 ): PropertyCardStatus {
   if (runtime === undefined) {
@@ -237,7 +240,9 @@ export function buildPropertyCard(
     alertCount: runtime?.alertCount ?? 0,
     cardStatus: resolveCardStatus(runtime),
     deviceId: point.deviceId,
-    deviceName: point.deviceIdName?.trim() ? point.deviceIdName : point.deviceId,
+    deviceName: point.deviceIdName?.trim()
+      ? point.deviceIdName
+      : point.deviceId,
     hasAnyValue,
     nodeName: point.nodeName ?? undefined,
     onlineStatus: runtime?.onlineStatus,

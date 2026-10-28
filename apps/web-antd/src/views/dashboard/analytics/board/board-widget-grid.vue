@@ -1,8 +1,5 @@
 <script lang="ts" setup>
-import type {
-  BoardWidget,
-  BoardWidgetRuntime,
-} from './board-utils';
+import type { BoardWidget, BoardWidgetRuntime } from './board-utils';
 
 import type { IotDeviceApi } from '#/api/iot';
 
@@ -50,7 +47,6 @@ const emit = defineEmits<{
  */
 /** 宿主未提供 `runtimeFor` 时的占位（与 board-drawer 抽出前的 `EMPTY_RUNTIME` 同口径）。 */
 const EMPTY_RUNTIME = createBoardWidgetRuntime();
-
 </script>
 
 <template>
@@ -58,7 +54,10 @@ const EMPTY_RUNTIME = createBoardWidgetRuntime();
     {{ $t('page.iot.board.reorderHint') }}
   </p>
 
-  <Empty v-if="widgets.length === 0" :description="$t('page.iot.board.empty')" />
+  <Empty
+    v-if="widgets.length === 0"
+    :description="$t('page.iot.board.empty')"
+  />
   <div
     v-else
     class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"

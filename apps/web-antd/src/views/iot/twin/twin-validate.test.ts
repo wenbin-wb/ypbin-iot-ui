@@ -72,7 +72,10 @@ describe('twinLimits 已接线（不是只定义不用）', () => {
         file: 'index.vue',
       },
     ];
-    for (const dir of [resolve(base, 'modules'), resolve(base, 'composables')]) {
+    for (const dir of [
+      resolve(base, 'modules'),
+      resolve(base, 'composables'),
+    ]) {
       for (const name of readdirSync(dir)) {
         if (/\.(?:ts|vue)$/.test(name) && !name.endsWith('.test.ts')) {
           files.push({
@@ -87,7 +90,9 @@ describe('twinLimits 已接线（不是只定义不用）', () => {
 
   it('★ maxPointsPerScene 在业务代码里被真实消费（此前仅测试引用）', async () => {
     const files = await sourceFiles();
-    const hits = files.filter((item) => item.code.includes('maxPointsPerScene'));
+    const hits = files.filter((item) =>
+      item.code.includes('maxPointsPerScene'),
+    );
     expect(hits.map((item) => item.file)).not.toHaveLength(0);
   });
 

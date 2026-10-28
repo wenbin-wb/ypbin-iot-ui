@@ -49,10 +49,12 @@ export interface CardState {
  * @param onPinChange 钉住状态变化的回调（页面据此写 URL / 聚焦相机；`undefined` = 取消钉住）
  * @returns 状态与操作方法
  */
-export function useTwinPropertyCard(options: {
-  /** 钉住目标变化（含取消钉住）。 */
-  onPinChange?: (pointId: string | undefined) => void;
-} = {}) {
+export function useTwinPropertyCard(
+  options: {
+    /** 钉住目标变化（含取消钉住）。 */
+    onPinChange?: (pointId: string | undefined) => void;
+  } = {},
+) {
   const state = ref<CardState>({});
   let hoverTimer: ReturnType<typeof setTimeout> | undefined;
 

@@ -149,7 +149,10 @@ export function useDebugCommand({
     try {
       for (const target of targets) {
         try {
-          const instance = await sendDeviceCommand(deviceId() ?? '', target.req);
+          const instance = await sendDeviceCommand(
+            deviceId() ?? '',
+            target.req,
+          );
           batch.add(instance.requestId);
           sendResults.value.push({
             identifier: target.identifier,
@@ -210,4 +213,3 @@ export function useDebugCommand({
     writeDesired,
   };
 }
-

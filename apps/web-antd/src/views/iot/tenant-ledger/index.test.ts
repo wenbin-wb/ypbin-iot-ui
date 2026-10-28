@@ -63,11 +63,9 @@ describe('tenant-ledger/index.vue 页壳接线', () => {
     expect(html).toContain('接入节点与指标');
     expect(container.querySelector('[data-testid="ledger-stub"]')).toBeTruthy();
 
-    const overviewTab = [
-      ...container.querySelectorAll('.ant-tabs-tab'),
-    ].find((tab) => tab.textContent?.includes('接入节点与指标')) as
-      | HTMLElement
-      | undefined;
+    const overviewTab = [...container.querySelectorAll('.ant-tabs-tab')].find(
+      (tab) => tab.textContent?.includes('接入节点与指标'),
+    ) as HTMLElement | undefined;
     expect(overviewTab).toBeTruthy();
     overviewTab?.click();
     await nextTick();

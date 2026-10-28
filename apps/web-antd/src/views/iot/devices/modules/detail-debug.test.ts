@@ -212,7 +212,6 @@ function stubApi(history: () => Promise<unknown>) {
 
 async function flush(times = 6) {
   for (let index = 0; index < times; index += 1) {
-     
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
   await nextTick();
@@ -872,9 +871,7 @@ describe('下发拆分 / 重发 / 回执展开（拆分后接线守门）', () =
         ]);
       }
       if (url.includes('/products/') && url.endsWith('/commands')) {
-        return Promise.resolve([
-          { commandName: '重启', identifier: 'reboot' },
-        ]);
+        return Promise.resolve([{ commandName: '重启', identifier: 'reboot' }]);
       }
       if (url.includes('/commands') && url.includes('/devices/')) {
         // 首次加载为空；下发成功后的重查返回该批记录（用于验证本批高亮）
@@ -908,7 +905,11 @@ describe('下发拆分 / 重发 / 回执展开（拆分后接线守门）', () =
   }
 
   /** 填第 index 行的值。 */
-  async function typeValue(container: HTMLElement, index: number, value: string) {
+  async function typeValue(
+    container: HTMLElement,
+    index: number,
+    value: string,
+  ) {
     const input = container.querySelector(
       `[data-testid="debug-set-value-${index}"]`,
     ) as HTMLInputElement | null;
@@ -1005,13 +1006,15 @@ describe('下发拆分 / 重发 / 回执展开（拆分后接线守门）', () =
     expect(resendButton, '失败行没有「重发同一请求」按钮').toBeTruthy();
     resendButton?.click();
     await flush(6);
-    const popovers = [...document.querySelectorAll<HTMLElement>('.ant-popover')];
+    const popovers = [
+      ...document.querySelectorAll<HTMLElement>('.ant-popover'),
+    ];
     const visible = popovers.filter(
       (item) => !item.classList.contains('ant-popover-hidden'),
     );
-    const okButton = [...(visible.at(-1)?.querySelectorAll('button') ?? [])].find(
-      (button) => button.classList.contains('ant-btn-primary'),
-    );
+    const okButton = [
+      ...(visible.at(-1)?.querySelectorAll('button') ?? []),
+    ].find((button) => button.classList.contains('ant-btn-primary'));
     expect(okButton, '重发缺少二次确认按钮').toBeTruthy();
     okButton?.click();
     await flush(10);

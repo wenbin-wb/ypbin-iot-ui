@@ -25,9 +25,7 @@
   background: transparent !important;
 }
 
-.menu-align-center
-  .vben-menu.is-horizontal
-  > .vben-menu-item.is-active::after {
+.menu-align-center .vben-menu.is-horizontal > .vben-menu-item.is-active::after {
   position: absolute;
   right: 20px;
   bottom: 6px;

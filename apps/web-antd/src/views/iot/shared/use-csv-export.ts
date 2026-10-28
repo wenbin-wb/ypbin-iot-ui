@@ -51,7 +51,9 @@ const CSV_EXTENSION = 'csv';
  */
 function resolveFileName(options: UseCsvExportOptions): string {
   const body =
-    typeof options.fileName === 'string' ? options.fileName : options.fileName();
+    typeof options.fileName === 'string'
+      ? options.fileName
+      : options.fileName();
   if (options.appendDate === false) {
     return body;
   }

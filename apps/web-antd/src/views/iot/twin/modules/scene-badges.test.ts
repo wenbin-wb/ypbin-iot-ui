@@ -14,12 +14,14 @@ import { computeSceneBadges } from './scene-badges';
  */
 
 /** 造场景。 */
-function scene(overrides: Partial<{
-  childCount: number;
-  id: string;
-  modelAssetId: null | string;
-  pointCount: number;
-}>): {
+function scene(
+  overrides: Partial<{
+    childCount: number;
+    id: string;
+    modelAssetId: null | string;
+    pointCount: number;
+  }>,
+): {
   anchorRx: string;
   anchorRy: string;
   anchorRz: string;
@@ -86,7 +88,19 @@ describe('computeSceneBadges', () => {
   it('当前场景点位数用实际点位（比 pointCount 更实时），其它场景用 pointCount', () => {
     const badges = computeSceneBadges({
       currentPoints: [
-        { bindings: [], deviceId: 'd1', id: 'p1', labelVisible: true, localX: '0', localY: '0', localZ: '0', normalX: '0', normalY: '1', normalZ: '0', sceneId: 's1' },
+        {
+          bindings: [],
+          deviceId: 'd1',
+          id: 'p1',
+          labelVisible: true,
+          localX: '0',
+          localY: '0',
+          localZ: '0',
+          normalX: '0',
+          normalY: '1',
+          normalZ: '0',
+          sceneId: 's1',
+        },
       ],
       currentRuntimePoints: [],
       currentSceneId: 's1',
