@@ -1,89 +1,83 @@
 <div align="center">
 
-# Ypbin Admin
+# 🏭 Ypbin IoT UI
 
-**企业级中后台管理前端 · Enterprise Admin UI**
+**IoT Platform Frontend**
 
-[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![vue](https://img.shields.io/badge/Vue-3.5-green.svg)](https://vuejs.org/) [![vite](https://img.shields.io/badge/Vite-6-blueviolet.svg)](https://vitejs.dev/) [![typescript](https://img.shields.io/badge/TypeScript-5-3178c6.svg)](https://www.typescriptlang.org/) [![ant-design-vue](https://img.shields.io/badge/Ant%20Design%20Vue-4-1677ff.svg)](https://next.antdv.com/)
+> The frontend for `ypbin-iot`: IoT pages built on top of `ypbin-admin-ui` (devices, products/thing models, points, shadows, alerts, online debugging), while keeping the base platform's RBAC, messaging, jobs and AI chat.
 
-</div>
+**Vue 3.5 · TypeScript · Vite · Ant Design Vue 4 · Pinia · Vben Admin 5**
 
-**English** | [中文](./README.md)
+[![CI](https://github.com/wenbin-wb/ypbin-iot-ui/actions/workflows/ci.yml/badge.svg)](https://github.com/wenbin-wb/ypbin-iot-ui/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-## Online Demo
+[Backend ypbin-iot](https://github.com/wenbin-wb/ypbin-iot) · [Upstream ypbin-admin-ui](https://github.com/wenbin-wb/ypbin-admin-ui) · [Docs](https://ypbin.cn/)
 
-<p align="center">
-  <a href="https://admin.ypbin.cn/"><strong>https://admin.ypbin.cn</strong></a> — try it directly
-</p>
-
-## Preview
-
-<div align="center">
-
-![Dashboard](https://ypbin.cn/screenshots/admin-ui/dashboard.png)
-*Dashboard · Real-time Analytics & System Overview*
-
-| 🤖 AI Assistant Chat | 👥 User & Department Management |
-|---|---|
-| ![AI Chat](https://ypbin.cn/screenshots/admin-ui/ai-chat.png) | ![Users](https://ypbin.cn/screenshots/admin-ui/users.png) |
-
-| 🔑 Role & Permission Assignment | 🧭 Dynamic Menu Management |
-|---|---|
-| ![Roles](https://ypbin.cn/screenshots/admin-ui/roles.png) | ![Menus](https://ypbin.cn/screenshots/admin-ui/menus.png) |
-
-| 📜 License Management | ⏰ Scheduled Tasks |
-|---|---|
-| ![Licenses](https://ypbin.cn/screenshots/admin-ui/licenses.png) | ![Jobs](https://ypbin.cn/screenshots/admin-ui/jobs.png) |
+[中文](./README.md) | **English**
 
 </div>
+
+---
 
 ## Introduction
 
-Ypbin Admin is the frontend of the [ypbin-admin](https://github.com/wenbin-wb/ypbin-admin) enterprise management system, built on top of the open source project [vue-vben-admin](https://github.com/vbenjs/vue-vben-admin) (MIT License) with the `ant-design-vue` variant (`web-antd`). It delivers an out-of-the-box, enterprise-ready admin UI with backend-driven menus and real-time messaging.
+This repository is a **fork** of [`ypbin-admin-ui`](https://github.com/wenbin-wb/ypbin-admin-ui) and provides the frontend for [`ypbin-iot`](https://github.com/wenbin-wb/ypbin-iot). The base platform supplies RBAC, multi-tenancy, dynamic routes, messaging and AI chat; the IoT layer adds devices, products/thing models, point mappings, shadows, alerting and online debugging.
 
-> Full documentation: [ypbin.cn](https://ypbin.cn/guide/admin-ui/) · [Development guide](https://ypbin.cn/guide/admin-ui/development)
+- Menus, routes and permission codes are driven by the backend `sys_menu`; the frontend never invents them.
+- IoT code lives in `apps/web-antd/src/api/iot/**` and `apps/web-antd/src/views/iot/**`.
+- Upstream sync rules: see [`SYNC.md`](SYNC.md).
 
-## Features
+## Quick start
 
-- **Backend-driven Menus & Permissions** — menus are loaded from the ypbin-admin backend (`/menu/all`) with button-level permission codes
-- **System Management** — users, roles, departments, posts, menus, dictionaries, configs, tenants, permission templates
-- **Messaging Center** — in-site messages with real-time push via SSE, notification/announcement publishing with rich text
-- **Scheduled Tasks** — Cron-based task management with execution logs
-- **Multi-tenant Isolation** — tenant-scoped data and permission templates
-- **Enterprise Baseline** — i18n (zh-CN / en-US), theming, dark mode, custom preferences
-
-## Tech Stack
-
-- [Vue 3](https://vuejs.org/) + [TypeScript](https://www.typescriptlang.org/)
-- [Vite](https://vitejs.dev/) + [pnpm](https://pnpm.io/) + [Turbo](https://turbo.build/) monorepo
-- [Ant Design Vue](https://next.antdv.com/)
-- [Vben Admin 5.x](https://github.com/vbenjs/vue-vben-admin) as the base framework
-
-## Quick Start
-
-The frontend requires the backend service to be running (see the backend's `DEVELOPMENT-PLAN.md` for how to start it).
+Start the backend first (see [`ypbin-iot`](https://github.com/wenbin-wb/ypbin-iot); the gateway defaults to `18080`), then:
 
 ```bash
-# install dependencies
+corepack enable
+corepack prepare pnpm@11.16.0 --activate   # pnpm version pinned by this repo
 pnpm install
-
-# start the web-antd application
-pnpm dev:antd
+pnpm dev:antd                              # http://localhost:5666
 ```
 
-Then open http://localhost:5666 (or the port printed in the terminal).
+The dev server proxies `/api` to `http://localhost:8080` by default (the upstream vben default). For local work against `ypbin-iot`, change the target in `apps/web-antd/vite.config.ts` to `http://localhost:18080`. In production nginx reverse-proxies `/api` to the gateway; see `deploy/nginx-microservice.conf` in the backend repository.
 
-## Project Structure
+## Production build
+
+```bash
+pnpm -F @vben/web-antd build
+# output: apps/web-antd/dist
+```
+
+Deployment and reverse-proxy wiring live in the backend repository's `deploy/`. In production `VITE_GLOB_API_URL` defaults to `/api`, which nginx forwards to the gateway.
+
+> 🔐 `VITE_APP_STORE_SECURE_KEY` is the pinia persistence encryption key: the development default lives in `apps/web-antd/.env.development`; **production must inject it from the deployment environment**. If it is missing or still a placeholder, the guard in `packages/stores` refuses to start the app — no silent "fake encryption".
+
+## Checks
+
+```bash
+pnpm -F @vben/web-antd run typecheck
+pnpm exec vitest run --dom apps/web-antd/src/views/iot apps/web-antd/src/utils
+node scripts/check-iot-i18n-keys.mjs
+node scripts/check-i18n-message-compile.mjs
+```
+
+The full gate (typecheck + unit tests + build) runs in CI.
+
+## Layout
 
 ```
-apps/
-  web-antd/          # the ypbin-admin web application (Ant Design Vue)
-packages/            # shared libraries (layouts, common-ui, preferences, ...)
-internal/            # build tooling (vite-config, eslint-config, ...)
+apps/web-antd/                 # main app (Vue 3 + Ant Design Vue)
+  src/api/iot/                 # IoT API clients
+  src/views/iot/               # IoT pages (devices/products/alerts/groups/maintenance…)
+  src/locales/langs/*/page.json# copy (IoT under the iot section, runtime namespace page.*)
+packages/                      # shared libraries (layouts, common-ui, preferences…)
+internal/                      # build tooling (vite-config, eslint-config…)
+deploy/                        # IoT-related proxy/static hosting wiring
 ```
+
+## Contributing
+
+Read [`SYNC.md`](SYNC.md) first: modifying upstream files requires whitelist registration and a reason; prefer new files for IoT work. Use Conventional Commits (`type(scope): description`).
 
 ## License
 
-[Ypbin Admin](https://github.com/wenbin-wb/ypbin-admin-ui) is [MIT licensed](./LICENSE).
-
-This project is derived from [vue-vben-admin](https://github.com/vbenjs/vue-vben-admin) (MIT, Copyright (c) 2024-present, Vben). We keep the original copyright and license notice as required by the MIT License. The ypbin-admin modifications and additions are Copyright (c) 2026-present, ypbin-admin authors.
+[MIT](./LICENSE). Derived from [vue-vben-admin](https://github.com/vbenjs/vue-vben-admin) (MIT, Copyright (c) 2024-present, Vben) and [ypbin-admin-ui](https://github.com/wenbin-wb/ypbin-admin-ui); upstream copyright and license notices are retained. IoT additions are Copyright (c) 2026-present, ypbin-admin authors.

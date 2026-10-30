@@ -71,20 +71,8 @@ export default defineConfig(async () => {
               });
             },
           },
-          // 接口文档（knife4j/swagger）：页面与其相对资源都在后端，不 rewrite 原样转发，
-          // 否则 /webjars、/v3/api-docs 等资源在前端端口 404 导致文档页白屏
-          ...Object.fromEntries(
-            [
-              '/doc.html',
-              '/webjars',
-              '/v3/api-docs',
-              '/swagger-ui',
-              '/swagger-resources',
-            ].map((p) => [
-              p,
-              { changeOrigin: true, target: 'http://localhost:8080' },
-            ]),
-          ),
+          // 接口文档由后端提供：ypbin-iot 服务（18084）含 springdoc，经网关访问需登录态
+          //（/iot/v3/api-docs）；不再沿用单体时代直连 8080 的 doc.html 段。
         },
       },
     },

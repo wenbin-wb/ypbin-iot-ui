@@ -9,6 +9,8 @@
    - `apps/web-antd/src/api/iot/**`（IoT 接口客户端）
    - `apps/web-antd/src/views/iot/**`（IoT 页面）
    - `apps/web-antd/src/locales/langs/*/page.json` 的 **`iot` 段**（菜单/字段文案）
+   - `README.md`、`README.en-US.md`（仓库门面：必须说明本仓是 `ypbin-iot` 的前端 fork，不能沿用上游 admin-ui 的标题与链接；
+     理由同后端仓 `ypbin-iot` 重写 README 的登记）
    - `deploy/**` 里与 IoT 服务相关的反代/静态托管接线
    除上述位置外修改上游文件，必须在 PR 说明里写明**为什么必须改上游**（例如通用缺陷修复），并尽量反向移植给 upstream。
 3. **菜单与权限码由后端提供**：页面路径必须与 `ypbin-iot` 的 `deploy/sql/007-iot-data.sql` 里
