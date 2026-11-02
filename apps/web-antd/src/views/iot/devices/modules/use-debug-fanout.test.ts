@@ -111,9 +111,9 @@ describe('buildFanoutTargets：属性设置（多点位拆分）', () => {
 
   it('writeDesired 只在勾选时出现在请求体（不写用户没要求的期望值）', () => {
     const off = buildFanoutTargets(form(), CONTEXT);
-    expect(off.ok && Object.hasOwn(off.targets[0]?.req ?? {}, 'writeDesired')).toBe(
-      false,
-    );
+    expect(
+      off.ok && Object.hasOwn(off.targets[0]?.req ?? {}, 'writeDesired'),
+    ).toBe(false);
 
     const on = buildFanoutTargets(form({ writeDesired: true }), CONTEXT);
     expect(on.ok && on.targets[0]?.req.writeDesired).toBe(true);
@@ -147,7 +147,9 @@ describe('buildFanoutTargets：属性读取', () => {
     expect(result.targets).toHaveLength(1);
     // 目标表的「标识」列显示人话，请求体不带 identifier
     expect(result.targets[0]?.identifier).toBe('全部可读属性');
-    expect(Object.hasOwn(result.targets[0]?.req ?? {}, 'identifier')).toBe(false);
+    expect(Object.hasOwn(result.targets[0]?.req ?? {}, 'identifier')).toBe(
+      false,
+    );
   });
 
   it('多选 ⇒ 每个点位一条', () => {
@@ -169,16 +171,17 @@ describe('buildFanoutTargets：属性读取', () => {
 
 describe('buildFanoutTargets：服务调用', () => {
   it('未选命令 ⇒ noCommand', () => {
-    const result = buildFanoutTargets(
-      form({ kind: 'service_call' }),
-      CONTEXT,
-    );
+    const result = buildFanoutTargets(form({ kind: 'service_call' }), CONTEXT);
     expect(result).toEqual({ errorKey: 'page.iot.debug.noCommand', ok: false });
   });
 
   it('params 不是 JSON 对象 ⇒ paramsInvalid（前端先拦，不白跑一次请求）', () => {
     const invalidJson = buildFanoutTargets(
-      form({ kind: 'service_call', paramsText: '{', serviceIdentifier: 'reboot' }),
+      form({
+        kind: 'service_call',
+        paramsText: '{',
+        serviceIdentifier: 'reboot',
+      }),
       CONTEXT,
     );
     expect(invalidJson).toEqual({
@@ -186,7 +189,11 @@ describe('buildFanoutTargets：服务调用', () => {
       ok: false,
     });
     const array = buildFanoutTargets(
-      form({ kind: 'service_call', paramsText: '[1,2]', serviceIdentifier: 'reboot' }),
+      form({
+        kind: 'service_call',
+        paramsText: '[1,2]',
+        serviceIdentifier: 'reboot',
+      }),
       CONTEXT,
     );
     expect(array).toEqual({

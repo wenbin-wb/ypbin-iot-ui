@@ -53,7 +53,10 @@ onErrorCaptured((err, instance, info) => {
       globalHandler(err, instance, `panel-error-boundary:${String(info)}`);
     } catch (handlerError) {
       // 上报通道自己抛错时不得连累页面：这里必须留痕（不静默吞），但页面继续渲染 Alert
-      console.error('[iot] 全局错误处理器上报失败（页面仍展示错误边界）', handlerError);
+      console.error(
+        '[iot] 全局错误处理器上报失败（页面仍展示错误边界）',
+        handlerError,
+      );
     }
   } else {
     // 没有全局 handler（如未配置埋点通道）时不能装作没发生：留一条控制台记录
@@ -65,12 +68,7 @@ onErrorCaptured((err, instance, info) => {
 </script>
 
 <template>
-  <Alert
-    v-if="error"
-    :message="$t(props.titleKey)"
-    show-icon
-    type="error"
-  >
+  <Alert v-if="error" :message="$t(props.titleKey)" show-icon type="error">
     <template #description>
       <pre class="mt-1 text-xs break-all whitespace-pre-wrap">{{
         error.stack || error.message

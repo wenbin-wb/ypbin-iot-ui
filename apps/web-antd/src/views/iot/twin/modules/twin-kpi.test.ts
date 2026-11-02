@@ -19,7 +19,19 @@ import { computeTwinKpi, toKpiItems } from './twin-kpi';
 function point(
   id: string,
   deviceId: string,
-): { bindings: []; deviceId: string; id: string; labelVisible: boolean; localX: string; localY: string; localZ: string; normalX: string; normalY: string; normalZ: string; sceneId: string } {
+): {
+  bindings: [];
+  deviceId: string;
+  id: string;
+  labelVisible: boolean;
+  localX: string;
+  localY: string;
+  localZ: string;
+  normalX: string;
+  normalY: string;
+  normalZ: string;
+  sceneId: string;
+} {
   return {
     bindings: [],
     deviceId,
@@ -36,11 +48,7 @@ function point(
 }
 
 /** 造运行态点位。 */
-function runtime(
-  deviceId: string,
-  onlineStatus: string,
-  alertCount = 0,
-) {
+function runtime(deviceId: string, onlineStatus: string, alertCount = 0) {
   return { alertCount, deviceId, onlineStatus };
 }
 

@@ -208,7 +208,7 @@ function qualityStyle(
     >
       <span
         v-if="dirty"
-        class="truncate text-[10px] text-amber-500"
+        class="truncate text-[10px]"
         :style="{ color: TWIN_COLOR_UNKNOWN }"
       >
         {{ $t('page.iot.twin.devicePanel.unsaved') }}

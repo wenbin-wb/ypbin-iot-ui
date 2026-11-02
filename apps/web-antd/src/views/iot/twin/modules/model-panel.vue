@@ -123,9 +123,7 @@ async function submitRename(): Promise<void> {
   }
   if (next.length > MAX_ASSET_NAME_LENGTH) {
     message.warning(
-      $t('page.iot.twin.assetNameTooLong', [
-        MAX_ASSET_NAME_LENGTH,
-      ]),
+      $t('page.iot.twin.assetNameTooLong', [MAX_ASSET_NAME_LENGTH]),
     );
     return;
   }

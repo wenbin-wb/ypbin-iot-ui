@@ -183,7 +183,9 @@ describe('useCsvExport · 文件名口径（批次 8：string 主体 / appendDat
 
 describe('useCsvExport · 自定义成功文案（批次 8 新增）', () => {
   it('successText 覆盖默认的 common.success', async () => {
-    const { onExportCsv } = createExport({ successText: 'page.iot.series.exportCsv' });
+    const { onExportCsv } = createExport({
+      successText: 'page.iot.series.exportCsv',
+    });
 
     await onExportCsv();
 

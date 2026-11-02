@@ -88,115 +88,113 @@ function registerDecodeText(point: {
       v-if="mergedRows.length === 0"
       :description="$t('page.iot.product.noProperty')"
     />
-  <!-- 12 列：窄屏必须由表格自身横向滚动（min-w 保证列不被压扁） -->
-  <div v-else class="overflow-x-auto">
-    <table
-      class="w-full min-w-[900px] text-sm"
-      data-testid="point-join-table"
-    >
-      <thead>
-        <tr class="text-left text-muted-foreground">
-          <th class="py-1">{{ $t('page.iot.point.property') }}</th>
-          <th class="py-1">{{ $t('page.iot.point.service') }}</th>
-          <th class="py-1">{{ $t('page.iot.point.dataType') }}</th>
-          <th class="py-1">{{ $t('page.iot.point.accessMode') }}</th>
-          <th class="py-1">{{ $t('page.iot.point.unit') }}</th>
-          <th class="py-1">{{ $t('page.iot.point.rawAddress') }}</th>
-          <th class="py-1">{{ $t('page.iot.point.addressType') }}</th>
-          <th class="py-1">{{ $t('page.iot.point.decode') }}</th>
-          <th class="py-1">{{ $t('page.iot.point.pollIntervalMs') }}</th>
-          <th class="py-1">{{ $t('page.iot.point.scaleFactor') }}</th>
-          <th class="py-1">{{ $t('page.iot.point.enabled') }}</th>
-          <th class="py-1">{{ $t('common.action') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr
-          v-for="row in mergedRows"
-          :key="row.propertyId"
-          class="border-t"
-        >
-          <td class="py-1">{{ row.identifier }}</td>
-          <td class="py-1">{{ row.serviceId }}</td>
-          <td class="py-1">{{ dataTypeLabel(row.dataType) }}</td>
-          <td class="py-1">{{ accessModeLabel(row.accessMode) }}</td>
-          <td class="py-1">{{ row.unit || EMPTY_TEXT }}</td>
-          <td class="py-1">
-            <template v-if="row.point">
-              {{ row.point.rawAddress }}
-            </template>
-            <Tag v-else color="orange">
-              {{ $t('page.iot.point.unmapped') }}
-            </Tag>
-          </td>
-          <td class="py-1">
-            {{ row.point ? addressTypeLabel(row.point.addressType) : EMPTY_TEXT }}
-          </td>
-          <td class="py-1">
-            {{ row.point ? registerDecodeText(row.point) : EMPTY_TEXT }}
-          </td>
-          <td class="py-1">{{ row.point?.pollIntervalMs ?? EMPTY_TEXT }}</td>
-          <td class="py-1">{{ row.point?.scaleFactor ?? EMPTY_TEXT }}</td>
-          <td class="py-1">
-            <Tag v-if="row.point" :color="tagColor(row.point.enabled)">
-              {{ row.point.enabled === false ? 'off' : 'on' }}
-            </Tag>
-            <span v-else>{{ EMPTY_TEXT }}</span>
-          </td>
-          <td class="py-1">
-            <template v-if="row.point">
-              <div class="flex gap-1">
-                <Button
-                  v-if="canUpdate"
-                  :data-testid="`point-edit-${row.propertyId}`"
-                  size="small"
-                  type="link"
-                  @click="emit('edit', row.point)"
-                >
-                  {{ $t('page.iot.point.edit') }}
-                </Button>
-                <Popconfirm
-                  v-if="canDelete"
-                  :cancel-text="$t('page.iot.point.cancel')"
-                  :ok-text="$t('page.iot.point.okText')"
-                  :title="
-                    $t('page.iot.point.deleteConfirm', [row.point.rawAddress])
-                  "
-                  @confirm="emit('remove', row.point)"
-                >
+    <!-- 12 列：窄屏必须由表格自身横向滚动（min-w 保证列不被压扁） -->
+    <div v-else class="overflow-x-auto">
+      <table
+        class="w-full min-w-[900px] text-sm"
+        data-testid="point-join-table"
+      >
+        <thead>
+          <tr class="text-left text-muted-foreground">
+            <th class="py-1">{{ $t('page.iot.point.property') }}</th>
+            <th class="py-1">{{ $t('page.iot.point.service') }}</th>
+            <th class="py-1">{{ $t('page.iot.point.dataType') }}</th>
+            <th class="py-1">{{ $t('page.iot.point.accessMode') }}</th>
+            <th class="py-1">{{ $t('page.iot.point.unit') }}</th>
+            <th class="py-1">{{ $t('page.iot.point.rawAddress') }}</th>
+            <th class="py-1">{{ $t('page.iot.point.addressType') }}</th>
+            <th class="py-1">{{ $t('page.iot.point.decode') }}</th>
+            <th class="py-1">{{ $t('page.iot.point.pollIntervalMs') }}</th>
+            <th class="py-1">{{ $t('page.iot.point.scaleFactor') }}</th>
+            <th class="py-1">{{ $t('page.iot.point.enabled') }}</th>
+            <th class="py-1">{{ $t('common.action') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in mergedRows" :key="row.propertyId" class="border-t">
+            <td class="py-1">{{ row.identifier }}</td>
+            <td class="py-1">{{ row.serviceId }}</td>
+            <td class="py-1">{{ dataTypeLabel(row.dataType) }}</td>
+            <td class="py-1">{{ accessModeLabel(row.accessMode) }}</td>
+            <td class="py-1">{{ row.unit || EMPTY_TEXT }}</td>
+            <td class="py-1">
+              <template v-if="row.point">
+                {{ row.point.rawAddress }}
+              </template>
+              <Tag v-else color="orange">
+                {{ $t('page.iot.point.unmapped') }}
+              </Tag>
+            </td>
+            <td class="py-1">
+              {{
+                row.point ? addressTypeLabel(row.point.addressType) : EMPTY_TEXT
+              }}
+            </td>
+            <td class="py-1">
+              {{ row.point ? registerDecodeText(row.point) : EMPTY_TEXT }}
+            </td>
+            <td class="py-1">{{ row.point?.pollIntervalMs ?? EMPTY_TEXT }}</td>
+            <td class="py-1">{{ row.point?.scaleFactor ?? EMPTY_TEXT }}</td>
+            <td class="py-1">
+              <Tag v-if="row.point" :color="tagColor(row.point.enabled)">
+                {{ row.point.enabled === false ? 'off' : 'on' }}
+              </Tag>
+              <span v-else>{{ EMPTY_TEXT }}</span>
+            </td>
+            <td class="py-1">
+              <template v-if="row.point">
+                <div class="flex gap-1">
                   <Button
-                    :data-testid="`point-delete-joined-${row.propertyId}`"
+                    v-if="canUpdate"
+                    :data-testid="`point-edit-${row.propertyId}`"
                     size="small"
                     type="link"
-                    danger
+                    @click="emit('edit', row.point)"
                   >
-                    {{ $t('page.iot.point.delete') }}
+                    {{ $t('page.iot.point.edit') }}
                   </Button>
-                </Popconfirm>
-              </div>
-            </template>
-            <Button
-              v-else-if="canCreate"
-              :data-testid="`point-add-for-${row.propertyId}`"
-              size="small"
-              type="link"
-              @click="emit('create', row.propertyId)"
-            >
-              {{ $t('page.iot.point.addPointFor') }}
-            </Button>
-            <Button
-              :data-testid="`point-series-${row.propertyId}`"
-              size="small"
-              type="link"
-              @click="emit('openSeries', row.identifier)"
-            >
-              {{ $t('page.iot.series.title') }}
-            </Button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+                  <Popconfirm
+                    v-if="canDelete"
+                    :cancel-text="$t('page.iot.point.cancel')"
+                    :ok-text="$t('page.iot.point.okText')"
+                    :title="
+                      $t('page.iot.point.deleteConfirm', [row.point.rawAddress])
+                    "
+                    @confirm="emit('remove', row.point)"
+                  >
+                    <Button
+                      :data-testid="`point-delete-joined-${row.propertyId}`"
+                      size="small"
+                      type="link"
+                      danger
+                    >
+                      {{ $t('page.iot.point.delete') }}
+                    </Button>
+                  </Popconfirm>
+                </div>
+              </template>
+              <Button
+                v-else-if="canCreate"
+                :data-testid="`point-add-for-${row.propertyId}`"
+                size="small"
+                type="link"
+                @click="emit('create', row.propertyId)"
+              >
+                {{ $t('page.iot.point.addPointFor') }}
+              </Button>
+              <Button
+                :data-testid="`point-series-${row.propertyId}`"
+                size="small"
+                type="link"
+                @click="emit('openSeries', row.identifier)"
+              >
+                {{ $t('page.iot.series.title') }}
+              </Button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </template>
 
   <div class="mt-4 mb-2 font-semibold">

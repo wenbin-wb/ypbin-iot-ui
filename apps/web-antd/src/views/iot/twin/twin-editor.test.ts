@@ -36,7 +36,10 @@ describe('useTwinEditor 放置锚点状态机', () => {
   it('★ setDraft 记录拾取位置并打开表单（拾取结果必须能回填）', () => {
     const editor = useTwinEditor();
     editor.startPlacing();
-    editor.setDraft({ local: { x: 1, y: 2, z: 3 }, normal: { x: 0, y: 1, z: 0 } });
+    editor.setDraft({
+      local: { x: 1, y: 2, z: 3 },
+      normal: { x: 0, y: 1, z: 0 },
+    });
 
     expect(editor.draft.value).toEqual({
       local: { x: 1, y: 2, z: 3 },
@@ -49,7 +52,10 @@ describe('useTwinEditor 放置锚点状态机', () => {
   it('★ dismissPlaceForm 只收起表单、保留放置态（用户点偏了可以直接改点）', () => {
     const editor = useTwinEditor();
     editor.startPlacing();
-    editor.setDraft({ local: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 1, z: 0 } });
+    editor.setDraft({
+      local: { x: 0, y: 0, z: 0 },
+      normal: { x: 0, y: 1, z: 0 },
+    });
 
     editor.dismissPlaceForm();
 
@@ -61,7 +67,10 @@ describe('useTwinEditor 放置锚点状态机', () => {
   it('★ cancelPlacing 退出放置态并丢弃草稿', () => {
     const editor = useTwinEditor();
     editor.startPlacing();
-    editor.setDraft({ local: { x: 5, y: 0, z: 0 }, normal: { x: 0, y: 1, z: 0 } });
+    editor.setDraft({
+      local: { x: 5, y: 0, z: 0 },
+      normal: { x: 0, y: 1, z: 0 },
+    });
 
     editor.cancelPlacing();
 
@@ -73,7 +82,10 @@ describe('useTwinEditor 放置锚点状态机', () => {
   it('★ 再次 startPlacing 会清掉上一次的草稿（不残留旧坐标）', () => {
     const editor = useTwinEditor();
     editor.startPlacing();
-    editor.setDraft({ local: { x: 9, y: 9, z: 9 }, normal: { x: 0, y: 1, z: 0 } });
+    editor.setDraft({
+      local: { x: 9, y: 9, z: 9 },
+      normal: { x: 0, y: 1, z: 0 },
+    });
 
     editor.startPlacing();
 
@@ -84,7 +96,10 @@ describe('useTwinEditor 放置锚点状态机', () => {
   it('selectPoint 切到浏览态并收起放置表单（避免两个态叠加）', () => {
     const editor = useTwinEditor();
     editor.startPlacing();
-    editor.setDraft({ local: { x: 1, y: 1, z: 1 }, normal: { x: 0, y: 1, z: 0 } });
+    editor.setDraft({
+      local: { x: 1, y: 1, z: 1 },
+      normal: { x: 0, y: 1, z: 0 },
+    });
 
     editor.selectPoint('point-1');
 
@@ -96,7 +111,10 @@ describe('useTwinEditor 放置锚点状态机', () => {
   it('★ reset 清空全部（切场景 / 保存成功后调用，防跨场景串坐标）', () => {
     const editor = useTwinEditor();
     editor.startPlacing();
-    editor.setDraft({ local: { x: 1, y: 2, z: 3 }, normal: { x: 0, y: 1, z: 0 } });
+    editor.setDraft({
+      local: { x: 1, y: 2, z: 3 },
+      normal: { x: 0, y: 1, z: 0 },
+    });
     editor.selectPoint('point-1');
 
     editor.reset();

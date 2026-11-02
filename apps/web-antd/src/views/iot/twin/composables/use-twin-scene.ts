@@ -166,9 +166,6 @@ export function useTwinScene() {
       }));
   }
 
-
-
-
   return {
     ancestryOf,
     byId,

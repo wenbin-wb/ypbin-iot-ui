@@ -54,7 +54,9 @@ function anchor(patch: Partial<AnchorTransform> = {}): AnchorTransform {
 describe('世界坐标链（渲染与换算同源）', () => {
   it('空祖先链 ⇒ 世界矩阵为单位阵', async () => {
     const { world } = await buildChain([]);
-    expect([...world.elements]).toEqual([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+    expect([...world.elements]).toEqual([
+      1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
+    ]);
   });
 
   it('单级平移 ⇒ 世界原点等于该锚点位置', async () => {

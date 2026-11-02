@@ -102,7 +102,9 @@ function setupApi() {
   };
   historyPages = {
     1: {
-      items: Array.from({ length: 10 }, (_v, index) => alertRow(`h${index + 1}`)),
+      items: Array.from({ length: 10 }, (_v, index) =>
+        alertRow(`h${index + 1}`),
+      ),
       total: '25',
     },
     2: {
@@ -211,9 +213,7 @@ function historyCalls() {
 /** 活动告警表格当前渲染的行（antd 的展开行不算数据行）。 */
 function activeRowEls(container: HTMLElement) {
   const table = byTestId<HTMLElement>(container, 'active-alert-table');
-  return [
-    ...(table?.querySelectorAll('tbody tr.ant-table-row') ?? []),
-  ];
+  return [...(table?.querySelectorAll('tbody tr.ant-table-row') ?? [])];
 }
 
 describe('活动告警分页：总数与页码可见（P2-5 核心）', () => {
@@ -276,7 +276,9 @@ describe('活动告警分页：加载更多失败保留已加载行', () => {
     expect(activeRowEls(container)).toHaveLength(2);
     const moreError = byTestId<HTMLElement>(container, 'active-more-error');
     expect(moreError, '加载更多失败必须可见').toBeTruthy();
-    expect(moreError?.textContent).toContain('活动告警第 2 页查询失败：后端 502');
+    expect(moreError?.textContent).toContain(
+      '活动告警第 2 页查询失败：后端 502',
+    );
     // 总数/页码不被失败请求污染
     expect(
       byTestId<HTMLElement>(container, 'active-page-info')?.textContent?.trim(),
@@ -345,9 +347,7 @@ describe('历史告警分页保持不动（回归）', () => {
     const activeBefore = activeCalls().length;
 
     // 历史表分页器（只有历史表开启分页；total=25 会有第 2 页）
-    const page2 = document.querySelector<HTMLElement>(
-      '.ant-pagination-item-2',
-    );
+    const page2 = document.querySelector<HTMLElement>('.ant-pagination-item-2');
     expect(page2, '历史告警分页器未渲染第 2 页').toBeTruthy();
     page2?.click();
     await flush();

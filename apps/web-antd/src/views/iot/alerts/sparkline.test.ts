@@ -8,18 +8,18 @@ import { buildSparkline, parseThresholdSnapshot } from './sparkline';
  * 最该咬住的两点：① 坏质量/非数值点必须被**丢弃并计数**（不能当 0，否则曲线会凭空掉到谷底）；
  * ② 时间轴按实际 `ts` 映射（等距索引会造出假的时间关系）。
  */
-function point(ts: number, value: null | string, quality: null | string = 'GOOD') {
+function point(
+  ts: number,
+  value: null | string,
+  quality: null | string = 'GOOD',
+) {
   return { ts, value, quality };
 }
 
 describe('曲线缩略 buildSparkline', () => {
   it('正常序列生成折线路径，阈值线落在值域内', () => {
     const result = buildSparkline({
-      points: [
-        point(1000, '23.5'),
-        point(2000, '24.5'),
-        point(3000, '25.5'),
-      ],
+      points: [point(1000, '23.5'), point(2000, '24.5'), point(3000, '25.5')],
       threshold: 25,
       width: 100,
       height: 50,

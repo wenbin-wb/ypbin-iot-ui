@@ -132,10 +132,7 @@ vi.mock('@vben/common-ui', async () => {
       if (isHost) {
         drawerHosts.push({ api, options });
       }
-      return [
-        define({ name: 'DrawerStub', setup: () => () => null }),
-        api,
-      ];
+      return [define({ name: 'DrawerStub', setup: () => () => null }), api];
     },
   };
 });

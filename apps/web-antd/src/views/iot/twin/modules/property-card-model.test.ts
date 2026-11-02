@@ -157,7 +157,9 @@ describe('buildPropertyCard：组装全部绑定属性', () => {
         ],
       }),
       runtime: { alertCount: 0, onlineStatus: 'unknown', status: 1 },
-      values: { voltage: { quality: null, stale: false, ts: null, value: null } },
+      values: {
+        voltage: { quality: null, stale: false, ts: null, value: null },
+      },
     });
     expect(model.rows).toHaveLength(1);
     expect(model.rows[0]?.valueText).toBeUndefined();
@@ -233,12 +235,24 @@ describe('buildPropertyCard：组装全部绑定属性', () => {
       runtime: { alertCount: 0, onlineStatus: 'online', status: 1 },
       values: {
         // 值还在，但被标记为失效
-        humidity: { quality: 'good', stale: true, ts: '1792574180929', value: '5' },
+        humidity: {
+          quality: 'good',
+          stale: true,
+          ts: '1792574180929',
+          value: '5',
+        },
         // 值在，质量差
-        temperature: { quality: 'BAD', stale: false, ts: '1792574180929', value: '99' },
+        temperature: {
+          quality: 'BAD',
+          stale: false,
+          ts: '1792574180929',
+          value: '99',
+        },
       },
     });
-    const byId = new Map(model.rows.map((row) => [row.propertyIdentifier, row]));
+    const byId = new Map(
+      model.rows.map((row) => [row.propertyIdentifier, row]),
+    );
     expect(byId.get('humidity')?.valueStale).toBe(true);
     expect(byId.get('humidity')?.quality).toBe('stale');
     expect(byId.get('temperature')?.valueStale).toBe(false);
@@ -334,7 +348,10 @@ describe('describe_age：返回结构化相对时间（不含文案）', () => {
       count: 2,
       unit: 'minute',
     });
-    expect(describeAge(NOW - 3 * HOUR, NOW)).toEqual({ count: 3, unit: 'hour' });
+    expect(describeAge(NOW - 3 * HOUR, NOW)).toEqual({
+      count: 3,
+      unit: 'hour',
+    });
     expect(describeAge(NOW - 2 * DAY, NOW)).toEqual({ count: 2, unit: 'day' });
   });
 

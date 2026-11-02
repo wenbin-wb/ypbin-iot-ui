@@ -212,12 +212,13 @@ describe('use-series-query：空结果 vs 失败（严格分开）', () => {
   });
 
   it('某点位失败 ⇒ 该点位带错误、其它点位照常出数（不把失败吞成空）', async () => {
-    mockApi.getDeviceSeries.mockImplementation((_deviceId: string, params: { propertyId: string }) =>
-      params.propertyId === 'bad'
-        ? Promise.reject(new Error('时序库未启用'))
-        : Promise.resolve([
-            { quality: 'GOOD', ts: 1_790_400_000_000, value: '20' },
-          ]),
+    mockApi.getDeviceSeries.mockImplementation(
+      (_deviceId: string, params: { propertyId: string }) =>
+        params.propertyId === 'bad'
+          ? Promise.reject(new Error('时序库未启用'))
+          : Promise.resolve([
+              { quality: 'GOOD', ts: 1_790_400_000_000, value: '20' },
+            ]),
     );
     const query = await mountQuery();
     query.deviceId.value = '9300012';
@@ -331,8 +332,7 @@ describe('series-chart.vue：多单位 ⇒ 多 Y 轴（不同量纲不共轴）'
     const container = document.createElement('div');
     document.body.append(container);
     const app = createApp({
-      render: () =>
-        h(SeriesChart as never, { model, units }),
+      render: () => h(SeriesChart as never, { model, units }),
     });
     app.mount(container);
     mounted = { app };

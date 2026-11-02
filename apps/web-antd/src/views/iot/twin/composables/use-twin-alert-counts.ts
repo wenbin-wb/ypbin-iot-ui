@@ -67,7 +67,10 @@ export function useTwinAlertCounts() {
     } catch (error) {
       // 告警数刷新失败不能让孪生页报错（设备状态仍在正常显示），但必须留痕——
       // 静默失败会让 KPI 长期停在旧数字上而无人察觉。
-      console.warn('[iot/twin] 活动告警数刷新失败（设备状态不受影响）：', error);
+      console.warn(
+        '[iot/twin] 活动告警数刷新失败（设备状态不受影响）：',
+        error,
+      );
     } finally {
       inFlight = false;
       if (queued) {

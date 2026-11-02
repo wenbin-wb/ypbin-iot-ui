@@ -18,11 +18,13 @@ import { $t } from '#/locales';
 export const ALERT_TIME_RANGE_FORMAT = 'YYYY-MM-DD HH:mm:ss';
 
 /** 与 {@link ALERT_TIME_RANGE_FORMAT} 对应的严格格式断言（防区间被外部改成 ISO/时间戳）。 */
-export const ALERT_TIME_RANGE_PATTERN =
-  /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+export const ALERT_TIME_RANGE_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 
 /** RangePicker 表单值：`[from, to]`；清空时 antd 可能给 `[]`/`null`/`undefined`。 */
-export type AlertTimeRangeValue = (null | string | undefined)[] | null | undefined;
+export type AlertTimeRangeValue =
+  | (null | string | undefined)[]
+  | null
+  | undefined;
 
 /** 实例查询的时间条件（空对象 = 不按时间过滤）。 */
 export interface AlertTimeQuery {
@@ -57,7 +59,10 @@ export function isAlertTimeRangeValid(value: AlertTimeRangeValue): boolean {
   if (from === '' || to === '') {
     return false;
   }
-  if (!ALERT_TIME_RANGE_PATTERN.test(from) || !ALERT_TIME_RANGE_PATTERN.test(to)) {
+  if (
+    !ALERT_TIME_RANGE_PATTERN.test(from) ||
+    !ALERT_TIME_RANGE_PATTERN.test(to)
+  ) {
     return false;
   }
   return from <= to;

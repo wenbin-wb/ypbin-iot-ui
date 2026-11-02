@@ -1,6 +1,10 @@
 import type { Ref } from 'vue';
 
-import type { BoardConfig, BoardWidget, BoardWidgetRuntime } from './board-utils';
+import type {
+  BoardConfig,
+  BoardWidget,
+  BoardWidgetRuntime,
+} from './board-utils';
 
 import type { IotDeviceApi } from '#/api/iot';
 import type { IotRealtimeLatestPayload } from '#/api/iot/realtime';

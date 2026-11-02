@@ -1,4 +1,8 @@
-import type { BoardConfig, BoardConfigSource, BoardWidget } from './board-utils';
+import type {
+  BoardConfig,
+  BoardConfigSource,
+  BoardWidget,
+} from './board-utils';
 
 import { computed, ref } from 'vue';
 
@@ -99,7 +103,9 @@ export function useBoardLoad() {
    * 成功：写 localStorage 且 dirty=false，source 变 platform；
    * 失败：**保留本地草稿**（dirty=true）并明确提示，绝不假装保存成功。
    */
-  async function pushBoard(options: { silent?: boolean } = {}): Promise<boolean> {
+  async function pushBoard(
+    options: { silent?: boolean } = {},
+  ): Promise<boolean> {
     if (saving.value) {
       return false;
     }
@@ -116,7 +122,10 @@ export function useBoardLoad() {
       }
       return true;
     } catch (error) {
-      const reason = extractErrorMessage(error, $t('page.iot.board.saveFailed'));
+      const reason = extractErrorMessage(
+        error,
+        $t('page.iot.board.saveFailed'),
+      );
       persistLocal(true);
       source.value = 'local-draft';
       saveError.value = $t('page.iot.board.saveFailedDetail', [reason]);

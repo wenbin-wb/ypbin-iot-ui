@@ -1,5 +1,4 @@
 <script lang="ts" setup>
-
 import type { IotTwinApi } from '#/api/iot';
 import type { AnchorRuntimeState } from '#/three/twin/types';
 

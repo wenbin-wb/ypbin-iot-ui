@@ -55,7 +55,11 @@ const emit = defineEmits<{
 
 /** 批次列表状态（三分：加载中 / 失败 / 空 / 就绪）。 */
 const listState = computed<ImportListState>(() =>
-  resolveImportListState(props.listLoading, props.listError, props.batches.length),
+  resolveImportListState(
+    props.listLoading,
+    props.listError,
+    props.batches.length,
+  ),
 );
 
 /** 批次表格列（无操作列：点击行即选中，少一次「查看」点击）。 */

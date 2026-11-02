@@ -298,7 +298,9 @@ function timestampText(ts: number | undefined): string | undefined {
                 >
                   {{ ageText(row.updatedAt) }}
                 </span>
-                <span v-else class="text-[10px] text-muted-foreground/60">--</span>
+                <span v-else class="text-[10px] text-muted-foreground/60"
+                  >--</span
+                >
               </td>
             </tr>
           </tbody>

@@ -1,6 +1,14 @@
 import { createApp, h, nextTick } from 'vue';
 
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
 import { PENDING_TEXT } from '../../shared/display';
 import AccessOverview from './access-overview.vue';
@@ -41,7 +49,10 @@ function bizFailure(code: number, message: string) {
 }
 
 /** 一份结构完整的概览；默认 reported=false（未上报），计数字段故意用 Long 字符串形态。 */
-function overview(overrides: Record<string, any> = {}, metrics: Record<string, any> = {}) {
+function overview(
+  overrides: Record<string, any> = {},
+  metrics: Record<string, any> = {},
+) {
   return {
     metrics: {
       egressPendingCount: '0',
@@ -206,9 +217,24 @@ describe('access-overview：节点表映射', () => {
     mockApi.getAccessOverview.mockResolvedValue(
       overview({
         nodes: [
-          { accessNode: 'a-null', leaseAlive: null, leaseRemainingSec: null, maxTenants: 3 },
-          { accessNode: 'a-true', leaseAlive: true, leaseRemainingSec: 12, maxTenants: 3 },
-          { accessNode: 'a-false', leaseAlive: false, leaseRemainingSec: -5, maxTenants: 3 },
+          {
+            accessNode: 'a-null',
+            leaseAlive: null,
+            leaseRemainingSec: null,
+            maxTenants: 3,
+          },
+          {
+            accessNode: 'a-true',
+            leaseAlive: true,
+            leaseRemainingSec: 12,
+            maxTenants: 3,
+          },
+          {
+            accessNode: 'a-false',
+            leaseAlive: false,
+            leaseRemainingSec: -5,
+            maxTenants: 3,
+          },
         ],
       }),
     );
@@ -226,7 +252,9 @@ describe('access-overview：节点表映射', () => {
 describe('access-overview：失败可见与刷新', () => {
   it('★ 加载失败 ⇒ 展示后端 message 原文（页面不留空白、也不假装是「无数据」）', async () => {
     const backendMessage = '查询被拒绝：无对应权限';
-    mockApi.getAccessOverview.mockRejectedValue(bizFailure(40_303, backendMessage));
+    mockApi.getAccessOverview.mockRejectedValue(
+      bizFailure(40_303, backendMessage),
+    );
 
     const container = await mountPage();
     expect(container.innerHTML).toContain(backendMessage);

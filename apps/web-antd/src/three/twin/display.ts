@@ -142,7 +142,11 @@ export function toColorRatio(
   const numeric = typeof value === 'number' ? value : Number(value);
   const low = typeof min === 'number' ? min : Number(min);
   const high = typeof max === 'number' ? max : Number(max);
-  if (!Number.isFinite(numeric) || !Number.isFinite(low) || !Number.isFinite(high)) {
+  if (
+    !Number.isFinite(numeric) ||
+    !Number.isFinite(low) ||
+    !Number.isFinite(high)
+  ) {
     return undefined;
   }
   if (high <= low) {

@@ -162,10 +162,7 @@ async function loadActive(reset = true) {
     activeError.value = '';
     activeMoreError.value = '';
   } catch (error) {
-    const reason = extractErrorMessage(
-      error,
-      $t('page.iot.alert.loadFailed'),
-    );
+    const reason = extractErrorMessage(error, $t('page.iot.alert.loadFailed'));
     if (reset) {
       activeRows.value = [];
       activeTotal.value = 0;
@@ -319,114 +316,120 @@ watch(
           }
         "
       >
-      <Table.Column
-        :title="$t('page.iot.alert.severityField')"
-        data-index="severity"
-      >
-        <template #default="{ record }">
-          <Tag :color="severityColor(record.severity)">
-            {{ $t(severityLabelKey(record.severity)) }}
-          </Tag>
-        </template>
-      </Table.Column>
-      <Table.Column
-        :title="$t('page.iot.alert.property')"
-        data-index="propertyId"
-      >
-        <template #default="{ record }">
-          <span v-if="record.outage">{{
-            $t('page.iot.alert.kind.offline')
-          }}</span>
-          <span v-else>{{ displayOrFallback(record.propertyId) }}</span>
-        </template>
-      </Table.Column>
-      <Table.Column
-        :title="$t('page.iot.alert.triggerValue')"
-        data-index="triggerValue"
-      >
-        <template #default="{ record }">
-          {{ displayOrFallback(record.triggerValue) }}
-        </template>
-      </Table.Column>
-      <Table.Column
-        :title="$t('page.iot.alert.threshold')"
-        data-index="thresholdSnapshot"
-      >
-        <template #default="{ record }">
-          {{ displayOrFallback(record.thresholdSnapshot) }}
-        </template>
-      </Table.Column>
-      <Table.Column :title="$t('page.iot.alert.stateField')" data-index="state">
-        <template #default="{ record }">
-          <Tag :color="stateColor(record.state)">
-            {{ $t(stateLabelKey(record.state)) }}
-          </Tag>
-        </template>
-      </Table.Column>
-      <Table.Column
-        :title="$t('page.iot.alert.duration')"
-        data-index="durationSeconds"
-      >
-        <template #default="{ record }">
-          {{ durationText(record.durationSeconds) }}
-        </template>
-      </Table.Column>
-      <Table.Column :title="$t('common.action')">
-        <template #default="{ record }">
-          <Space>
-            <Button
-              v-if="canAck"
-              :disabled="record.state !== 'FIRING'"
-              size="small"
-              type="link"
-              @click="onAck(record.id)"
-            >
-              {{ $t('page.iot.alert.ack') }}
-            </Button>
-            <Button
-              v-if="canAck"
-              size="small"
-              type="link"
-              @click="onSilence(record.id, 60)"
-            >
-              {{ $t('page.iot.alert.silenceOneHour') }}
-            </Button>
-          </Space>
-        </template>
-      </Table.Column>
-      <Table.Column :title="$t('page.iot.alert.expandHint')" key="expandIcon" />
-      <template #expandedRowRender="{ record }">
-        <div class="grid grid-cols-2 gap-4">
-          <div class="text-xs">
-            <div>
-              {{ $t('page.iot.alert.startTs') }}:
-              {{ formatDateTime(record.startTs) }}
+        <Table.Column
+          :title="$t('page.iot.alert.severityField')"
+          data-index="severity"
+        >
+          <template #default="{ record }">
+            <Tag :color="severityColor(record.severity)">
+              {{ $t(severityLabelKey(record.severity)) }}
+            </Tag>
+          </template>
+        </Table.Column>
+        <Table.Column
+          :title="$t('page.iot.alert.property')"
+          data-index="propertyId"
+        >
+          <template #default="{ record }">
+            <span v-if="record.outage">{{
+              $t('page.iot.alert.kind.offline')
+            }}</span>
+            <span v-else>{{ displayOrFallback(record.propertyId) }}</span>
+          </template>
+        </Table.Column>
+        <Table.Column
+          :title="$t('page.iot.alert.triggerValue')"
+          data-index="triggerValue"
+        >
+          <template #default="{ record }">
+            {{ displayOrFallback(record.triggerValue) }}
+          </template>
+        </Table.Column>
+        <Table.Column
+          :title="$t('page.iot.alert.threshold')"
+          data-index="thresholdSnapshot"
+        >
+          <template #default="{ record }">
+            {{ displayOrFallback(record.thresholdSnapshot) }}
+          </template>
+        </Table.Column>
+        <Table.Column
+          :title="$t('page.iot.alert.stateField')"
+          data-index="state"
+        >
+          <template #default="{ record }">
+            <Tag :color="stateColor(record.state)">
+              {{ $t(stateLabelKey(record.state)) }}
+            </Tag>
+          </template>
+        </Table.Column>
+        <Table.Column
+          :title="$t('page.iot.alert.duration')"
+          data-index="durationSeconds"
+        >
+          <template #default="{ record }">
+            {{ durationText(record.durationSeconds) }}
+          </template>
+        </Table.Column>
+        <Table.Column :title="$t('common.action')">
+          <template #default="{ record }">
+            <Space>
+              <Button
+                v-if="canAck"
+                :disabled="record.state !== 'FIRING'"
+                size="small"
+                type="link"
+                @click="onAck(record.id)"
+              >
+                {{ $t('page.iot.alert.ack') }}
+              </Button>
+              <Button
+                v-if="canAck"
+                size="small"
+                type="link"
+                @click="onSilence(record.id, 60)"
+              >
+                {{ $t('page.iot.alert.silenceOneHour') }}
+              </Button>
+            </Space>
+          </template>
+        </Table.Column>
+        <Table.Column
+          :title="$t('page.iot.alert.expandHint')"
+          key="expandIcon"
+        />
+        <template #expandedRowRender="{ record }">
+          <div class="grid grid-cols-2 gap-4">
+            <div class="text-xs">
+              <div>
+                {{ $t('page.iot.alert.startTs') }}:
+                {{ formatDateTime(record.startTs) }}
+              </div>
+              <div>
+                {{ $t('page.iot.alert.firingTs') }}:
+                {{ formatDateTime(record.firingTs) }}
+              </div>
+              <div v-if="record.silenceUntil">
+                {{ $t('page.iot.alert.silenceUntil') }}:
+                {{ formatDateTime(record.silenceUntil) }}
+              </div>
+              <div v-if="record.reason">
+                {{ $t('page.iot.alert.reasonField') }}:
+                {{ $t(reasonLabelKey(record.reason)) }}
+              </div>
             </div>
             <div>
-              {{ $t('page.iot.alert.firingTs') }}:
-              {{ formatDateTime(record.firingTs) }}
-            </div>
-            <div v-if="record.silenceUntil">
-              {{ $t('page.iot.alert.silenceUntil') }}:
-              {{ formatDateTime(record.silenceUntil) }}
-            </div>
-            <div v-if="record.reason">
-              {{ $t('page.iot.alert.reasonField') }}:
-              {{ $t(reasonLabelKey(record.reason)) }}
+              <div class="mb-1 text-xs text-muted-foreground">
+                {{ $t('page.iot.alert.curve.title') }}
+              </div>
+              <InstanceCurve
+                :device-id="record.deviceId"
+                :property-id="record.propertyId"
+                :threshold-snapshot="record.thresholdSnapshot"
+              />
             </div>
           </div>
-          <div>
-            <div class="mb-1 text-xs text-muted-foreground">
-              {{ $t('page.iot.alert.curve.title') }}
-            </div>
-            <InstanceCurve
-              :device-id="record.deviceId"
-              :property-id="record.propertyId"
-              :threshold-snapshot="record.thresholdSnapshot"
-            />
-          </div>
-        </div>
-      </template>
+        </template>
       </Table>
       <div v-if="hasMoreActive" class="mt-2">
         <Button

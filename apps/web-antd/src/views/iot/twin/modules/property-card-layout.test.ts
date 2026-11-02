@@ -181,12 +181,16 @@ describe('placeCard：跟随锚点且不越界', () => {
 describe('isAnchorVisible', () => {
   it('画布内 ⇒ true；明显越界 ⇒ false', () => {
     expect(isAnchorVisible({ x: 100, y: 100 }, CANVAS)).toBe(true);
-    expect(isAnchorVisible({ x: CANVAS.width + 100, y: 100 }, CANVAS)).toBe(false);
+    expect(isAnchorVisible({ x: CANVAS.width + 100, y: 100 }, CANVAS)).toBe(
+      false,
+    );
     expect(isAnchorVisible({ x: 100, y: -100 }, CANVAS)).toBe(false);
   });
 
   it('允许 slack 容差（图标本身有尺寸）', () => {
-    expect(isAnchorVisible({ x: CANVAS.width + 10, y: 100 }, CANVAS)).toBe(true);
+    expect(isAnchorVisible({ x: CANVAS.width + 10, y: 100 }, CANVAS)).toBe(
+      true,
+    );
     expect(isAnchorVisible({ x: CANVAS.width + 10, y: 100 }, CANVAS, 0)).toBe(
       false,
     );

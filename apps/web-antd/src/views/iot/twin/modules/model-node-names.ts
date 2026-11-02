@@ -48,7 +48,10 @@ export async function extractNodeNames(file: File): Promise<string[]> {
     const names = new Set<string>();
     (gltf.scene as InstanceType<typeof THREE.Group>).traverse((object) => {
       // 用鸭子类型判断相机/灯光（避免 instanceof 在跨 realm/mock 环境失效）
-      const asAny = object as unknown as { isCamera?: boolean; isLight?: boolean };
+      const asAny = object as unknown as {
+        isCamera?: boolean;
+        isLight?: boolean;
+      };
       if (asAny.isCamera || asAny.isLight) {
         return;
       }
