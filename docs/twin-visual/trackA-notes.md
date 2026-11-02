@@ -30,7 +30,7 @@
 | `three/twin/colors.ts` | 改 | 新增环境/灯光/后处理/标签色板（全部集中在此） |
 | `three/twin/camera-rig.ts` | 改 | 修「新飞行打断旧飞行时旧 Promise 永不 resolve」；新增 `resolveFocusPose` / `jumpTo` |
 | `*.test.ts` | 新增 6 个 | `renderer-options` / `label-layout` / `motion-profile` / `twin-animator` / `camera-orbit` / 扩展 `anchor-layer`（新增 10 用例，原 3 个保持） |
-| `apps/web-antd/scratch/twin-verify/screenshot.mjs` | **新增** | 部署后一键截图 + 结构自检 |
+| `apps/web-antd/scratch/twin-verify/screenshot.mjs` | **本地脚本** | 部署后一键截图 + 结构自检；`scratch/` 已整体 gitignore，脚本不入库 |
 
 commit 拆分见 §9。
 
@@ -316,12 +316,13 @@ isShellVisible(): boolean;              // 当前是否剖切（开关选中态�
 
 ## 9. 浏览器实测（待 Lead 部署）
 
-脚本：`apps/web-antd/scratch/twin-verify/screenshot.mjs`
+脚本：`apps/web-antd/scratch/twin-verify/screenshot.mjs`（本地排障脚本，`scratch/` 已整体 gitignore、不入库；
+在检出目录本地保留即可，路径不变）
 
 ```bash
 node apps/web-antd/scratch/twin-verify/screenshot.mjs \
   --url "https://<host>/#/iot/twin?sceneId=2112773048514154497" \
-  --user admin --pass wenbin1314 \
+  --user admin --pass "<部署时生成的管理员口令>" \
   --out /tmp/twin-after.png --json /tmp/twin-after-report.json
 
 # 验证动效降级：加 --reduced（等价于系统开「减少动态效果」）

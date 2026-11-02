@@ -169,8 +169,9 @@ async function generateRoutes(
     //   - `/iot/alerts?deviceId=…`
     // 现象：切一次场景就多一个「数字孪生」标签，很快就堆满标签栏。
     //
-    // 为什么可以**默认**开启：全仓没有任何页面依赖「同一 path 不同 query 开多个标签」
-    // （`grep fullPathKey|pageKey` 在 apps 下零命中）；它们都只把 query 当页内状态。
+    // 为什么可以**默认**开启：本仓（ypbin-iot-ui）没有任何页面依赖「同一 path 不同 query 开多个标签」
+    // （`grep fullPathKey|pageKey` 在本仓 apps 下零命中）；它们都只把 query 当页内状态。
+    // 这是 fork 定制、未回传 upstream：admin-ui 当前没有 query 驱动页面的前提，别按本注释推断两仓一致。
     // 需要「一个 query 一个标签」的页面可自己把 `meta.fullPathKey` 设回 true
     // （本处只在**未显式设置**时兜底，不覆盖页面自己的选择）。
     // ------------------------------------------------------------------

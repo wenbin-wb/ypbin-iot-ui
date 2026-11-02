@@ -22,6 +22,8 @@ yarn.lock
 package-lock.json
 .VSCodeCounter
 **/backend-mock/data
+**/backend-mock/.nitro
+**/backend-mock/.output
 .omx
 .pnpm-store
 # local env files
@@ -68,10 +70,5 @@ captcha-bg.b64.json
 captcha-bg.jpg
 captcha-tpl.png
 
-# 本地一次性排障脚本（不属于交付物）
-apps/web-antd/scratch/twin-verify/diag.mjs
-apps/web-antd/scratch/twin-verify/probe.mjs
-apps/web-antd/scratch/twin-verify/shot.mjs
-apps/web-antd/scratch/twin-verify/after-shot.mjs
-apps/web-antd/scratch/twin-verify/diag*.mjs
-apps/web-antd/scratch/twin-verify/hover-test.mjs
+# 本地一次性排障脚本（不属于交付物）：按目录整体忽略，新增脚本不用再改本文件
+apps/web-antd/scratch/
