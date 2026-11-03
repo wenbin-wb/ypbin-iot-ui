@@ -31,8 +31,8 @@ catalogs:
       specifier: ^10.0.1
       version: 10.0.1
     '@faker-js/faker':
-      specifier: ^10.5.0
-      version: 10.5.0
+      specifier: ^10.6.0
+      version: 10.6.0
     '@iconify/json':
       specifier: ^2.2.539
       version: 2.2.539
@@ -332,7 +332,7 @@ catalogs:
       version: 18.0.14
     medium-zoom:
       specifier: ^1.1.0
-      version: 1.1.0
+      version: 1.1.2
     naive-ui:
       specifier: ^2.45.3
       version: 2.45.3
@@ -661,7 +661,7 @@ importers:
     dependencies:
       '@faker-js/faker':
         specifier: 'catalog:'
-        version: 10.5.0
+        version: 10.6.0
       jsonwebtoken:
         specifier: 'catalog:'
         version: 9.0.3
@@ -1038,7 +1038,7 @@ importers:
         version: 1.6.0(date-fns@4.4.0)(vue@3.5.43(typescript@6.0.3))
       medium-zoom:
         specifier: 'catalog:'
-        version: 1.1.0
+        version: 1.1.2
       reka-ui:
         specifier: 'catalog:'
         version: 2.10.4(vue@3.5.43(typescript@6.0.3))
@@ -3706,8 +3706,8 @@ packages:
     resolution: {integrity: sha512-+CNAzxglkrpNf/kKywqQfk74QjtceuOE7Qm+AF8miRvPF/wmmK5+OJOgVh3AVTT3RP2mH3+FOaxlE5v72owk0A==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
 
-  '@faker-js/faker@10.5.0':
-    resolution: {integrity: sha512-bsxD8WLS5lIj7aaoCx1YJkktqYj5vlBUE6HWzu2Q51ksrGJ0H737ECCKlFU7Yf8Br45z9t99frBp/J7kzbMPAg==}
+  '@faker-js/faker@10.6.0':
+    resolution: {integrity: sha512-3RQHgEtvL1Frl/d1cSreo7qhJ3Gk1OdNUai/CtZ8G+wYeRQnJih3s9xJ9/kgYekPQRdwgh0HXRPqMlzWGwivIQ==}
     engines: {node: ^20.19.0 || ^22.13.0 || ^23.5.0 || >=24.0.0, npm: '>=10'}
 
   '@floating-ui/core@1.8.0':
@@ -8960,8 +8960,8 @@ packages:
   mdn-data@2.28.1:
     resolution: {integrity: sha512-U9w+PzSZ00Z5m9rZ5ARVFL5xOfuCHdKYi/1RRwDCJsboFgJDNT3zT6PIPD7mZQYaQLhsZM3GfDRgSMRHhSmVng==}
 
-  medium-zoom@1.1.0:
-    resolution: {integrity: sha512-ewyDsp7k4InCUp3jRmwHBRFGyjBimKps/AJLjRSox+2q/2H4p/PNpQf+pwONWlJiOudkBXtbdmVbFjqyybfTmQ==}
+  medium-zoom@1.1.2:
+    resolution: {integrity: sha512-0wTqeCQ4NGzjPghi7i2lMI6RyGj9N60fGvzY9HiNcxDTcvOw7S+ri7K3xVkrIZ+2uzUg4w/KSVMDdZXYMtHkdw==}
 
   memoize-one@6.0.0:
     resolution: {integrity: sha512-rkpe71W0N0c0Xz6QD0eJETuWAJGnJ9afsl1srmwPrI+yBCkge5EycXXbYRyvL29zZVUWQCY7InPRCv3GDXuZNw==}
@@ -10633,6 +10633,9 @@ packages:
 
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
+
+  tslib@2.9.1:
+    resolution: {integrity: sha512-a4Ux9VKuIMHsOS7ENbEq6hK2ZGYIT27Rtl0E4eD9KqwxhKiQeMZE/9xb3IdYwWaSOyIBQLExhQgXDTYoiCxnWA==}
 
   turbo@2.10.6:
     resolution: {integrity: sha512-3VfH7fK7WQ/ZHYjvfWyVnPRpcNaX3ZqXfGDMdc82eGdM0ESATyxFK4R4PM3wNsVFsdkUFZ4pZpkNeG37dxOv+g==}
@@ -13181,7 +13184,7 @@ snapshots:
       '@eslint/core': 1.2.1
       levn: 0.4.1
 
-  '@faker-js/faker@10.5.0': {}
+  '@faker-js/faker@10.6.0': {}
 
   '@floating-ui/core@1.8.0':
     dependencies:
@@ -18404,7 +18407,7 @@ snapshots:
 
   mdn-data@2.28.1: {}
 
-  medium-zoom@1.1.0: {}
+  medium-zoom@1.1.2: {}
 
   memoize-one@6.0.0: {}
 
@@ -19684,7 +19687,7 @@ snapshots:
 
   rxjs@7.8.2:
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
 
   sade@1.8.1:
     dependencies:
@@ -20485,6 +20488,8 @@ snapshots:
   tslib@2.4.0: {}
 
   tslib@2.8.1: {}
+
+  tslib@2.9.1: {}
 
   turbo@2.10.6:
     optionalDependencies:
