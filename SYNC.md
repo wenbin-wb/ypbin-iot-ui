@@ -56,6 +56,10 @@
 ## 最近同步点
 
 - **分叉点**：`2aa8e3b`（2026-09-18，admin-ui `main`）。
+- **最近同步**：`0ec5b40`（2026-11-03，admin-ui `main`，含空间关联修复/CI 门禁/后端契约适配等 67 个提交）。
+  冲突处理口径：IoT 品牌与 IoT 定制（`accessible.ts` 的 path 去重、dashboard/three/iot 页面）保留本仓版本；
+  共用文件以 upstream 为准；`pnpm-workspace.yaml` 按「每个键取较高版本」合并（保留 IoT 独有的 three 依赖）；
+  CI 合并 upstream 的 lint/stylelint/oxfmt/cspell 步骤与 IoT 专有门禁（store 密钥、IoT i18n、菜单 i18n、artifact 上传）。
 - **最近同步**：`9f02bc6`（tracking 会话/事件标识改用 Web Crypto，去掉 `Math.random()`，CodeQL `js/insecure-randomness`）已 cherry-pick 到本仓；本仓 `packages/tracking` 的两个随机源均已切换，测试/typecheck 通过。
 - **仍未同步**：
   - `7655848`（品牌 logo 换猫图）未合入。其 commit message 声称「目录路由补 redirect」，但 diff 里**没有** redirect —— 本仓的「后端绝对路径首子路由补 redirect」来源是 **`42ac8d1`**（IoT 品牌重塑大 commit 顺带带入），不是 `9265064`，也不是 `7655848`。这类「commit message 与 diff 不符」是同步时必须以代码为准、不能凭 message 记账的实例。

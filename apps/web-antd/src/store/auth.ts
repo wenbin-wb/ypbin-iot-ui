@@ -61,7 +61,8 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * 第三方登录：拿到 accessToken 后与账号密码登录走同一收尾流程
+   * 第三方登录：拿到 accessToken 后与账号密码登录走同一收尾流程；
+   * 初始口令账号同样先跳到改密页。
    */
   async function socialLogin(
     accessToken: string,
