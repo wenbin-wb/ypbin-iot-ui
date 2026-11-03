@@ -2239,7 +2239,10 @@
     "socialCallback": "第三方登录回调",
     "title": "Ypbin IoT 物联网平台",
     "techStack": "设备接入 · 物模型 · 实时监控 · 告警运维",
-    "demoTip": "演示环境数据每日重置"
+    "demoTip": "演示环境数据每日重置",
+    "changePassword": "修改初始密码",
+    "changePasswordHint": "当前为初始密码，请先修改后再继续使用",
+    "changePasswordSuccess": "密码已修改，请使用新密码重新登录"
   },
   "dashboard": {
     "title": "总览",
