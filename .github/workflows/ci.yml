@@ -29,24 +29,25 @@ jobs:
       - name: 安装依赖
         run: pnpm install --frozen-lockfile
 
-      # 🔴 本仓 CI 原先没有 lint（SYNC.md 第 4 条曾如实登记）。这里补上 oxlint（类型感知）
-      # 与 stylelint，参数与 lefthook 的 pre-commit 保持同一套：--type-aware --threads=4。
-      # 作用域先只覆盖 apps/web-antd/src（自有 IoT 代码），与本次修完的 18 处报错范围一致；
-      # 全仓其它包由各自 lint 通道负责，避免把既存历史问题一次性染红。
+      # Lint / stylelint / oxfmt / cspell / 结构检查：与 upstream（admin-ui）保持同一套参数与作用域。
       - name: Lint（oxlint，类型感知）
         run: pnpm exec oxlint -c oxlint.config.ts --type-aware --threads=4 apps/web-antd/src
 
-      # 格式门禁：oxfmt 是仓内既定工具（`pnpm format` 已用它），但此前从未进 CI，
-      # 于是有 55 个文件长期漂移、且漂移会随功能 PR 一起混进 diff（格式化噪声盖住语义改动）。
+      - name: Stylelint（web-antd 全量）
+        run: pnpm exec stylelint "apps/web-antd/src/**/*.{vue,css}" --config stylelint.config.mjs
+
       - name: 格式检查（oxfmt）
         run: pnpm exec oxfmt --check apps/web-antd/src
 
-      # stylelint 覆盖扩到**全量** apps/web-antd/src（原先只覆盖 views/iot）。
-      # 收窄作用域是「先不把历史问题一次性染红」的过渡措施；现在全量实跑已零报错
-      # （`at-rule-prelude-no-invalid` 对 `@apply` 的误报在 role/modules/form.vue 行内豁免），
-      # 没必要继续只守着 IoT 目录——`views/system` 是两仓共用代码，更需要守。
-      - name: Stylelint（web-antd 全量）
-        run: pnpm exec stylelint "apps/web-antd/src/**/*.{vue,css}" --config stylelint.config.mjs
+      - name: 拼写检查（cspell）
+        run: pnpm run check:cspell
+
+      # 信息性结构检查：check:circular / check:dep 当前只打印告警、退出码恒为 0
+      # （上游 vsh 行为），因此这里不设阻断；输出仍留在 CI 日志里便于追踪。
+      - name: 循环依赖 / 未使用依赖（信息性）
+        run: |
+          pnpm run check:circular
+          pnpm run check:dep
 
       # 🔴 假加密守卫：.env 里的默认值只服务本地开发；生产构建若仍用占位符/空值，
       # pinia 持久化等于混淆。这里 grep 生产环境文件，门禁拦截；运行时还有 packages/stores 的硬校验。
@@ -60,25 +61,18 @@ jobs:
           fi
           echo "未发现生产 env 中的空值/占位符 store 加密密钥（实际值由部署环境注入）"
 
-      # ⚠️ 本仓 CI 原本没有 lint，也没有任何 i18n 校验；实测过一次「键少了 page. 前缀」导致
+      # ⚠️ IoT 文案键必须带 page. 前缀：实测过一次「键少了 page. 前缀」导致
       # IoT 页面 95 处文案渲染成原始 key（CI 全绿也发现不了）。此步骤补上该盲区。
       - name: IoT i18n 键存在性校验
         run: node scripts/check-iot-i18n-keys.mjs
 
-      # 🔴 **新增门禁**（本 PR 提案，理由/范围/误报风险见 PR 描述与脚本头注释）：
-      # 上一步只证明「键**存在**」，证明不了「值**能不能编译**」。2026-09-27 线上「在线调试」
-      # 页签内容区全白，根因就是文案里的字面 `{`/`}` 让 vue-i18n 在**渲染期**抛 SyntaxError——
-      # 而键存在性校验、typecheck、构建**全绿**。本步用真实 vue-i18n 编译**全库**（zh-CN + en-US
-      # 共 44 个语言包文件）的每个字符串叶子键，谁编译不过就点名谁。
-      # 退出码 2 只用于「参数写错」，退出码 1 = 有文案编译不过 / 门禁空跑。
+      # 🔴 键存在 ≠ 值能编译。2026-09-27 线上「在线调试」页签内容区全白，根因就是文案里的
+      # 字面 `{`/`}` 让 vue-i18n 在渲染期抛 SyntaxError——而键存在性校验、typecheck、构建全绿。
+      # 本步用真实 vue-i18n 编译全库（zh-CN + en-US）的每个字符串叶子键。
       - name: i18n 文案编译校验（全库，zh-CN + en-US）
         run: node scripts/check-i18n-message-compile.mjs
 
-      # 🔴 **新增门禁**（本 PR 提案，理由/范围/误报风险见 PR 描述与脚本头注释）：
-      # 前两步只覆盖**前端源码里 `$t('…')` 写的键**；而菜单/权限的文案来源是**后端 `sys_menu.title`**
-      # ——那一列存的就是 i18n 键本身，前端对它做 `$t(title)`，缺键时不报错、直接渲染原始键。
-      # 实证：本门禁落地前实测 11 个键缺失（10 个 `page.ai.*` + `page.iot.alert.rule.list`），
-      # 全是权限分配界面上要显示的按钮标题，而 typecheck / 构建 / 上面两条 i18n 门禁**全绿**。
+      # 🔴 菜单/权限文案来源是后端 sys_menu.title（存的就是 i18n 键）；缺键时不报错、直接渲染原始键。
       - name: 检出 ypbin-iot（sys_menu.title 的事实源）
         uses: actions/checkout@v7
         with:
@@ -88,45 +82,16 @@ jobs:
 
       - name: 菜单标题 i18n 键校验（SQL sys_menu.title ↔ zh-CN/en-US）
         env:
-          # 必须与上方 checkout 的 `path:` 逐字一致；脚本读不到该目录时会以退出码 1 明确报
-          # 「配置/检出问题」，不会退化成「0 个键 ⇒ 全绿」的假绿。
           IOT_REPO_DIR: ${{ github.workspace }}/ypbin-iot
         run: node scripts/check-menu-i18n-keys.mjs
 
       - name: Typecheck（web-antd）
         run: pnpm -F @vben/web-antd run typecheck
 
-      # 🔴 IoT 前端的**组件级运行时**用例（只跑 IoT 目录）。
-      #
-      # 为什么必须加这一步：2026-09-27 线上「设备详情 → 在线调试」页签**内容区全白**
-      # （用户原话「是什么都没有」），根因是 i18n 文案里写了未逃逸的字面 `{` `}`
-      # （`page.iot.debug.valueHint` 的 `{"a":1}`）⇒ vue-i18n 在**渲染期**编译消息时抛
-      # `SyntaxError: Message compilation error` ⇒ 整个子树渲染成 `<!---->`。
-      # 当时 typecheck、构建、i18n 键存在性校验**全绿**——因为键确实存在，只是编译不过。
-      # 这条盲区只能用「真挂载（真实 i18n + 真实 antdv + 真实 v-access 指令）」的用例兜住。
-      #
-      # 作用域刻意只到 `apps/web-antd/src/views/iot`：根脚本 `pnpm test:unit` 在一台
-      # TZ=UTC 的主机上有**既存**的时区断言失败（`packages/@core/base/shared/.../date.test.ts` 的
-      # `getSystemTimezone()` 断言要求 `Area/Location` 形态，与本改动无关），整体接入会把 CI 染红
-      # ⇒ 那是另一条线，本 PR 不顺手改（已在 PR 说明里登记）。
-      #
-      # `apps/web-antd/src/utils` 是本 PR 追加的：`utils/backend-number.ts` 是「后端 Long
-      # 序列化成字符串」这条口径的**唯一**转换点（分页 total/page/pageSize 都过它），
-      # 它的边界用例必须进 CI——否则该 helper 可以悄悄写错而无人察觉。
-      # 该目录下目前只有 backend-number.test.ts 一个用例文件。
-      #
-      # `views/system` 是 2026-10-28 审查追加的：该目录是**两仓共用**的基础模块
-      # （空间/部门/岗位/用户），此前 `space-tree.test.ts` 写了却从不执行，而 admin 侧连
-      # vitest 都没有。共用代码的回归用例必须两边都跑，否则「同一份代码、两套验证」是假的。
-      #
-      # `views/dashboard` + `api/iot` 是 2026-10-20 审查整改追加的（原作用域漏了这两处）：
-      # - `views/dashboard` 审查时有 7 个用例文件（含 1415 行 `board.test.ts`，现已增至 9 个）曾「写了但从不跑」，
-      #   看板/总览是最贴业务首屏的页面，回归必须进 CI；
-      # - `api/iot` 覆盖实时事件流客户端（SSE 分帧/退避/鉴权）与请求契约测试，
-      #   这类「URL/参数序列化漂移」只有请求层用例能抓住（trace 时间格式事故即此盲区）。
-      # 本机已用 `TZ=UTC` 实跑本步**新增的两条路径**（12 文件 / 178 用例全绿，2026-10-20；CI runner 默认也是 UTC）。
-      - name: IoT 前端组件级用例（真实 vue-i18n，覆盖「整块空白」这类渲染期事故）
-        run: pnpm exec vitest run --dom apps/web-antd/src/views/iot apps/web-antd/src/views/system apps/web-antd/src/utils apps/web-antd/src/views/dashboard apps/web-antd/src/api/iot
+      # 单元测试：IoT 页面 + 两仓共用模块（system/utils/store/dashboard）+ IoT 接口客户端。
+      # 根脚本 `pnpm test:unit` 在 TZ=UTC 主机上有既存的时区断言失败（与本仓业务无关），故按目录显式接入。
+      - name: 前端单元测试（iot / system / utils / store / dashboard / api）
+        run: pnpm exec vitest run --dom apps/web-antd/src/views/iot apps/web-antd/src/views/system apps/web-antd/src/utils apps/web-antd/src/store apps/web-antd/src/views/dashboard apps/web-antd/src/api/iot
 
       - name: 单元测试（埋点 SDK）
         # 该 SDK 有真实逻辑（批量、队列、URL 截断、令牌携带）且已有单测，
@@ -161,9 +126,6 @@ jobs:
       # 事件目录分两层：base 在 starter 仓、project 在宿主后端仓（admin）。前端生成物是**两者合并**的结果，
       # 故两仓都要检出——只检出 starter 会退化成「纯 base」生成物，与已提交的联合生成物不一致（门禁会如实报红）。
       # ⚠ 两仓的默认分支名并不同：starter 是 `master`、admin 是 `main`（starter 从未有 main）。
-      # 这里显式写 `ref:` 而不是依赖默认分支：门禁的比对基准必须一眼可见——两仓各自的分支
-      # 若还没合入「base 迁出 / 宿主目录」，本门禁必然失败，而此时失败性质是**检出/配置**而非事件码漂移，
-      # 生成器会以退出码 2 明确区分（见 scripts/sync-tracking-events.mjs 头部说明）。
       - name: 检出代码
         uses: actions/checkout@v7
 
@@ -188,9 +150,6 @@ jobs:
 
       - name: 校验前端事件码与 base + project 合并结果一致
         env:
-          # 这两个路径必须与上方 checkout 的 `path:` 逐字一致（${{ github.workspace }} 即检出根目录）。
-          # 生成器据 HOST_REPO_ROOT 递归定位宿主 project 层目录；显式给了却不含该目录时
-          # 以退出码 2 报「配置/检出问题」，不会误报成事件码漂移。
           STARTER_REPO_ROOT: ${{ github.workspace }}/ypbin-starter
           HOST_REPO_ROOT: ${{ github.workspace }}/ypbin-admin
         run: node scripts/sync-tracking-events.mjs --check
