@@ -27,6 +27,14 @@ const props = reactive({
 });
 const leftMinWidth = ref(props.leftMinWidth || 1);
 const leftMaxWidth = ref(props.leftMaxWidth || 100);
+
+function onLeftMinWidthChange(value: number) {
+  props.leftMinWidth = value;
+}
+
+function onLeftMaxWidthChange(value: number) {
+  props.leftMaxWidth = value;
+}
 </script>
 <template>
   <ColPage
@@ -78,7 +86,7 @@ const leftMaxWidth = ref(props.leftMaxWidth || 100);
             :max="props.leftMaxWidth - 1"
             :min="1"
             class="w-25"
-            @after-change="(value) => (props.leftMinWidth = value as number)"
+            @after-change="onLeftMinWidthChange"
           />
           <span>左侧最大宽度百分比：</span>
           <Slider
@@ -86,7 +94,7 @@ const leftMaxWidth = ref(props.leftMaxWidth || 100);
             :max="100"
             :min="leftMaxWidth + 1"
             class="w-25"
-            @after-change="(value) => (props.leftMaxWidth = value as number)"
+            @after-change="onLeftMaxWidthChange"
           />
         </div>
         <Alert title="实验性的组件" show-icon type="warning">
