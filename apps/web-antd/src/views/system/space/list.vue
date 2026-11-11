@@ -216,16 +216,15 @@ function totalRelationCount(counts?: Record<string, number>): number {
   if (!counts) {
     return 0;
   }
-  // 防御性 Number()：即使上游漏做归一（如后端 Long 序列化为字符串），也不能把 "2"+"1" 拼成 "21"。
-  // 用 for 循环而不是 Array#reduce：iot-ui 的 oxlint 启用了 no-array-reduce。
-  let sum = 0;
+  // 防御性 Number()：即使上游漏做归一（如后端 Long 序列化为字符串），也不能把 "2"+"1" 拼成 "21"
+  let total = 0;
   for (const value of Object.values(counts)) {
     const count = Number(value);
     if (Number.isFinite(count)) {
-      sum += count;
+      total += count;
     }
   }
-  return sum;
+  return total;
 }
 
 const [ImportModalComp, importModalApi] = useVbenModal({
