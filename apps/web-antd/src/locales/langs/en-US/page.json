@@ -1866,6 +1866,7 @@
       "renameSession": "Rename",
       "deleteSession": "Delete",
       "send": "Send",
+      "list": "Conversation List",
       "stop": "Stop",
       "welcomeSubtitle": "Choose a role or just start typing",
       "quickQuestion_1": "Write a weekly work summary",
@@ -1916,6 +1917,7 @@
     },
     "knowledge": {
       "title": "Knowledge Base",
+      "list": "Knowledge Base List",
       "create": "Create Knowledge Base",
       "wizard": "Create Wizard",
       "name": "Name",
@@ -2131,6 +2133,7 @@
     },
     "role": {
       "title": "Chat Roles",
+      "list": "Role List",
       "create": "New Role",
       "edit": "Edit Role",
       "name": "Role Name",

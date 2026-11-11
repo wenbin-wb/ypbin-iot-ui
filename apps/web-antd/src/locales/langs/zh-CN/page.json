@@ -1851,6 +1851,7 @@
       "renameSession": "重命名",
       "deleteSession": "删除",
       "send": "发送",
+      "list": "对话列表",
       "stop": "停止",
       "welcomeSubtitle": "选择一个角色开始对话，或直接输入问题",
       "quickQuestion_1": "帮我写一份工作周报",
@@ -1901,6 +1902,7 @@
     },
     "knowledge": {
       "title": "知识库",
+      "list": "知识库列表",
       "create": "新建知识库",
       "wizard": "创建向导",
       "name": "知识库名称",
@@ -2116,6 +2118,7 @@
     },
     "role": {
       "title": "对话角色",
+      "list": "角色列表",
       "create": "新建角色",
       "edit": "编辑角色",
       "name": "角色名称",
