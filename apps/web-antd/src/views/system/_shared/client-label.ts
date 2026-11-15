@@ -20,3 +20,34 @@ export function clientTagOptions() {
     },
   ];
 }
+
+/**
+ * 客户端展示名：已知 ID 返回可读名称，未知 ID 原样返回，空值返回空串。
+ *
+ * @param clientId 客户端 ID
+ */
+export function clientLabel(clientId?: null | string): string {
+  if (!clientId) {
+    return '';
+  }
+  return (
+    clientTagOptions().find((item) => item.value === clientId)?.label ??
+    clientId
+  );
+}
+
+/**
+ * 客户端集合展示名：逗号分隔的 ID 集合 → 可读名称，用顿号连接；空集返回空串。
+ *
+ * @param clientIds 逗号分隔的客户端 ID 集合
+ */
+export function clientLabels(clientIds?: null | string): string {
+  if (!clientIds) {
+    return '';
+  }
+  return clientIds
+    .split(',')
+    .map((clientId) => clientLabel(clientId.trim()))
+    .filter(Boolean)
+    .join('、');
+}

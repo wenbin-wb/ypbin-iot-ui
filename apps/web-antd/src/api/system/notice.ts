@@ -8,11 +8,14 @@ export namespace SystemNoticeApi {
     title?: string;
     noticeType?: number;
     publishStatus?: number;
+    clientId?: string;
   }
 
   export interface NoticeSaveReq {
     content: string;
     cover?: string;
+    /** 投放客户端 ID 集合（逗号分隔）；空表示全部客户端 */
+    clientIds?: string;
     effectiveTime?: string;
     expireTime?: string;
     isTop?: number;
@@ -32,6 +35,8 @@ export namespace SystemNoticeApi {
     /** 列表接口不返回正文（体积大），编辑/预览前需调用 getNoticeDetail 补全 */
     content?: string;
     cover?: string;
+    /** 投放客户端 ID 集合（逗号分隔）；空表示全部客户端 */
+    clientIds?: string;
     noticeType: number;
     noticeScope?: number;
     scopeTargetIds?: string;
@@ -85,4 +90,13 @@ export function revokeNotice(id: string) {
 /** 直接发布（草稿/待发布/已撤回 → 已发布并触发推送） */
 export function publishNotice(id: string) {
   return requestClient.put(`/system/notice/${id}/publish`);
+}
+
+/**
+ * 公告可选的客户端 ID 列表。
+ *
+ * 公告菜单对租户可见，但「客户端管理」仅平台用户可读，因此单独提供只读选项接口。
+ */
+export function getNoticeClientOptions() {
+  return requestClient.get<string[]>('/system/notice/options/clients');
 }

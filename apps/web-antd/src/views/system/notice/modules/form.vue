@@ -10,9 +10,14 @@ import { VbenTiptap } from '@vben/plugins/tiptap';
 import { Button, message } from 'ant-design-vue';
 
 import { useVbenForm } from '#/adapter/form';
-import { createNotice, updateNotice } from '#/api/system/notice';
+import {
+  createNotice,
+  getNoticeClientOptions,
+  updateNotice,
+} from '#/api/system/notice';
 import { $t } from '#/locales';
 
+import { clientLabel } from '../../_shared/client-label';
 import ImageUpload from '../../_shared/image-upload.vue';
 import { useFormSchema } from '../data';
 
@@ -49,6 +54,7 @@ async function submit(draft: boolean) {
     return;
   }
   const values = await formApi.getValues<{
+    clientIds?: string[];
     content: string;
     cover?: string;
     effectiveTime?: string;
@@ -63,6 +69,8 @@ async function submit(draft: boolean) {
     title: string;
   }>();
   const data: SystemNoticeApi.NoticeSaveReq = {
+    // 空串表示全部客户端：后端按「空/NULL 对全部可见」处理，也能在编辑时清除已有客户端
+    clientIds: (values.clientIds || []).join(','),
     content: values.content,
     cover: values.cover,
     effectiveTime: values.effectiveTime,
@@ -110,10 +118,33 @@ const [Modal, modalApi] = useVbenModal<NoticeFormData>({
           ? $t('ui.actionTitle.edit', [$t('system.notice.name')])
           : $t('ui.actionTitle.create', [$t('system.notice.name')]),
       });
+      // 客户端选项来自公告专用的只读接口；加载失败不阻塞编辑，只保留「全部客户端」
+      let clientIds: string[] = [];
+      try {
+        clientIds = await getNoticeClientOptions();
+      } catch (error) {
+        console.error('加载客户端选项失败', error);
+      }
+      formApi.updateSchema([
+        {
+          componentProps: {
+            allowClear: true,
+            class: 'w-full',
+            mode: 'multiple',
+            options: clientIds.map((clientId) => ({
+              label: clientLabel(clientId),
+              value: clientId,
+            })),
+            placeholder: $t('system.notice.clientPlaceholder'),
+          },
+          fieldName: 'clientIds',
+        },
+      ]);
       await nextTick();
       if (data) {
         formApi.setValues({
           ...data,
+          clientIds: data.clientIds ? data.clientIds.split(',') : [],
           notifyMethods: data.notifyMethods
             ? data.notifyMethods.split(',')
             : [],
