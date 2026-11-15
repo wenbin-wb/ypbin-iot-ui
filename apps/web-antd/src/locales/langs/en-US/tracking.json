@@ -6,6 +6,7 @@
     "eventCodeOption": "{0} ({1})",
     "eventId": "Event ID",
     "appId": "App",
+    "client": "Client",
     "appTagAdmin": "Admin console",
     "appTagMiniapp": "WeChat mini program",
     "appTagIot": "IoT console",

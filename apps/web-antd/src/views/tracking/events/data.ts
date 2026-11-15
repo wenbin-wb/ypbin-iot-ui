@@ -87,7 +87,7 @@ export function useColumns(): VxeTableGridColumns {
     },
     {
       field: 'appId',
-      title: $t('tracking.events.appId'),
+      title: $t('tracking.events.client'),
       width: 150,
       // 未登记的 appId 会原样显示，长度不可控，超出时悬停看全量
       showOverflow: 'tooltip',
