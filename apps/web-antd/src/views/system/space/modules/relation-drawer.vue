@@ -69,12 +69,12 @@ async function loadTypes() {
     // 字典不可用必须让用户看见；内置兜底保证抽屉仍可操作（显式降级，不静默）
     message.warning($t('system.space.typeDictFailed'));
     typeOptions.value = [
-      { label: '部门', value: 'dept' },
-      { label: '人员', value: 'user' },
-      { label: '设备', value: 'device' },
-      { label: '资产', value: 'asset' },
+      { label: $t('system.space.typeDept'), value: 'dept' },
+      { label: $t('system.space.typeUser'), value: 'user' },
+      { label: $t('system.space.typeDevice'), value: 'device' },
+      { label: $t('system.space.typeAsset'), value: 'asset' },
     ];
-    console.error('加载空间对象类型字典失败', error);
+    console.error('Failed to load space object type dict', error);
   }
 }
 
@@ -204,7 +204,7 @@ function onUnbind(item: SystemSpaceApi.SpaceRelationResp) {
         await loadRelations();
       } catch (error) {
         // 解绑失败文案由全局响应拦截器展示（不重复提示）
-        console.warn('[space] 解绑空间关联失败', error);
+        console.warn('[space] Failed to unbind space relation', error);
       }
     },
     title: $t('system.space.confirmRemoveTitle'),

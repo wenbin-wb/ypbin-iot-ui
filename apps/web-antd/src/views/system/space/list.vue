@@ -201,7 +201,7 @@ async function fillRelationCounts(rows: SystemSpaceApi.SpaceTreeNode[]) {
       });
       countFailureWarned = true;
       // 控制台留原始错误便于排障（不是业务提示，不展示给用户）
-      console.warn('[space] 对象数量统计失败', error);
+      console.warn('[space] Failed to count objects', error);
     }
   }
 }
@@ -246,7 +246,7 @@ async function onExport() {
     const blob = await exportSpaces();
     await downloadBlobSafe(
       blob,
-      `空间管理-${new Date().toISOString().slice(0, 10)}.csv`,
+      `${$t('system.space.exportFileName')}-${new Date().toISOString().slice(0, 10)}.csv`,
       $t('system.space.exportFailed'),
     );
   } catch (error: unknown) {
@@ -310,6 +310,7 @@ function refreshGrid() {
           -->
           <Button
             v-access:code="['system:space:add']"
+            :aria-label="$t('system.space.addChild')"
             class="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
             size="small"
             type="text"
