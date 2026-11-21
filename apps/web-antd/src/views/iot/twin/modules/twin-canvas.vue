@@ -628,9 +628,6 @@ function pickNearestPoint(
   return nearest?.pointId;
 }
 
-/** 指针是否在属性/详情卡片上（在卡片上时不因「离开设备」而清掉 hover）。 */
-let pointerOnCard = false;
-
 /**
  * 处理设备悬停（进入/离开）。
  *
@@ -642,14 +639,8 @@ let pointerOnCard = false;
 function onHoverAnchor(pointId?: string): void {
   if (pointId) {
     hoveredPointId.value = pointId;
-    pointerOnCard = false;
     lastAnchorPx = undefined;
     sampleCardPosition();
-    return;
-  }
-  // 指针在卡片上时不关闭：卡片可交互（看详情/点位配置），
-  // 鼠标从锚点移到卡片的过程必然经过一次 leave，关掉就永远点不到卡片里的按钮。
-  if (pointerOnCard) {
     return;
   }
   if (hoveredPointId.value !== undefined && pinnedPointId.value === undefined) {
@@ -1227,10 +1218,14 @@ defineExpose({
     ></div>
 
     <!--
-      ⚠️ 这里**不再**渲染悬浮属性卡（`TwinPropertyCard`）。
-      它是「圆点时代」的产物：卡片跟着圆点跑。现在设备本身就是锚点、选中由页面的
-      设备详情卡（`DeviceDetailPanel`）承担 —— 两处同时渲染会出现**两张卡片叠在一起**
-      （用户实测：「设备的悬浮卡片怎么会有两个」）。
+      ⚠️ 这里**不渲染**悬浮属性卡。它是「圆点时代」的产物（卡片跟着圆点跑），
+      现在设备本身就是锚点、选中由页面的设备详情卡（`DeviceDetailPanel`）承担 ——
+      两处同时渲染会出现**两张卡片叠在一起**（用户实测：「设备的悬浮卡片怎么会有两个」）。
+
+      2026-11-21：那套组件已作为死代码整体删除（`twin-property-card.vue`、
+      `property-card-layout.ts`、`use-twin-property-card.ts` 及其测试，共 1013 行，
+      生产代码 0 引用；`pointerOnCard` 也只被赋 false、从无 true，是死分支）。
+      本注释保留，是为了防止后人「顺手加回来」。
     -->
 
     <!-- 加载中：骨架式遮罩（比纯转圈更能说明「正在建模型」） -->
