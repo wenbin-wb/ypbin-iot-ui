@@ -118,8 +118,8 @@
     "rrggbb",
     "uiux",
     "vermillion",
-    "zhangsan"
-  ],
+    "zhangsan",
+    "TOCTOU"],
   "ignorePaths": [
     "**/*-dist/**",
     "**/*.log",
