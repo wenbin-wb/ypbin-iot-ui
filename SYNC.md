@@ -108,15 +108,26 @@ packages/stores/src/modules/tabbar.test.ts
 
 ## 最近同步点
 
-- **分叉点**：`2aa8e3b`（2026-09-18，admin-ui `main`）。
-- **最近同步**：`0ec5b40`（2026-11-03，admin-ui `main`，含空间关联修复/CI 门禁/后端契约适配等 67 个提交）。
-  冲突处理口径：IoT 品牌与 IoT 定制（`accessible.ts` 的 path 去重、dashboard/three/iot 页面）保留本仓版本；
-  共用文件以 upstream 为准；`pnpm-workspace.yaml` 按「每个键取较高版本」合并（保留 IoT 独有的 three 依赖）；
-  CI 合并 upstream 的 lint/stylelint/oxfmt/cspell 步骤与 IoT 专有门禁（store 密钥、IoT i18n、菜单 i18n、artifact 上传）。
-- **最近同步**：`9f02bc6`（tracking 会话/事件标识改用 Web Crypto，去掉 `Math.random()`，CodeQL `js/insecure-randomness`）已 cherry-pick 到本仓；本仓 `packages/tracking` 的两个随机源均已切换，测试/typecheck 通过。
-- **仍未同步**：
-  - `7655848`（品牌 logo 换猫图）未合入。其 commit message 声称「目录路由补 redirect」，但 diff 里**没有** redirect —— 本仓的「后端绝对路径首子路由补 redirect」来源是 **`42ac8d1`**（IoT 品牌重塑大 commit 顺带带入），不是 `9265064`，也不是 `7655848`。这类「commit message 与 diff 不符」是同步时必须以代码为准、不能凭 message 记账的实例。
-  - `toBackendNumber`（后端 Long 字符串转 number）是 **iot-ui 自有工具**，admin-ui 不存在；同步上游文件时不要假设上游有同名工具，也不要把它当同步来源。
+> **本节数字全部由命令现场产出，不手工维护**（2026-11-22 重建）：
+> `git merge-base main <admin-ui>/main`、`git rev-list --count <mb>..<admin-ui>/main`。
+> 此前本节严重失真（写分叉点 2026-09-18，实测 2026-11-21；写最近同步 11-03，实际已到 11-22），
+> 所以改成「给命令 + 采集时间」，机器判据交给 `scripts/check-fork-sync.mjs`。
+
+- **分叉点（merge-base）**：`d105e51`（2026-11-21 `style(@vben/web-antd): 补平残余 oxfmt 漂移`，采集于 2026-11-22 23:40）
+- **本仓领先该点**：279 个提交（IoT 业务与品牌定制累积）
+- **落后 admin-ui**：20 个提交（截至 `a8df35f` = 2026-11-22 的文本语义色反哺）
+  ⚠️ 这 20 个多数是**只属 admin 线**的演进，不等于本仓欠账；真正要跟的只有公共部分，
+  由 `check-fork-sync.mjs` 逐文件判定方向（LAG/LEAD）
+- **当前分歧面**：25 个文件（已登记 25，未登记 0）——清单与理由见上一节
+- **冲突处理口径**：IoT 品牌与定制（`accessible.ts` 的 path 去重、dashboard/three/iot 页面）保留本仓版本；
+  共用文件以 upstream 为准；`pnpm-workspace.yaml` 按「每个键取较高版本」合并（保留 IoT 独有的 three）；
+  CI 合并 upstream 的 lint/stylelint/oxfmt/cspell 与 IoT 专有门禁（store 密钥、IoT i18n、菜单 i18n、artifact 上传）
+- **仍未同步（逐条给判据，不凭 commit message 记账）**：
+  - `7655848`（品牌 logo 换猫图）未合入。其 message 声称「目录路由补 redirect」，但 diff 里**没有**
+    redirect —— 本仓「绝对路径首子路由补 redirect」的来源是 `42ac8d1`，不是 `9265064` 也不是 `7655848`
+  - `toBackendNumber` 是 **iot-ui 自有工具**，admin-ui 不存在；同步上游文件时不要假设上游有同名工具
+  - 图表 12 色分类色板（Okabe-Ito + Tol）是**本仓独有**：admin-ui 侧图表仍用 `#0066f5` hex 字面量、
+    未接入 `chart-tokens` 体系。反哺需先决定那边是否全面接这套体系（独立排期）
 
 ## 与后端仓的关系
 
