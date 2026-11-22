@@ -134,7 +134,7 @@ catalog:
   three: ^0.186.1
   three-mesh-bvh: ^0.9.16
   es-toolkit: ^1.49.0
-  eslint: ^10.7.0
+  eslint: ^10.14.0
   eslint-plugin-better-tailwindcss: ^4.7.0
   eslint-plugin-command: ^4.0.0
   eslint-plugin-jsonc: ^3.3.0
