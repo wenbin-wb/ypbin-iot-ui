@@ -76,8 +76,8 @@ apps/web-antd/src/preferences.ts
 # ---- 文案（page.json 的 iot 段是本仓独有；ui.json 含 IoT 术语）----
 apps/web-antd/src/locales/langs/zh-CN/page.json
 apps/web-antd/src/locales/langs/en-US/page.json
-packages/locales/src/langs/zh-CN/ui.json
-packages/locales/src/langs/en-US/ui.json
+# packages/locales/src/langs/{zh-CN,en-US}/ui.json 已于 2026-11-22 反哺 admin-ui 并合并（userSelect 段），
+# 两仓现已逐字节一致，故从本清单移除。
 # ---- 看板 / 工作台（IoT 真实数据装配：useIotOverview / useDashboardRealtime / useWorkbenchTrends）----
 apps/web-antd/src/api/dashboard/index.ts
 apps/web-antd/src/views/dashboard/analytics/index.vue
@@ -88,7 +88,11 @@ apps/web-antd/src/views/dashboard/analytics/analytics-visits-source.vue
 apps/web-antd/src/views/dashboard/analytics/analytics-visits.vue
 apps/web-antd/src/views/dashboard/workspace/index.vue
 apps/web-antd/src/views/dashboard/workspace/use-workbench-trends.ts
-# ---- 设计令牌（IoT 视觉体系，与上游 admin 的扁平化方向不同）----
+# ---- 设计令牌 ----
+# 2026-11-22：**文本语义色已反哺 admin-ui 并合并**（那侧原有「引用未定义色阶 ⇒ 警示色静默失效」
+# 的真实缺陷，见 admin-ui 提交 08ebfba）。现两仓 `--destructive-text/--success-text/--warning-text`
+# 亮暗两档取值完全一致，剩余差异只有 12 色图表色板（下面这两条仍存，因为 admin 侧图表还在用
+# `#0066f5` 这类 hex 字面量，没有接入图表色板——那属于另一件事，需要单独评估，不与本次混做）。
 packages/@core/base/design/src/design-tokens/default.css
 packages/@core/base/design/src/design-tokens/dark.css
 internal/tailwind-config/src/theme.css
