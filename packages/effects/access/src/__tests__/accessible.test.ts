@@ -178,8 +178,8 @@ describe('generateAccessible - redirect normalization', () => {
   });
 
   it('首子路由为绝对路径(/analytics)时生成 redirect 到该绝对路径', async () => {
-    // fork 行为：后端菜单常用绝对路径子路由（如 /dashboard/analytics）。
-    // 不补 redirect 的话，无组件的目录路由（如 /dashboard）渲染空白。
+    // 后端菜单常用绝对路径子路由（如 /dashboard/analytics）；
+    // 不补 redirect 的话，无 component 的目录路由（如 /dashboard）渲染空白。
     const routes = [
       {
         name: 'Dashboard',

@@ -14,8 +14,8 @@ export namespace SystemCommonApi {
    * `number`，一个是后端回的字符串），用继承把两者捏在一起正是「类型说谎」的来源。
    *
    * 后端 `total/page/pageSize` 都是 `long`，全局 Long→字符串序列化 ⇒ 真实返回
-   * `{"total":"17","page":"1","pageSize":"10"}`。消费方必须显式转数
-   * （`#/utils/backend-number` 的 `toBackendNumber`），不许 `as number`。口径同 `api/iot/command.ts`。
+   * `{"total":"17","page":"1","pageSize":"10"}`。消费方**必须显式转数**（如 `Number(total)`）
+   * 才能参与分页计算，不允许 `as number` 把分歧藏起来。
    */
   export interface PageResult<T> {
     items: T[];

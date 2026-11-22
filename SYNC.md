@@ -99,9 +99,7 @@ internal/lint-configs/commitlint-config/index.mjs
 # ---- 测试对大写 table 的断言补充（本仓先有边界用例，等上游采纳后删除）----
 apps/web-antd/src/store/message.test.ts
 packages/stores/src/modules/tabbar.test.ts
-# ---- 纯注释差异：代码逐行等价，只是措辞不同（对齐成本为零，下次同步顺手取上游即可）----
-apps/web-antd/src/api/system/common.ts
-packages/effects/access/src/__tests__/accessible.test.ts
+# ---- 纯注释差异已清零（2026-11-22：common.ts 与 accessible.test.ts 直接取上游版，故从清单移除）----
 <!-- /fork-sync:keep -->
 
 ## 最近同步点
