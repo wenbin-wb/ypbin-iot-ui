@@ -53,6 +53,57 @@
      其中 `deps` 是 dependabot 自动生成的。是否加由维护者定。
 
 
+## 本仓定制清单（`scripts/check-fork-sync.mjs` 的允许清单）
+
+> 机器门禁：`node scripts/check-fork-sync.mjs --check`（CI 已接入）。
+> 判据是**双向**的——既看本仓落后上游哪些文件，也看本仓**领先**哪些文件；
+> 领先侧的通用修复应当反哺 admin-ui（2026-11-21 就回植过 3 个：生产密钥守卫、SSE 断开语义、
+> `.env` 布局），不是长期留在 fork 里。
+>
+> 下面每一行都是「本仓有意与 admin-ui 不同」的文件，**必须写明为什么**。
+> 新增一行 = 承认一处永久分歧面 = 以后每次同步都要人工看，所以先问：能不能对齐上游？
+
+<!-- fork-sync:keep -->
+# ---- IoT 品牌与入口（上游没有 IoT 产品，改了会与 vben 升级冲突）----
+apps/web-antd/src/main.ts
+apps/web-antd/src/bootstrap.ts
+apps/web-antd/src/layouts/basic.vue
+apps/web-antd/src/router/routes/index.ts
+apps/web-antd/src/router/routes/modules/project.ts
+apps/web-antd/src/views/_core/about/index.vue
+# ---- 平台级导航与默认落点（顶部大模块 + mixed-nav；IoT 的 /dashboard 是无组件目录，必须 redirect）----
+apps/web-antd/src/preferences.ts
+# ---- 文案（page.json 的 iot 段是本仓独有；ui.json 含 IoT 术语）----
+apps/web-antd/src/locales/langs/zh-CN/page.json
+apps/web-antd/src/locales/langs/en-US/page.json
+packages/locales/src/langs/zh-CN/ui.json
+packages/locales/src/langs/en-US/ui.json
+# ---- 看板 / 工作台（IoT 真实数据装配：useIotOverview / useDashboardRealtime / useWorkbenchTrends）----
+apps/web-antd/src/api/dashboard/index.ts
+apps/web-antd/src/views/dashboard/analytics/index.vue
+apps/web-antd/src/views/dashboard/analytics/analytics-trends.vue
+apps/web-antd/src/views/dashboard/analytics/analytics-visits-data.vue
+apps/web-antd/src/views/dashboard/analytics/analytics-visits-sales.vue
+apps/web-antd/src/views/dashboard/analytics/analytics-visits-source.vue
+apps/web-antd/src/views/dashboard/analytics/analytics-visits.vue
+apps/web-antd/src/views/dashboard/workspace/index.vue
+apps/web-antd/src/views/dashboard/workspace/use-workbench-trends.ts
+# ---- 设计令牌（IoT 视觉体系，与上游 admin 的扁平化方向不同）----
+packages/@core/base/design/src/design-tokens/default.css
+packages/@core/base/design/src/design-tokens/dark.css
+internal/tailwind-config/src/theme.css
+# ---- 标签页按 path 去重（fork 定制；上游暂无「一个 query 一个标签」的页面前提）----
+packages/effects/access/src/accessible.ts
+# ---- commitlint 允许 `iot` scope（上游 vben 没有 IoT 前端，不强推给它）----
+internal/lint-configs/commitlint-config/index.mjs
+# ---- 测试对大写 table 的断言补充（本仓先有边界用例，等上游采纳后删除）----
+apps/web-antd/src/store/message.test.ts
+packages/stores/src/modules/tabbar.test.ts
+# ---- 纯注释差异：代码逐行等价，只是措辞不同（对齐成本为零，下次同步顺手取上游即可）----
+apps/web-antd/src/api/system/common.ts
+packages/effects/access/src/__tests__/accessible.test.ts
+<!-- /fork-sync:keep -->
+
 ## 最近同步点
 
 - **分叉点**：`2aa8e3b`（2026-09-18，admin-ui `main`）。

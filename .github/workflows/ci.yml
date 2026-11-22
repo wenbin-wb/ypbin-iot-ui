@@ -29,6 +29,24 @@ jobs:
       - name: 安装依赖
         run: pnpm install --frozen-lockfile
 
+      # 🔴 fork 同步门禁（**双向**）：本仓是 ypbin-admin-ui 的 IoT 前端 fork，公共部分必须保持同步。
+      # 判据与后端 ypbin-iot 的同步白名单同一思路，但**多判一侧**：
+      # 不仅要求「本仓落后上游的文件」都有解释，也要求「本仓领先上游的文件」已登记——
+      # 领先侧往往是通用缺陷修复（2026-11-21 就回植过 3 个），长期留在 fork 里等于上游继续带着 bug。
+      # 允许清单与理由写在 SYNC.md 的 <!-- fork-sync:keep --> 块，评审时理由与清单同屏可见。
+      # ⚠️ 只检出本仓会拿不到上游：必须同时检出 ypbin-admin-ui 并指定 ADMIN_UI_ROOT。
+      - name: 检出 admin-ui（fork 同步门禁的对照基准）
+        uses: actions/checkout@v7
+        with:
+          repository: wenbin-wb/ypbin-admin-ui
+          ref: main
+          path: ypbin-admin-ui
+
+      - name: fork 同步状态（双向，未登记分歧即失败）
+        env:
+          ADMIN_UI_ROOT: ${{ github.workspace }}/ypbin-admin-ui
+        run: node scripts/check-fork-sync.mjs --check
+
       # Lint / stylelint / oxfmt / cspell / 结构检查：与 upstream（admin-ui）保持同一套参数与作用域。
       - name: Lint（oxlint，类型感知）
         run: pnpm exec oxlint -c oxlint.config.ts --type-aware --threads=4 apps/web-antd/src
