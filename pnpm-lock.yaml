@@ -521,7 +521,7 @@ overrides:
   '@ast-grep/napi': ^0.45.3
   '@ctrl/tinycolor': ^4.2.0
   clsx: ^2.1.1
-  pinia: ^4.0.3
+  pinia: ^4.1.0
   prosemirror-view: ^1.42.6
   vue: ^3.5.44
 
@@ -723,8 +723,8 @@ importers:
         specifier: 'catalog:'
         version: 18.1.3
       pinia:
-        specifier: ^4.0.3
-        version: 4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3))
+        specifier: ^4.1.0
+        version: 4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3))
       three:
         specifier: 'catalog:'
         version: 0.186.1
@@ -736,7 +736,7 @@ importers:
         version: 3.5.44(typescript@6.0.3)
       vue-router:
         specifier: 'catalog:'
-        version: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))
+        version: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))
 
   apps/web-antdv-next:
     dependencies:
@@ -792,14 +792,14 @@ importers:
         specifier: 'catalog:'
         version: 1.11.23
       pinia:
-        specifier: ^4.0.3
-        version: 4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3))
+        specifier: ^4.1.0
+        version: 4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3))
       vue:
         specifier: ^3.5.44
         version: 3.5.44(typescript@6.0.3)
       vue-router:
         specifier: 'catalog:'
-        version: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))
+        version: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))
 
   apps/web-ele:
     dependencies:
@@ -855,14 +855,14 @@ importers:
         specifier: 'catalog:'
         version: 2.14.5(vue@3.5.44(typescript@6.0.3))
       pinia:
-        specifier: ^4.0.3
-        version: 4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3))
+        specifier: ^4.1.0
+        version: 4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3))
       vue:
         specifier: ^3.5.44
         version: 3.5.44(typescript@6.0.3)
       vue-router:
         specifier: 'catalog:'
-        version: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))
+        version: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))
     devDependencies:
       unplugin-element-plus:
         specifier: 'catalog:'
@@ -919,14 +919,14 @@ importers:
         specifier: 'catalog:'
         version: 2.45.3(vue@3.5.44(typescript@6.0.3))
       pinia:
-        specifier: ^4.0.3
-        version: 4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3))
+        specifier: ^4.1.0
+        version: 4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3))
       vue:
         specifier: ^3.5.44
         version: 3.5.44(typescript@6.0.3)
       vue-router:
         specifier: 'catalog:'
-        version: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))
+        version: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))
 
   apps/web-tdesign:
     dependencies:
@@ -982,8 +982,8 @@ importers:
         specifier: 'catalog:'
         version: 1.49.0
       pinia:
-        specifier: ^4.0.3
-        version: 4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3))
+        specifier: ^4.1.0
+        version: 4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3))
       tdesign-vue-next:
         specifier: 'catalog:'
         version: 1.20.11(vue@3.5.44(typescript@6.0.3))
@@ -992,7 +992,7 @@ importers:
         version: 3.5.44(typescript@6.0.3)
       vue-router:
         specifier: 'catalog:'
-        version: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))
+        version: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))
 
   internal/lint-configs/commitlint-config:
     dependencies:
@@ -1328,7 +1328,7 @@ importers:
         version: 3.5.44(typescript@6.0.3)
       vue-router:
         specifier: 'catalog:'
-        version: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))
+        version: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))
 
   packages/@core/composables:
     dependencies:
@@ -1649,7 +1649,7 @@ importers:
         version: 2.6.0(vue@3.5.44(typescript@6.0.3))
       vue-router:
         specifier: 'catalog:'
-        version: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))
+        version: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))
       vue-tippy:
         specifier: 'catalog:'
         version: 6.8.0(vue@3.5.44(typescript@6.0.3))
@@ -1689,7 +1689,7 @@ importers:
         version: 3.5.44(typescript@6.0.3)
       vue-router:
         specifier: 'catalog:'
-        version: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))
+        version: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))
       watermark-js-plus:
         specifier: 'catalog:'
         version: 1.6.6
@@ -1761,7 +1761,7 @@ importers:
         version: 3.5.44(typescript@6.0.3)
       vue-router:
         specifier: 'catalog:'
-        version: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))
+        version: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))
 
   packages/effects/plugins:
     dependencies:
@@ -1917,11 +1917,11 @@ importers:
         specifier: workspace:*
         version: link:../@core/base/typings
       pinia:
-        specifier: ^4.0.3
-        version: 4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3))
+        specifier: ^4.1.0
+        version: 4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3))
       pinia-plugin-persistedstate:
         specifier: 'catalog:'
-        version: 4.7.1(@nuxt/kit@4.5.0(magic-string@1.4.3)(magicast@0.5.3)(oxc-parser@0.155.0)(rolldown@1.2.19)(unplugin@3.4.0(esbuild@0.28.1)(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))))(pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))
+        version: 4.7.1(@nuxt/kit@4.5.0(magic-string@1.4.3)(magicast@0.5.3)(oxc-parser@0.155.0)(rolldown@1.2.19)(unplugin@3.4.0(esbuild@0.28.1)(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))))(pinia@4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))
       secure-ls:
         specifier: 'catalog:'
         version: 2.0.0
@@ -1930,7 +1930,7 @@ importers:
         version: 3.5.44(typescript@6.0.3)
       vue-router:
         specifier: 'catalog:'
-        version: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))
+        version: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))
 
   packages/styles:
     dependencies:
@@ -1950,7 +1950,7 @@ importers:
         version: 3.5.44(typescript@6.0.3)
       vue-router:
         specifier: 'catalog:'
-        version: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))
+        version: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))
 
   packages/utils:
     dependencies:
@@ -1962,7 +1962,7 @@ importers:
         version: link:../@core/base/typings
       vue-router:
         specifier: 'catalog:'
-        version: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))
+        version: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))
 
   playground:
     dependencies:
@@ -2030,14 +2030,14 @@ importers:
         specifier: 'catalog:'
         version: 1.0.0
       pinia:
-        specifier: ^4.0.3
-        version: 4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3))
+        specifier: ^4.1.0
+        version: 4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3))
       vue:
         specifier: ^3.5.44
         version: 3.5.44(typescript@6.0.3)
       vue-router:
         specifier: 'catalog:'
-        version: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))
+        version: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))
     devDependencies:
       '@playwright/test':
         specifier: 'catalog:'
@@ -9039,9 +9039,6 @@ packages:
   normalize-wheel-es@1.2.0:
     resolution: {integrity: sha512-Wj7+EJQ8mSuXr2iWfnujrimU35R2W4FAErEyTmJoJ7ucwTn2hOUSsRehMb5RSYkxXGTM7Y9QpvPmp++w5ftoJw==}
 
-  nostics@1.2.0:
-    resolution: {integrity: sha512-FGqEfhQjrvo1lL8KFifdTQiNwwQHJxC1jtYE1Rc54qF/jxONUNL+kC9gS1krX8Q65PgrQ5fCqH/I4NhWBvdSqg==}
-
   nostics@1.3.0:
     resolution: {integrity: sha512-wzRsrJwNlFbqIRQt8aCeL2WE8USip/uuvGSOZV1D02CxX8ABTMbw8IywKjH7yWHETMXbWJI4OBpihg9rmz2Vyg==}
 
@@ -9280,7 +9277,7 @@ packages:
     peerDependencies:
       '@nuxt/kit': '>=3.0.0'
       '@pinia/nuxt': '>=0.10.0'
-      pinia: ^4.0.3
+      pinia: ^4.1.0
     peerDependenciesMeta:
       '@nuxt/kit':
         optional: true
@@ -9289,10 +9286,10 @@ packages:
       pinia:
         optional: true
 
-  pinia@4.0.3:
-    resolution: {integrity: sha512-XMQqpvjgG7LMqVhhFUzKLT4KEbsYbfZZ0CZU9PgdFm1O2VKBmIkykL8+SfNhOaT7sR0wT6BEgKT0YNDYWgmVRA==}
+  pinia@4.1.0:
+    resolution: {integrity: sha512-+5/HMuVjYQfKlCD5xQ7zfXn1xUzYFEa7pd0DQK5SaMfZCaFRTHlaH/c02N1FoGOdlzSiwf5EOPgJx//1QDw6gw==}
     peerDependencies:
-      '@vue/devtools-api': ^8.1.5
+      '@vue/devtools-api': ^8.2.1
       typescript: '>=5.6.0'
       vue: ^3.5.44
     peerDependenciesMeta:
@@ -11129,7 +11126,7 @@ packages:
     peerDependencies:
       '@pinia/colada': '>=0.21.2'
       '@vue/compiler-sfc': ^3.5.34 || ^4.0.0
-      pinia: ^4.0.3
+      pinia: ^4.1.0
       vite: ^7.3.0 || ^8.0.0
       vue: ^3.5.44
     peerDependenciesMeta:
@@ -18568,8 +18565,6 @@ snapshots:
 
   normalize-wheel-es@1.2.0: {}
 
-  nostics@1.2.0: {}
-
   nostics@1.3.0: {}
 
   npm-run-path@6.0.0:
@@ -18879,17 +18874,17 @@ snapshots:
 
   picomatch@4.0.7: {}
 
-  pinia-plugin-persistedstate@4.7.1(@nuxt/kit@4.5.0(magic-string@1.4.3)(magicast@0.5.3)(oxc-parser@0.155.0)(rolldown@1.2.19)(unplugin@3.4.0(esbuild@0.28.1)(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))))(pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3))):
+  pinia-plugin-persistedstate@4.7.1(@nuxt/kit@4.5.0(magic-string@1.4.3)(magicast@0.5.3)(oxc-parser@0.155.0)(rolldown@1.2.19)(unplugin@3.4.0(esbuild@0.28.1)(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))))(pinia@4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3))):
     dependencies:
       defu: 6.1.7
     optionalDependencies:
       '@nuxt/kit': 4.5.0(magic-string@1.4.3)(magicast@0.5.3)(oxc-parser@0.155.0)(rolldown@1.2.19)(unplugin@3.4.0(esbuild@0.28.1)(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1)))
-      pinia: 4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3))
+      pinia: 4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3))
 
-  pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)):
+  pinia@4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)):
     dependencies:
       '@vue/devtools-api': 8.2.1
-      nostics: 1.2.0
+      nostics: 1.3.0
       vue: 3.5.44(typescript@6.0.3)
     optionalDependencies:
       typescript: 6.0.3
@@ -20869,7 +20864,7 @@ snapshots:
     dependencies:
       vue: 3.5.44(typescript@6.0.3)
 
-  vue-router@5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3)):
+  vue-router@5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.1)(pinia@4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3)))(rolldown@1.2.19)(rollup@4.62.2)(vite@8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3)):
     dependencies:
       '@vue-macros/common': 3.1.4(vue@3.5.44(typescript@6.0.3))
       '@vue/devtools-api': 8.2.1
@@ -20890,7 +20885,7 @@ snapshots:
       vue: 3.5.44(typescript@6.0.3)
     optionalDependencies:
       '@vue/compiler-sfc': 3.5.43
-      pinia: 4.0.3(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3))
+      pinia: 4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3))
       vite: 8.3.8(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(sass-embedded@1.105.1)(sass@1.105.1)(terser@5.49.0)(yaml@2.9.1)
     transitivePeerDependencies:
       - '@farmfe/core'
