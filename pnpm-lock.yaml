@@ -244,8 +244,8 @@ catalogs:
       specifier: ^6.1.0
       version: 6.1.0
     element-plus:
-      specifier: ^2.14.5
-      version: 2.14.5
+      specifier: ^2.14.8
+      version: 2.14.8
     es-toolkit:
       specifier: ^1.49.0
       version: 1.49.0
@@ -853,7 +853,7 @@ importers:
         version: 1.11.23
       element-plus:
         specifier: 'catalog:'
-        version: 2.14.5(vue@3.5.44(typescript@6.0.3))
+        version: 2.14.8(vue@3.5.44(typescript@6.0.3))
       pinia:
         specifier: ^4.1.0
         version: 4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.44(typescript@6.0.3))
@@ -7288,8 +7288,8 @@ packages:
   electron-to-chromium@1.5.395:
     resolution: {integrity: sha512-7zt9Aw+SrmxLWLN0zhaTWZQiCdryLVrYTq5R7iZakLvi2UQPYMMsROYV/2qVCzMeCiSXHwKOU+sZ4zOVVlrtKA==}
 
-  element-plus@2.14.5:
-    resolution: {integrity: sha512-bghYy/S+qg87enHPXELirhEdDqsVAUGcGpbGIeG8dz0kwpIkGz7gYsifulBshXX74iRtHib85XWQj0uSH2A1Yg==}
+  element-plus@2.14.8:
+    resolution: {integrity: sha512-Z4Br45W9b8vWKvVHSTvbS6rRKmsLjmHCPXICJR6osl35+i+S2LCBs4NN8apLBkQiUh0pzS9labK5eCS7yzDhWw==}
     peerDependencies:
       vue: ^3.5.44
 
@@ -16508,7 +16508,7 @@ snapshots:
 
   electron-to-chromium@1.5.395: {}
 
-  element-plus@2.14.5(vue@3.5.44(typescript@6.0.3)):
+  element-plus@2.14.8(vue@3.5.44(typescript@6.0.3)):
     dependencies:
       '@ctrl/tinycolor': 4.2.1
       '@element-plus/icons-vue': 2.3.2(vue@3.5.44(typescript@6.0.3))
@@ -16516,7 +16516,7 @@ snapshots:
       '@popperjs/core': '@sxzz/popperjs-es@2.11.8'
       '@types/lodash': 4.17.24
       '@types/lodash-es': 4.17.12
-      '@vueuse/core': 14.4.0(vue@3.5.44(typescript@6.0.3))
+      '@vueuse/core': 15.0.0(vue@3.5.44(typescript@6.0.3))
       async-validator: 4.2.5
       dayjs: 1.11.23
       lodash: 4.18.1

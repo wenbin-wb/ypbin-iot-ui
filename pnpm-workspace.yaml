@@ -124,7 +124,7 @@ catalog:
   dompurify: ^3.4.13
   dotenv: ^17.4.2
   echarts: ^6.1.0
-  element-plus: ^2.14.5
+  element-plus: ^2.14.8
   # 数字孪生 3D 渲染（原生 three.js）。
   # ⚠️ three 本身**不带 TypeScript 类型**（0.186.1 的 package.json 里 types/typings 均为空，
   #    npm registry 一手核实），类型由 DefinitelyTyped 按小版本跟随发布 ⇒ 两者必须**成对**升级，
