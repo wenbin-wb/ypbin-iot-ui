@@ -163,7 +163,7 @@ catalog:
   naive-ui: ^2.45.3
   nitropack: ^2.13.4
   nprogress: ^0.2.0
-  ora: ^9.4.1
+  ora: ^10.0.0
   oxfmt: ^0.72.0
   oxlint: ^1.75.0
   oxlint-tsgolint: ^7.0.2005
