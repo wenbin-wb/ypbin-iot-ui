@@ -511,8 +511,8 @@ catalogs:
       specifier: ^2.1.0
       version: 2.1.0
     zod:
-      specifier: ^4.6.5
-      version: 4.6.5
+      specifier: ^4.6.7
+      version: 4.6.7
     zod-defaults:
       specifier: ^0.2.3
       version: 0.2.3
@@ -1282,7 +1282,7 @@ importers:
     dependencies:
       '@ctrl/tinycolor':
         specifier: ^4.3.1
-        version: 4.3.2
+        version: 4.3.1
       '@tanstack/vue-store':
         specifier: 'catalog:'
         version: 0.11.2(vue@3.5.45(typescript@6.0.3))
@@ -1398,10 +1398,10 @@ importers:
         version: 3.5.45(typescript@6.0.3)
       zod:
         specifier: 'catalog:'
-        version: 4.6.5
+        version: 4.6.7
       zod-defaults:
         specifier: 'catalog:'
-        version: 0.2.3(zod@4.6.5)
+        version: 0.2.3(zod@4.6.7)
     devDependencies:
       '@vue/test-utils':
         specifier: 'catalog:'
@@ -3245,6 +3245,10 @@ packages:
     engines: {node: '>=20.19.0'}
     peerDependencies:
       postcss-selector-parser: ^7.1.1
+
+  '@ctrl/tinycolor@4.3.1':
+    resolution: {integrity: sha512-miLzcPaPApfChfqxxDw7nsTA8hlU4M9GZnL3UVdaxgyRzewiYaI0lsmn72SOARHgVDlVSagTTh2zWt4OcxYmmg==}
+    engines: {node: '>=14'}
 
   '@ctrl/tinycolor@4.3.2':
     resolution: {integrity: sha512-2UDbkHfMvSXVPLkj7VEwS9NMtu/miOOwkHGn7loA8zxUROlwpJF1UYqXfaIHIaHD4o5a80ouir6QyXbimLk9fg==}
@@ -11499,6 +11503,9 @@ packages:
   zod@4.6.5:
     resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
 
+  zod@4.6.7:
+    resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
+
   zrender@6.1.0:
     resolution: {integrity: sha512-oEGMDB6pOP2S6OwRR4PdVv610zrjnA3Bh+JnSG12fYJlBKjtNAoEb5fSUoCOOINlH96I2fU38/A2UpRKs67xYQ==}
 
@@ -11511,7 +11518,7 @@ snapshots:
 
   '@ant-design/colors@6.0.0':
     dependencies:
-      '@ctrl/tinycolor': 4.3.2
+      '@ctrl/tinycolor': 4.3.1
 
   '@ant-design/colors@7.2.1':
     dependencies:
@@ -12878,6 +12885,8 @@ snapshots:
   '@csstools/selector-specificity@6.0.0(postcss-selector-parser@7.1.6)':
     dependencies:
       postcss-selector-parser: 7.1.6
+
+  '@ctrl/tinycolor@4.3.1': {}
 
   '@ctrl/tinycolor@4.3.2': {}
 
@@ -21378,11 +21387,13 @@ snapshots:
       normalize-path: 3.0.0
       readable-stream: 4.7.0
 
-  zod-defaults@0.2.3(zod@4.6.5):
+  zod-defaults@0.2.3(zod@4.6.7):
     dependencies:
-      zod: 4.6.5
+      zod: 4.6.7
 
   zod@4.6.5: {}
+
+  zod@4.6.7: {}
 
   zrender@6.1.0:
     dependencies:
